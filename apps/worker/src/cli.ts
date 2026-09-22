@@ -7,6 +7,7 @@ import {
   discoverWebPlusPage,
   fetchRawDocument,
   loadSourceDirectory,
+  orderDiscoveredItemsByPublicationRecency,
   parseWebPlusNotice,
 } from "@nju-info/collector";
 import type {
@@ -56,11 +57,15 @@ interface IngestSummary {
   stats: DatabaseStats;
 }
 
+interface DiscoverPagesOptions {
+  maxPages: number;
+  recentLimit?: number;
+  onPage?: (rawDocument: RawDocument) => void;
+}
+
 async function discoverPages(
   source: WebPlusSourceConfig,
-  maxPages: number,
-  itemLimit = Number.POSITIVE_INFINITY,
-  onPage?: (rawDocument: RawDocument) => void,
+  options: DiscoverPagesOptions,
 ): Promise<{
   pagesVisited: number;
   items: DiscoveredItem[];
@@ -69,26 +74,38 @@ async function discoverPages(
   const seenPages = new Set<string>();
   let pageUrl: string | undefined = source.url;
   let pagesVisited = 0;
+  let reachedRecentLimit = false;
 
   while (
     pageUrl &&
-    pagesVisited < maxPages &&
-    items.size < itemLimit &&
+    pagesVisited < options.maxPages &&
     !seenPages.has(pageUrl)
   ) {
     seenPages.add(pageUrl);
     const raw = await fetchRawDocument(source.id, pageUrl);
-    onPage?.(raw);
+    options.onPage?.(raw);
     const page = discoverWebPlusPage(raw, source);
-    for (const item of page.items) {
-      items.set(item.url, item);
-      if (items.size >= itemLimit) break;
-    }
+    for (const item of page.items) items.set(item.url, item);
     pagesVisited += 1;
     pageUrl = page.nextPageUrl;
+
+    if (options.recentLimit !== undefined && items.size >= options.recentLimit) {
+      if (reachedRecentLimit) break;
+      reachedRecentLimit = true;
+    }
   }
 
-  return { pagesVisited, items: [...items.values()] };
+  const sourceOrderedItems = [...items.values()];
+  return {
+    pagesVisited,
+    items:
+      options.recentLimit === undefined
+        ? sourceOrderedItems
+        : orderDiscoveredItemsByPublicationRecency(sourceOrderedItems).slice(
+            0,
+            options.recentLimit,
+          ),
+  };
 }
 
 async function ingestSource(
@@ -100,12 +117,12 @@ async function ingestSource(
   const database = new InfoHubDatabase(resolvedDatabasePath);
 
   try {
-    const { pagesVisited, items } = await discoverPages(
-      source,
-      100,
-      itemLimit,
-      (rawDocument) => database.persistRawDocument(source, rawDocument),
-    );
+    const { pagesVisited, items } = await discoverPages(source, {
+      maxPages: 100,
+      recentLimit: itemLimit,
+      onPage: (rawDocument) =>
+        database.persistRawDocument(source, rawDocument),
+    });
     let insertedRevisions = 0;
     let unchangedRevisions = 0;
 
@@ -181,7 +198,9 @@ async function main(): Promise<void> {
   }
 
   if (command === "discover-pages") {
-    const result = await discoverPages(source, positiveInteger(thirdArg, 2));
+    const result = await discoverPages(source, {
+      maxPages: positiveInteger(thirdArg, 2),
+    });
     console.log(JSON.stringify(result, null, 2));
     return;
   }
@@ -196,7 +215,10 @@ async function main(): Promise<void> {
   }
 
   const limit = positiveInteger(thirdArg, 1);
-  const { items } = await discoverPages(source, 100, limit);
+  const { items } = await discoverPages(source, {
+    maxPages: 100,
+    recentLimit: limit,
+  });
   const notices = [];
   for (const item of items) {
     const detailRaw = await fetchRawDocument(source.id, item.url);

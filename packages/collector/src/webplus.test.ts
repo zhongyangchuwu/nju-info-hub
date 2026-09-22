@@ -5,6 +5,7 @@ import type { RawDocument, WebPlusSourceConfig } from "@nju-info/core";
 import {
   discoverWebPlusItems,
   discoverWebPlusPage,
+  orderDiscoveredItemsByPublicationRecency,
   parseWebPlusNotice,
 } from "./webplus.js";
 
@@ -67,6 +68,96 @@ describe("WebPlus adapter", () => {
     expect(page.lastPageUrl).toBe("https://cs.nju.edu.cn/1703/list29.htm");
     expect(page.currentPage).toBe(1);
     expect(page.totalPages).toBe(29);
+  });
+
+  it("discovers Graduate School split dates in source order", () => {
+    const config = source(
+      "nju-graduate-school-notices",
+      "研究生院动态通知",
+      "https://grawww.nju.edu.cn/905/list.htm",
+      "研究生院",
+    );
+    const page = discoverWebPlusPage(
+      raw(config.id, config.url, fixture("graduate-list.html")),
+      config,
+    );
+
+    expect(
+      page.items.map(({ title, publishedAtRaw }) => ({
+        title,
+        publishedAtRaw,
+      })),
+    ).toEqual([
+      {
+        title: "鼓楼校区综合服务大厅值班表",
+        publishedAtRaw: "08-20 2026",
+      },
+      {
+        title: "关于2027春季学期研究生赴台交流项目校内推荐名单的公示",
+        publishedAtRaw: "09-21 2026",
+      },
+      {
+        title: "关于2027春季学期研究生赴台交流项目遴选答辩的通知",
+        publishedAtRaw: "09-18 2026",
+      },
+    ]);
+    expect(page.nextPageUrl).toBe("https://grawww.nju.edu.cn/905/list2.htm");
+    expect(page.lastPageUrl).toBe("https://grawww.nju.edu.cn/905/list56.htm");
+  });
+
+  it("orders pinned dated items by recency without changing discovery order", () => {
+    const config = source(
+      "nju-graduate-school-notices",
+      "研究生院动态通知",
+      "https://grawww.nju.edu.cn/905/list.htm",
+    );
+    const sourceOrdered = discoverWebPlusItems(
+      raw(config.id, config.url, fixture("graduate-list.html")),
+      config,
+    );
+
+    expect(sourceOrdered.map(({ publishedAtRaw }) => publishedAtRaw)).toEqual([
+      "08-20 2026",
+      "09-21 2026",
+      "09-18 2026",
+    ]);
+    expect(
+      orderDiscoveredItemsByPublicationRecency(sourceOrdered).map(
+        ({ publishedAtRaw }) => publishedAtRaw,
+      ),
+    ).toEqual(["09-21 2026", "09-18 2026", "08-20 2026"]);
+  });
+
+  it("keeps missing and unparseable dates in deterministic source order", () => {
+    const items = [
+      {
+        sourceId: "test",
+        url: "https://example.edu/old",
+        title: "old",
+        publishedAtRaw: "2026-01-01",
+      },
+      {
+        sourceId: "test",
+        url: "https://example.edu/missing",
+        title: "missing",
+      },
+      {
+        sourceId: "test",
+        url: "https://example.edu/new",
+        title: "new",
+        publishedAtRaw: "2026-09-01",
+      },
+      {
+        sourceId: "test",
+        url: "https://example.edu/invalid",
+        title: "invalid",
+        publishedAtRaw: "unknown",
+      },
+    ];
+
+    expect(
+      orderDiscoveredItemsByPublicationRecency(items).map(({ title }) => title),
+    ).toEqual(["new", "old", "missing", "invalid"]);
   });
 
   it.each([

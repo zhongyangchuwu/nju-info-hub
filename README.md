@@ -101,18 +101,20 @@ pnpm worker -- sources
 # discover notices from a live WebPlus list page
 pnpm worker -- discover nju-cs-graduate
 
-# fetch and parse the newest detail page
+# fetch and parse the most recent dated detail page
 pnpm worker -- fetch nju-cs-graduate 1
 
-# ingest notices and raw documents into SQLite
+# ingest the most recent dated notices and raw documents into SQLite
 pnpm worker -- ingest nju-cs-graduate /tmp/nju-info.sqlite 10
 ```
 
 Live commands access public NJU websites. Unit tests use local fixtures instead.
 
+WebPlus discovery preserves list-page source/DOM order. Limited `fetch` and `ingest` commands instead rank parseable publication dates newest-first, with stable source-order fallback for equal, missing, or unparseable dates. They inspect one page beyond the point where enough candidates were found; `discover-pages` keeps full source order and pinned items.
+
 ## Initial sources
 
-The current public-source registry and fixtures cover multiple NJU WebPlus/Sudy sites, including Computer Science graduate notices, Student Affairs public notices, and student exchange notices. Additional high-value public sources are tracked through the roadmap and GitHub Issues.
+The current public-source registry and fixtures cover multiple NJU WebPlus/Sudy sites, including Computer Science, Graduate School, ITSC, Science & Technology, Student Affairs, and student exchange notices. Additional high-value public sources are tracked through the project roadmap and GitHub Issues.
 
 More sources should preferably be added by contributing YAML under `sources/nju/` rather than adding a new crawler.
 

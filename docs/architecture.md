@@ -52,6 +52,8 @@ The first adapter targets common WebPlus/Sudy conventions observed on multiple N
 
 The parser keeps heuristics narrow so that navigation links are not mistaken for notices.
 
+List discovery preserves source/DOM order, including pinned or featured items. Publication-recency ordering is a separate operation: parseable dates are ordered newest-first, equal dates retain source order, and missing or unparseable dates follow dated items while retaining their source order. The development CLI applies that ordering only to limited `fetch` and `ingest` operations. It reads one additional page after first collecting enough candidates, bounded by the command's page cap, so first-page pinned items do not displace newer dated notices on the next page. Full `discover-pages` results remain in source order and retain pinned items.
+
 ## Raw and canonical data
 
 `RawDocument` preserves:
