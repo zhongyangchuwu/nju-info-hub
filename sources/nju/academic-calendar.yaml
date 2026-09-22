@@ -1,0 +1,17 @@
+schemaVersion: 1
+id: nju-academic-calendar
+name: 本科生院校历
+organization:
+  id: nju-undergraduate-school
+  name: 本科生院
+url: https://jw.nju.edu.cn/24809/list.htm
+adapter:
+  type: webplus
+audience:
+  - all
+categories:
+  - academic-calendar
+  - teaching
+crawl:
+  intervalMinutes: 720
+enabled: true

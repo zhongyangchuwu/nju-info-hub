@@ -1,0 +1,17 @@
+schemaVersion: 1
+id: nju-itsc-notices
+name: 信息化建设管理服务中心通知公告
+organization:
+  id: nju-itsc
+  name: 信息化建设管理服务中心
+url: https://oi.nju.edu.cn/tzgg/listm.htm
+adapter:
+  type: webplus
+audience:
+  - all
+categories:
+  - it-services
+  - campus
+crawl:
+  intervalMinutes: 60
+enabled: true

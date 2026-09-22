@@ -1,0 +1,17 @@
+schemaVersion: 1
+id: nju-science-tech
+name: 科学技术处通知公告
+organization:
+  id: nju-science-tech-office
+  name: 科学技术处
+url: https://scit.nju.edu.cn/10916/listm2.htm
+adapter:
+  type: webplus
+audience:
+  - graduate
+  - faculty
+categories:
+  - research
+crawl:
+  intervalMinutes: 60
+enabled: true

@@ -14,6 +14,14 @@ export interface DiscoveredItem {
   publishedAtRaw?: string;
 }
 
+export interface DiscoveryPage {
+  items: DiscoveredItem[];
+  nextPageUrl?: string;
+  lastPageUrl?: string;
+  currentPage?: number;
+  totalPages?: number;
+}
+
 export interface Attachment {
   url: string;
   title: string;
@@ -34,4 +42,3 @@ export interface ParsedNotice {
     contentSha256: string;
   };
 }
-
