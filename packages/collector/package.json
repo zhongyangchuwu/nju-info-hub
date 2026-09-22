@@ -1,0 +1,21 @@
+{
+  "name": "@nju-info/collector",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@nju-info/core": "workspace:*",
+    "cheerio": "1.2.0",
+    "domhandler": "5.0.3",
+    "yaml": "2.9.1"
+  }
+}
+

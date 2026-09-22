@@ -1,0 +1,19 @@
+schemaVersion: 1
+id: nju-student-affairs-notices
+name: 党委学生工作部公示公告
+organization:
+  id: nju-student-affairs
+  name: 党委学生工作部
+url: https://xgb.nju.edu.cn/gsgg/list.htm
+adapter:
+  type: webplus
+audience:
+  - undergraduate
+  - graduate
+categories:
+  - scholarship
+  - student-affairs
+crawl:
+  intervalMinutes: 30
+enabled: true
+

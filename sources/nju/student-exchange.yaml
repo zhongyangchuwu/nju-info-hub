@@ -1,0 +1,18 @@
+schemaVersion: 1
+id: nju-student-exchange
+name: 国际化工作处学生交流办公室通知通告
+organization:
+  id: nju-student-exchange-office
+  name: 国际化工作处学生交流办公室
+url: https://stuex.nju.edu.cn/2539/list.htm
+adapter:
+  type: webplus
+audience:
+  - undergraduate
+  - graduate
+categories:
+  - international-exchange
+crawl:
+  intervalMinutes: 60
+enabled: true
+

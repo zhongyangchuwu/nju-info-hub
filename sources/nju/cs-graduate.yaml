@@ -1,0 +1,19 @@
+schemaVersion: 1
+id: nju-cs-graduate
+name: 计算机学院研究生公告栏
+organization:
+  id: nju-cs
+  name: 计算机学院
+url: https://cs.nju.edu.cn/1703/list.htm
+adapter:
+  type: webplus
+audience:
+  - graduate
+categories:
+  - graduate
+  - scholarship
+  - student-affairs
+crawl:
+  intervalMinutes: 30
+enabled: true
+

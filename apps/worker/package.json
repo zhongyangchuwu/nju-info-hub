@@ -1,0 +1,17 @@
+{
+  "name": "@nju-info/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "dev": "tsx src/cli.ts"
+  },
+  "dependencies": {
+    "@nju-info/collector": "workspace:*",
+    "@nju-info/core": "workspace:*"
+  }
+}
+
