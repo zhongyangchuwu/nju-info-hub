@@ -1,5 +1,7 @@
+import { resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { InfoHubDatabase, type DatabaseStats } from "@nju-info/db";
 import {
   discoverWebPlusItems,
   discoverWebPlusPage,
@@ -7,7 +9,12 @@ import {
   loadSourceDirectory,
   parseWebPlusNotice,
 } from "@nju-info/collector";
-import type { SourceConfig, WebPlusSourceConfig } from "@nju-info/core";
+import type {
+  DiscoveredItem,
+  RawDocument,
+  SourceConfig,
+  WebPlusSourceConfig,
+} from "@nju-info/core";
 
 function sourceDirectory(): string {
   return fileURLToPath(new URL("../../../sources/nju/", import.meta.url));
@@ -38,19 +45,27 @@ function positiveInteger(value: string | undefined, fallback: number): number {
   }
   return parsed;
 }
+interface IngestSummary {
+  sourceId: string;
+  databasePath: string;
+  pagesVisited: number;
+  itemsDiscovered: number;
+  noticesIngested: number;
+  insertedRevisions: number;
+  unchangedRevisions: number;
+  stats: DatabaseStats;
+}
 
 async function discoverPages(
   source: WebPlusSourceConfig,
   maxPages: number,
   itemLimit = Number.POSITIVE_INFINITY,
+  onPage?: (rawDocument: RawDocument) => void,
 ): Promise<{
   pagesVisited: number;
-  items: ReturnType<typeof discoverWebPlusItems>;
+  items: DiscoveredItem[];
 }> {
-  const items = new Map<
-    string,
-    ReturnType<typeof discoverWebPlusItems>[number]
-  >();
+  const items = new Map<string, DiscoveredItem>();
   const seenPages = new Set<string>();
   let pageUrl: string | undefined = source.url;
   let pagesVisited = 0;
@@ -63,6 +78,7 @@ async function discoverPages(
   ) {
     seenPages.add(pageUrl);
     const raw = await fetchRawDocument(source.id, pageUrl);
+    onPage?.(raw);
     const page = discoverWebPlusPage(raw, source);
     for (const item of page.items) {
       items.set(item.url, item);
@@ -75,8 +91,51 @@ async function discoverPages(
   return { pagesVisited, items: [...items.values()] };
 }
 
+async function ingestSource(
+  source: WebPlusSourceConfig,
+  databasePath: string,
+  itemLimit: number,
+): Promise<IngestSummary> {
+  const resolvedDatabasePath = resolve(databasePath);
+  const database = new InfoHubDatabase(resolvedDatabasePath);
+
+  try {
+    const { pagesVisited, items } = await discoverPages(
+      source,
+      100,
+      itemLimit,
+      (rawDocument) => database.persistRawDocument(source, rawDocument),
+    );
+    let insertedRevisions = 0;
+    let unchangedRevisions = 0;
+
+    for (const item of items) {
+      const detailRaw = await fetchRawDocument(source.id, item.url);
+      const notice = parseWebPlusNotice(detailRaw, source, item);
+      const result = database.ingestNotice(source, detailRaw, notice);
+      if (result.insertedRevision) insertedRevisions += 1;
+      else unchangedRevisions += 1;
+    }
+
+    return {
+      sourceId: source.id,
+      databasePath: resolvedDatabasePath,
+      pagesVisited,
+      itemsDiscovered: items.length,
+      noticesIngested: items.length,
+      insertedRevisions,
+      unchangedRevisions,
+      stats: database.stats(),
+    };
+  } finally {
+    database.close();
+  }
+}
+
 async function main(): Promise<void> {
-  const [command = "sources", sourceId, limitArg] = process.argv.slice(2);
+  const args = process.argv.slice(2);
+  if (args[0] === "--") args.shift();
+  const [command = "sources", sourceId, thirdArg, fourthArg] = args;
   const sources = await loadSources();
 
   if (command === "sources") {
@@ -95,16 +154,34 @@ async function main(): Promise<void> {
     return;
   }
 
-  const sourceCommands = new Set(["discover", "discover-pages", "fetch"]);
-  if (!sourceCommands.has(command)) {
+  const sourceCommands: Record<string, true> = {
+    discover: true,
+    "discover-pages": true,
+    fetch: true,
+    ingest: true,
+  };
+  if (!sourceCommands[command]) {
     throw new Error(`unknown command: ${command}`);
   }
 
   if (!sourceId) throw new Error(`usage: ${command} <source-id> [limit]`);
   const source = requireWebPlus(findSource(sources, sourceId));
 
+  if (command === "ingest") {
+    if (!thirdArg) {
+      throw new Error("usage: ingest <source-id> <database-path> [limit]");
+    }
+    const result = await ingestSource(
+      source,
+      thirdArg,
+      positiveInteger(fourthArg, 10),
+    );
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
   if (command === "discover-pages") {
-    const result = await discoverPages(source, positiveInteger(limitArg, 2));
+    const result = await discoverPages(source, positiveInteger(thirdArg, 2));
     console.log(JSON.stringify(result, null, 2));
     return;
   }
@@ -113,12 +190,12 @@ async function main(): Promise<void> {
     const listRaw = await fetchRawDocument(source.id, source.url);
     const items = discoverWebPlusItems(listRaw, source);
     console.log(
-      JSON.stringify(items.slice(0, positiveInteger(limitArg, 10)), null, 2),
+      JSON.stringify(items.slice(0, positiveInteger(thirdArg, 10)), null, 2),
     );
     return;
   }
 
-  const limit = positiveInteger(limitArg, 1);
+  const limit = positiveInteger(thirdArg, 1);
   const { items } = await discoverPages(source, 100, limit);
   const notices = [];
   for (const item of items) {

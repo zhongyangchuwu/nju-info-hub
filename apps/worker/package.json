@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "@nju-info/collector": "workspace:*",
-    "@nju-info/core": "workspace:*"
+    "@nju-info/core": "workspace:*",
+    "@nju-info/db": "workspace:*"
   }
 }
 

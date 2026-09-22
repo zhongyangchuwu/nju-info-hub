@@ -28,7 +28,7 @@ canonical record + revisions
     +--> MCP
 ```
 
-The current proof of concept implements only the registry, WebPlus/Sudy adapter, raw-document representation, and parsed notice representation.
+The current proof of concept implements the registry, WebPlus/Sudy adapter, raw-document and parsed-notice representations, and SQLite persistence for source items and revisions.
 
 ## Source registry
 
@@ -67,27 +67,23 @@ The raw/canonical split is deliberate. A future database should retain raw paylo
 
 `ParsedNotice` currently contains the source item identity, title, publication text, normalized text/HTML content, attachments, and provenance. Deadline extraction, audience classification, cross-source deduplication, and canonical notice identity are intentionally deferred.
 
-## Persistence plan
+## Persistence
 
-SQLite is the intended first persistence layer. Drizzle is a candidate ORM, but it is not added until real parser samples settle the schema.
-
-Expected logical tables:
+`packages/db` uses Node.js 24's built-in `node:sqlite` API. The current schema keeps the v0.1 identity model deliberately small:
 
 ```text
 sources
-fetches
 raw_documents
 source_items
-notices
 notice_revisions
 attachments
 ```
 
-Cross-source deduplication should distinguish:
+A source item is one publication identity at one source. A notice revision is a parsed snapshot linked to the raw document that produced it. The revision content hash covers the parsed URL, title, publication text, body, and attachment metadata. Re-ingesting identical parsed content is idempotent; changed parsed content creates the next revision for that source item.
 
-- source item: one publication at one source;
-- canonical notice: the underlying information item;
-- revision: a changed version of one publication.
+There is no separate canonical `notices` table yet. Cross-source semantic deduplication is deferred until real consumers require it. Detailed schema and transaction semantics are documented in [`database.md`](database.md).
+
+Direct `fetch` remains sufficient for the current public WebPlus sources; persistence does not introduce a requirement for Crawlee or browser orchestration.
 
 ## Future adapters
 

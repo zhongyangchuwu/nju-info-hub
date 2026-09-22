@@ -187,6 +187,9 @@ importers:
       '@nju-info/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@nju-info/db':
+        specifier: workspace:*
+        version: link:../../packages/db
 
   packages/collector:
     dependencies:
@@ -208,6 +211,12 @@ importers:
       zod:
         specifier: 4.6.5
         version: 4.6.5
+
+  packages/db:
+    dependencies:
+      '@nju-info/core':
+        specifier: workspace:*
+        version: link:../core
 
 packages:
 

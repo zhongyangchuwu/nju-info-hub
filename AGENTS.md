@@ -34,7 +34,10 @@ The current milestone is a WebPlus/Sudy proof of concept. Do not add a web front
 
 ## Development
 
-- Node.js 24 LTS and pnpm are the supported local toolchain.
+- Node.js 26 and pnpm 12.5.1 are the normal local toolchain through `mise.toml`.
+- Node.js 24 is the minimum supported runtime; run `mise --env node24 run verify` for local compatibility validation.
+- Keep `@types/node` on major version 24 so TypeScript cannot rely on newer runtime APIs.
+- Use repository-local mise environments, not Docker, for Node compatibility checks.
 - TypeScript is strict.
 - Parser changes require fixture tests.
 - Network smoke tests are useful locally but must not be the only CI coverage.

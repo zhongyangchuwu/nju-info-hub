@@ -49,28 +49,40 @@ The source adapter boundary is intentionally independent of MCP. Future WeChat/Q
 
 ```text
 apps/
-  worker/        development CLI for crawling and parser smoke tests
+  worker/        development CLI for discovery, parsing, and ingestion
 packages/
   core/          shared schemas and canonical types
   collector/     source registry loader and source adapters
+  db/            SQLite schema, migrations, and persistence API
 sources/
   nju/           declarative source definitions
 ```
 
-Database persistence is intentionally deferred until the parser proof of concept has real samples. The intended persistence layer is SQLite first; the raw-document/canonical-record boundary is already represented in the types.
+SQLite persistence is implemented with Node.js 24's built-in `node:sqlite` API. See [`docs/database.md`](docs/database.md) for schema and revision semantics.
 
 ## Development
 
+The repository-local mise configuration provides Node.js 26 and pnpm 12.5.1 without changing global tool defaults. Node.js 24 remains the minimum supported runtime and has an explicit compatibility environment.
+
 Requirements:
 
-- Node.js 24 LTS
-- pnpm 12
+- mise (configuration verified with mise 2026.9.9)
 
 ```bash
-pnpm install
-pnpm check
-pnpm test
+# install the default Node 26 toolchain and project dependencies
+mise install
+mise exec -- node --version
+mise exec -- pnpm install
 
+# install and inspect the Node 24 compatibility environment
+mise --env node24 install
+mise --env node24 exec -- node --version
+
+# run the full check/test/build suite under either environment
+mise run verify
+mise --env node24 run verify
+
+# with mise shell integration active, project commands are available directly
 # list configured sources
 pnpm worker -- sources
 
@@ -79,6 +91,9 @@ pnpm worker -- discover nju-cs-graduate
 
 # fetch and parse the newest detail page
 pnpm worker -- fetch nju-cs-graduate 1
+
+# ingest notices and raw documents into SQLite
+pnpm worker -- ingest nju-cs-graduate /tmp/nju-info.sqlite 10
 ```
 
 Live commands access public NJU websites. Unit tests use local fixtures instead.
