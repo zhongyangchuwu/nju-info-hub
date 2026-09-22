@@ -1,75 +1,187 @@
-import { createHash } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
-import type { RawDocument, WebPlusSourceConfig } from '@nju-info/core';
-import { discoverWebPlusItems, parseWebPlusNotice } from './webplus.js';
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+import type { RawDocument, WebPlusSourceConfig } from "@nju-info/core";
+import {
+  discoverWebPlusItems,
+  discoverWebPlusPage,
+  parseWebPlusNotice,
+} from "./webplus.js";
 
-const source: WebPlusSourceConfig = {
-  schemaVersion: 1,
-  id: 'nju-cs-graduate',
-  name: '计算机学院研究生公告栏',
-  organization: { id: 'nju-cs', name: '计算机学院' },
-  url: 'https://cs.nju.edu.cn/1703/list.htm',
-  adapter: { type: 'webplus' },
-  audience: ['graduate'],
-  categories: ['graduate'],
-  enabled: true,
-};
+function fixture(name: string): string {
+  return readFileSync(
+    new URL(`../fixtures/webplus/${name}`, import.meta.url),
+    "utf8",
+  );
+}
 
-function raw(url: string, body: string): RawDocument {
+function source(
+  id: string,
+  name: string,
+  url: string,
+  organization = "南京大学",
+): WebPlusSourceConfig {
   return {
-    sourceId: source.id,
+    schemaVersion: 1,
+    id,
+    name,
+    organization: { id: `${id}-org`, name: organization },
     url,
-    fetchedAt: '2026-09-22T00:00:00.000Z',
-    contentType: 'text/html; charset=utf-8',
-    body,
-    sha256: createHash('sha256').update(body).digest('hex'),
+    adapter: { type: "webplus" },
+    audience: ["graduate"],
+    categories: ["notice"],
+    enabled: true,
   };
 }
 
-describe('WebPlus adapter', () => {
-  it('discovers article links and nearby publication dates', () => {
-    const list = raw(
-      source.url,
-      `<ul class="news_list list2">
-        <li><span class="news_title"><a href="/e2/e4/c1703a844516/page.htm" title="奖学金评选工作的通知">奖学金评选工作的通知</a></span><span class="news_meta">2026-09-21</span></li>
-      </ul>`,
+function raw(sourceId: string, url: string, body: string): RawDocument {
+  return {
+    sourceId,
+    url,
+    fetchedAt: "2026-09-22T00:00:00.000Z",
+    contentType: "text/html; charset=utf-8",
+    body,
+    sha256: createHash("sha256").update(body).digest("hex"),
+  };
+}
+
+describe("WebPlus adapter", () => {
+  it("discovers CS notices and WebPlus pagination links", () => {
+    const config = source(
+      "nju-cs-graduate",
+      "计算机学院研究生公告栏",
+      "https://cs.nju.edu.cn/1703/list.htm",
+      "计算机学院",
+    );
+    const page = discoverWebPlusPage(
+      raw(config.id, config.url, fixture("cs-list.html")),
+      config,
     );
 
-    expect(discoverWebPlusItems(list, source)).toEqual([
-      {
-        sourceId: 'nju-cs-graduate',
-        url: 'https://cs.nju.edu.cn/e2/e4/c1703a844516/page.htm',
-        title: '奖学金评选工作的通知',
-        publishedAtRaw: '2026-09-21',
-      },
-    ]);
+    expect(page.items).toHaveLength(1);
+    expect(page.items[0]).toMatchObject({
+      title: "计算机学院2026年研究生奖学金评选工作的通知",
+      publishedAtRaw: "2026-09-21",
+    });
+    expect(page.nextPageUrl).toBe("https://cs.nju.edu.cn/1703/list2.htm");
+    expect(page.lastPageUrl).toBe("https://cs.nju.edu.cn/1703/list29.htm");
+    expect(page.currentPage).toBe(1);
+    expect(page.totalPages).toBe(29);
   });
 
-  it('parses content and both link/pdf-player attachments', () => {
-    const detail = raw(
-      'https://cs.nju.edu.cn/e2/e4/c1703a844516/page.htm',
-      `<article>
-        <h1 class="arti_title">计算机学院2026年研究生奖学金评选工作的通知</h1>
-        <p class="arti_metas"><span class="arti_update">发布时间：2026-09-21</span></p>
-        <div class="wp_articlecontent">
-          <p>请按要求提交材料。</p>
-          <span id="奖学金通知.pdf" class="wp_pdf_player" pdfsrc="/_upload/article/files/a/notice.pdf"></span>
-          <a href="/_upload/article/files/a/form.xlsx" title="附件一：申请表.xlsx">附件一：申请表.xlsx</a>
-        </div>
-      </article>`,
-    );
+  it.each([
+    [
+      "xgb-list.html",
+      "nju-student-affairs-notices",
+      "https://xgb.nju.edu.cn/gsgg/list.htm",
+      "关于开展2026年度南京大学研究生奖学金评选工作的通知",
+    ],
+    [
+      "stuex-list.html",
+      "nju-student-exchange",
+      "https://stuex.nju.edu.cn/2539/list.htm",
+      "【奥地利-本科生】2027年春季学期格拉茨大学Erasmus+交换项目通知",
+    ],
+  ])("parses list structure from %s", (file, id, url, title) => {
+    const config = source(id, id, url);
+    const items = discoverWebPlusItems(raw(id, url, fixture(file)), config);
 
-    const notice = parseWebPlusNotice(detail, source);
-    expect(notice.title).toContain('研究生奖学金');
-    expect(notice.publishedAtRaw).toBe('2026-09-21');
-    expect(notice.bodyText).toContain('请按要求提交材料');
+    expect(items).toHaveLength(1);
+    expect(items[0]?.title).toBe(title);
+  });
+
+  it("parses content and both link/pdf-player attachments", () => {
+    const config = source(
+      "nju-cs-graduate",
+      "计算机学院研究生公告栏",
+      "https://cs.nju.edu.cn/1703/list.htm",
+      "计算机学院",
+    );
+    const detailUrl = "https://cs.nju.edu.cn/e2/e4/c1703a844516/page.htm";
+    const detail = raw(config.id, detailUrl, fixture("cs-detail.html"));
+
+    const notice = parseWebPlusNotice(detail, config);
+    expect(notice.title).toContain("研究生奖学金");
+    expect(notice.publishedAtRaw).toBe("2026-09-21");
+    expect(notice.bodyText).toContain("请按要求提交材料");
     expect(notice.attachments).toHaveLength(2);
     expect(notice.attachments.map((item) => item.url)).toEqual(
       expect.arrayContaining([
-        'https://cs.nju.edu.cn/_upload/article/files/a/notice.pdf',
-        'https://cs.nju.edu.cn/_upload/article/files/a/form.xlsx',
+        "https://cs.nju.edu.cn/_upload/article/files/a/notice.pdf",
+        "https://cs.nju.edu.cn/_upload/article/files/a/form.xlsx",
       ]),
     );
   });
-});
 
+  it("ignores upload links outside the article content", () => {
+    const config = source(
+      "nju-cs-graduate",
+      "计算机学院研究生公告栏",
+      "https://cs.nju.edu.cn/1703/list.htm",
+      "计算机学院",
+    );
+    const detail = raw(
+      config.id,
+      "https://cs.nju.edu.cn/a/b/c1a1/page.htm",
+      `<a href="/_upload/article/files/a/sidebar.pdf">sidebar</a>
+       <h1 class="arti_title">Notice</h1>
+       <div class="wp_articlecontent">
+         <a href="/_upload/article/files/a/body.pdf">body</a>
+       </div>`,
+    );
+
+    const notice = parseWebPlusNotice(detail, config);
+    expect(notice.attachments).toEqual([
+      expect.objectContaining({
+        url: "https://cs.nju.edu.cn/_upload/article/files/a/body.pdf",
+      }),
+    ]);
+  });
+
+  it("ignores cross-origin pagination links", () => {
+    const config = source(
+      "nju-test",
+      "Test",
+      "https://example.nju.edu.cn/notices/list.htm",
+    );
+    const page = discoverWebPlusPage(
+      raw(
+        config.id,
+        config.url,
+        '<div class="wp_paging"><a class="next" href="https://evil.example/list2.htm">next</a></div>',
+      ),
+      config,
+    );
+
+    expect(page.nextPageUrl).toBeUndefined();
+  });
+
+  it("uses a configured listItem selector for links and nearby dates", () => {
+    const config: WebPlusSourceConfig = {
+      ...source(
+        "nju-custom",
+        "Custom",
+        "https://custom.nju.edu.cn/notices/list.htm",
+      ),
+      adapter: {
+        type: "webplus",
+        selectors: { listItem: ".notice-card" },
+      },
+    };
+    const page = discoverWebPlusPage(
+      raw(
+        config.id,
+        config.url,
+        '<div class="notice-card"><a href="/a/b/c1a1/page.htm">Custom notice</a><time>2026-09-22</time></div>',
+      ),
+      config,
+    );
+
+    expect(page.items).toEqual([
+      expect.objectContaining({
+        title: "Custom notice",
+        publishedAtRaw: "2026-09-22",
+      }),
+    ]);
+  });
+});

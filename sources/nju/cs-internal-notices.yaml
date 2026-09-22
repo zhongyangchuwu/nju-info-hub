@@ -1,17 +1,18 @@
 schemaVersion: 1
-id: nju-cs-graduate
-name: 计算机学院研究生公告栏
+id: nju-cs-internal-notices
+name: 计算机学院院内公告
 organization:
   id: nju-cs
   name: 计算机学院
-url: https://cs.nju.edu.cn/1703/list.htm
+url: https://cs.nju.edu.cn/1702/list.htm
 adapter:
   type: webplus
 audience:
   - graduate
+  - faculty
 categories:
   - graduate
-  - student-affairs
+  - research
 crawl:
-  intervalMinutes: 30
+  intervalMinutes: 60
 enabled: true

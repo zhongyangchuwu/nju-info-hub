@@ -15,4 +15,3 @@ categories:
 crawl:
   intervalMinutes: 60
 enabled: true
-

@@ -5,6 +5,8 @@ export interface RawDocument {
   contentType: string | null;
   body: string;
   sha256: string;
+  etag?: string;
+  lastModified?: string;
 }
 
 export interface DiscoveredItem {
@@ -12,6 +14,14 @@ export interface DiscoveredItem {
   url: string;
   title: string;
   publishedAtRaw?: string;
+}
+
+export interface DiscoveryPage {
+  items: DiscoveredItem[];
+  nextPageUrl?: string;
+  lastPageUrl?: string;
+  currentPage?: number;
+  totalPages?: number;
 }
 
 export interface Attachment {
@@ -34,4 +44,3 @@ export interface ParsedNotice {
     contentSha256: string;
   };
 }
-
