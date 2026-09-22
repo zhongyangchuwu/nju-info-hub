@@ -5,6 +5,8 @@ export interface RawDocument {
   contentType: string | null;
   body: string;
   sha256: string;
+  etag?: string;
+  lastModified?: string;
 }
 
 export interface DiscoveredItem {

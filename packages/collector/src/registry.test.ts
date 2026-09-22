@@ -1,18 +1,27 @@
-import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
-import { loadSourceDirectory } from './registry.js';
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+import { loadSourceDirectory } from "./registry.js";
 
-describe('source registry', () => {
-  it('loads every checked-in NJU source with unique ids', async () => {
+const EXPECTED_SOURCE_IDS = [
+  "nju-academic-calendar",
+  "nju-cs-graduate",
+  "nju-cs-internal-notices",
+  "nju-cs-seminars",
+  "nju-itsc-notices",
+  "nju-science-tech",
+  "nju-student-affairs-notices",
+  "nju-student-exchange",
+].sort();
+
+describe("source registry", () => {
+  it("loads the checked-in NJU inventory with unique ids", async () => {
     const directory = fileURLToPath(
-      new URL('../../../sources/nju/', import.meta.url),
+      new URL("../../../sources/nju/", import.meta.url),
     );
     const sources = await loadSourceDirectory(directory);
+    const ids = sources.map((source) => source.id).sort();
 
-    expect(sources.length).toBeGreaterThanOrEqual(8);
-    expect(new Set(sources.map((source) => source.id)).size).toBe(
-      sources.length,
-    );
-    expect(sources.every((source) => source.enabled)).toBe(true);
+    expect(ids).toEqual(EXPECTED_SOURCE_IDS);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });

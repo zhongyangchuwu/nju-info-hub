@@ -11,7 +11,6 @@ audience:
   - graduate
 categories:
   - graduate
-  - scholarship
   - student-affairs
 crawl:
   intervalMinutes: 30

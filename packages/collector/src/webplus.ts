@@ -29,14 +29,23 @@ function normalizeText(value: string): string {
     .trim();
 }
 
-function absolutize(baseUrl: string, href: string): string {
-  return new URL(href, baseUrl).toString();
+function resolveHttpUrl(baseUrl: string, href: string): URL | undefined {
+  try {
+    const target = new URL(href, baseUrl);
+    return target.protocol === "http:" || target.protocol === "https:"
+      ? target
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function sameOriginUrl(baseUrl: string, href: string): string | undefined {
-  const base = new URL(baseUrl);
-  const target = new URL(href, base);
-  return target.origin === base.origin ? target.toString() : undefined;
+  const base = resolveHttpUrl(baseUrl, baseUrl);
+  const target = resolveHttpUrl(baseUrl, href);
+  return base && target && target.origin === base.origin
+    ? target.toString()
+    : undefined;
 }
 
 function looksLikeArticleUrl(url: URL): boolean {
@@ -63,53 +72,24 @@ export function discoverWebPlusPage(
 ): DiscoveryPage {
   const $ = cheerio.load(raw.body);
   const listItemSelector = source.adapter.selectors?.listItem;
-  const selector =
-    source.adapter.selectors?.listLink ??
-    (listItemSelector
-      ? `${listItemSelector} a[href]`
-      : DEFAULT_LIST_LINK_SELECTOR);
+  const explicitListLink = source.adapter.selectors?.listLink;
   const items = new Map<string, DiscoveredItem>();
 
-  $(selector).each((_, element) => {
-    const href = $(element).attr("href");
-    if (!href || href.startsWith("javascript:")) return;
-
-    const absolute = new URL(href, raw.url);
-    if (!looksLikeArticleUrl(absolute)) return;
-
-    const title = normalizeText($(element).attr("title") ?? $(element).text());
-    if (!title) return;
-
-    const url = absolute.toString();
-    if (items.has(url)) return;
-
-    const publishedAtRaw = publishedDateNearAnchor(
-      $,
-      element,
-      listItemSelector,
-    );
-    items.set(url, {
-      sourceId: source.id,
-      url,
-      title,
-      ...(publishedAtRaw ? { publishedAtRaw } : {}),
-    });
-  });
-
-  // Some WebPlus themes omit the common list classes. Fall back to all links,
-  // but retain the page.htm heuristic so navigation links are not emitted.
-  if (items.size === 0) {
-    $("a[href]").each((_, element) => {
+  const scanLinks = (selector: string): void => {
+    $(selector).each((_, element) => {
       const href = $(element).attr("href");
-      if (!href || href.startsWith("javascript:")) return;
-      const absolute = new URL(href, raw.url);
-      if (!looksLikeArticleUrl(absolute)) return;
-      const title = normalizeText(
-        $(element).attr("title") ?? $(element).text(),
-      );
+      if (!href) return;
+
+      const absolute = resolveHttpUrl(raw.url, href);
+      if (!absolute || !looksLikeArticleUrl(absolute)) return;
+
+      const titleFromAttribute = normalizeText($(element).attr("title") ?? "");
+      const title = titleFromAttribute || normalizeText($(element).text());
       if (!title) return;
+
       const url = absolute.toString();
       if (items.has(url)) return;
+
       const publishedAtRaw = publishedDateNearAnchor(
         $,
         element,
@@ -122,6 +102,14 @@ export function discoverWebPlusPage(
         ...(publishedAtRaw ? { publishedAtRaw } : {}),
       });
     });
+  };
+
+  if (explicitListLink) {
+    scanLinks(explicitListLink);
+  } else if (listItemSelector) {
+    scanLinks(`${listItemSelector} a[href]`);
+  } else {
+    scanLinks(DEFAULT_LIST_LINK_SELECTOR);
   }
 
   const nextHref = $(".wp_paging a.next[href], .page_nav a.next[href]")
@@ -138,6 +126,25 @@ export function discoverWebPlusPage(
     normalizeText($(".wp_paging .all_pages").first().text()),
     10,
   );
+  const perPage = Number.parseInt(
+    normalizeText($(".wp_paging .per_count").first().text()),
+    10,
+  );
+
+  const likelyPartialPage =
+    Number.isFinite(perPage) &&
+    Number.isFinite(currentPage) &&
+    Number.isFinite(totalPages) &&
+    currentPage < totalPages &&
+    items.size < perPage;
+
+  if (
+    !explicitListLink &&
+    !listItemSelector &&
+    (items.size === 0 || likelyPartialPage)
+  ) {
+    scanLinks("a[href]");
+  }
 
   const nextPageUrl =
     nextHref && !nextHref.startsWith("javascript:")
@@ -166,23 +173,30 @@ export function discoverWebPlusItems(
 
 function collectAttachments(
   $: cheerio.CheerioAPI,
+  content: cheerio.Cheerio<AnyNode>,
   baseUrl: string,
 ): Attachment[] {
   const attachments = new Map<string, Attachment>();
 
-  $('a[href*="/_upload/article/files/"]').each((_, element) => {
+  content.find('a[href*="/_upload/article/files/"]').each((_, element) => {
     const href = $(element).attr("href");
     if (!href) return;
-    const url = absolutize(baseUrl, href);
-    const title =
-      normalizeText($(element).attr("title") ?? $(element).text()) || url;
+    const target = resolveHttpUrl(baseUrl, href);
+    if (!target) return;
+
+    const url = target.toString();
+    const titleFromAttribute = normalizeText($(element).attr("title") ?? "");
+    const title = titleFromAttribute || normalizeText($(element).text()) || url;
     attachments.set(url, { url, title });
   });
 
-  $('[pdfsrc*="/_upload/article/files/"]').each((_, element) => {
+  content.find('[pdfsrc*="/_upload/article/files/"]').each((_, element) => {
     const pdfsrc = $(element).attr("pdfsrc");
     if (!pdfsrc) return;
-    const url = absolutize(baseUrl, pdfsrc);
+    const target = resolveHttpUrl(baseUrl, pdfsrc);
+    if (!target) return;
+
+    const url = target.toString();
     const title =
       normalizeText($(element).attr("id") ?? $(element).attr("title") ?? "") ||
       url;
@@ -206,15 +220,21 @@ export function parseWebPlusNotice(
     source.adapter.selectors?.content ?? DEFAULT_CONTENT_SELECTOR;
 
   const title =
-    normalizeText($(titleSelector).first().text()) ||
-    discovered?.title ||
-    "Untitled notice";
+    normalizeText($(titleSelector).first().text()) || discovered?.title;
+  if (!title) {
+    throw new Error(`missing notice title for ${source.id}: ${raw.url}`);
+  }
+
   const publishedText = normalizeText($(publishedSelector).first().text());
   const publishedAtRaw =
     publishedText.match(DATE_RE)?.[0] ?? discovered?.publishedAtRaw;
 
   const content = $(contentSelector).first();
-  const bodyHtml = content.length ? (content.html() ?? "") : "";
+  if (!content.length) {
+    throw new Error(`missing notice content for ${source.id}: ${raw.url}`);
+  }
+
+  const bodyHtml = content.html() ?? "";
   const bodyText = normalizeText(content.text());
   const sourceItemId = createHash("sha256")
     .update(raw.url)
@@ -229,7 +249,7 @@ export function parseWebPlusNotice(
     ...(publishedAtRaw ? { publishedAtRaw } : {}),
     bodyText,
     bodyHtml,
-    attachments: collectAttachments($, raw.url),
+    attachments: collectAttachments($, content, raw.url),
     provenance: {
       fetchedAt: raw.fetchedAt,
       contentSha256: raw.sha256,

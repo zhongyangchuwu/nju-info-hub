@@ -1,5 +1,5 @@
-import path from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 import {
   discoverWebPlusItems,
   discoverWebPlusPage,
@@ -10,7 +10,7 @@ import {
 import type { SourceConfig, WebPlusSourceConfig } from "@nju-info/core";
 
 function sourceDirectory(): string {
-  return path.resolve(process.cwd(), "../../sources/nju");
+  return fileURLToPath(new URL("../../../sources/nju/", import.meta.url));
 }
 
 async function loadSources(): Promise<SourceConfig[]> {
@@ -30,9 +30,19 @@ function requireWebPlus(source: SourceConfig): WebPlusSourceConfig {
   return source as WebPlusSourceConfig;
 }
 
+function positiveInteger(value: string | undefined, fallback: number): number {
+  if (value === undefined) return fallback;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`expected a positive integer, got: ${value}`);
+  }
+  return parsed;
+}
+
 async function discoverPages(
   source: WebPlusSourceConfig,
   maxPages: number,
+  itemLimit = Number.POSITIVE_INFINITY,
 ): Promise<{
   pagesVisited: number;
   items: ReturnType<typeof discoverWebPlusItems>;
@@ -45,11 +55,19 @@ async function discoverPages(
   let pageUrl: string | undefined = source.url;
   let pagesVisited = 0;
 
-  while (pageUrl && pagesVisited < maxPages && !seenPages.has(pageUrl)) {
+  while (
+    pageUrl &&
+    pagesVisited < maxPages &&
+    items.size < itemLimit &&
+    !seenPages.has(pageUrl)
+  ) {
     seenPages.add(pageUrl);
     const raw = await fetchRawDocument(source.id, pageUrl);
     const page = discoverWebPlusPage(raw, source);
-    for (const item of page.items) items.set(item.url, item);
+    for (const item of page.items) {
+      items.set(item.url, item);
+      if (items.size >= itemLimit) break;
+    }
     pagesVisited += 1;
     pageUrl = page.nextPageUrl;
   }
@@ -77,37 +95,37 @@ async function main(): Promise<void> {
     return;
   }
 
+  const sourceCommands = new Set(["discover", "discover-pages", "fetch"]);
+  if (!sourceCommands.has(command)) {
+    throw new Error(`unknown command: ${command}`);
+  }
+
   if (!sourceId) throw new Error(`usage: ${command} <source-id> [limit]`);
   const source = requireWebPlus(findSource(sources, sourceId));
 
   if (command === "discover-pages") {
-    const result = await discoverPages(source, Number(limitArg ?? 2));
+    const result = await discoverPages(source, positiveInteger(limitArg, 2));
     console.log(JSON.stringify(result, null, 2));
     return;
   }
 
-  const listRaw = await fetchRawDocument(source.id, source.url);
-  const items = discoverWebPlusItems(listRaw, source);
-
   if (command === "discover") {
+    const listRaw = await fetchRawDocument(source.id, source.url);
+    const items = discoverWebPlusItems(listRaw, source);
     console.log(
-      JSON.stringify(items.slice(0, Number(limitArg ?? 10)), null, 2),
+      JSON.stringify(items.slice(0, positiveInteger(limitArg, 10)), null, 2),
     );
     return;
   }
 
-  if (command === "fetch") {
-    const limit = Number(limitArg ?? 1);
-    const notices = [];
-    for (const item of items.slice(0, limit)) {
-      const detailRaw = await fetchRawDocument(source.id, item.url);
-      notices.push(parseWebPlusNotice(detailRaw, source, item));
-    }
-    console.log(JSON.stringify(notices, null, 2));
-    return;
+  const limit = positiveInteger(limitArg, 1);
+  const { items } = await discoverPages(source, 100, limit);
+  const notices = [];
+  for (const item of items) {
+    const detailRaw = await fetchRawDocument(source.id, item.url);
+    notices.push(parseWebPlusNotice(detailRaw, source, item));
   }
-
-  throw new Error(`unknown command: ${command}`);
+  console.log(JSON.stringify(notices, null, 2));
 }
 
 main().catch((error: unknown) => {
