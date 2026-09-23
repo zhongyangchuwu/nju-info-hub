@@ -18,6 +18,7 @@ jobs:
       NJU_INFO_CACHE_DIR: ${{ github.workspace }}/.cache/nju-info
       NJU_INFO_DB: ${{ github.workspace }}/.cache/nju-info/feeds.sqlite
       NJU_INFO_PAGES_DIR: ${{ github.workspace }}/_site
+      NJU_INFO_PUBLIC_BASE_URL: https://zhongyangchuwu.github.io/nju-info-hub/
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -44,8 +45,8 @@ jobs:
           pnpm worker -- ingest nju-cs-graduate "$NJU_INFO_DB" 10
           pnpm worker -- ingest nju-cs-internal-notices "$NJU_INFO_DB" 10
           pnpm worker -- ingest nju-cs-seminars "$NJU_INFO_DB" 10
-      - name: Export static JSON Feeds
-        run: pnpm --filter @nju-info/api export-feeds -- "$NJU_INFO_DB" "$NJU_INFO_PAGES_DIR" nju-cs-graduate nju-cs-internal-notices nju-cs-seminars
+      - name: Export static feeds and CS subscriptions
+        run: pnpm --filter @nju-info/api export-feeds -- "$NJU_INFO_DB" "$NJU_INFO_PAGES_DIR" nju-cs-graduate nju-cs-internal-notices nju-cs-seminars --base-url "$NJU_INFO_PUBLIC_BASE_URL" --opml subscriptions/cs.opml
       - name: Save SQLite database cache
         uses: actions/cache/save@v4
         continue-on-error: true

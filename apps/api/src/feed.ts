@@ -1,57 +1,40 @@
 import type { NoticeQueryResult, PersistedSourceSummary } from "@nju-info/db";
-
-const mimeTypes: Record<string, string> = {
-  pdf: "application/pdf",
-  doc: "application/msword",
-  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  xls: "application/vnd.ms-excel",
-  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  ppt: "application/vnd.ms-powerpoint",
-  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  txt: "text/plain",
-  zip: "application/zip",
-};
-
-function mimeType(url: string, title: string, stored: string | undefined): string {
-  if (stored) return stored;
-  const urlExtension = /\.([a-z0-9]+)(?:[?#]|$)/i.exec(url)?.[1]?.toLowerCase();
-  const titleExtension = /\.([a-z0-9]+)$/i.exec(title.trim())?.[1]?.toLowerCase();
-  return (urlExtension && mimeTypes[urlExtension]) ||
-    (titleExtension && mimeTypes[titleExtension]) || "application/octet-stream";
-}
+import { syndicationFeed, type SyndicationContext } from "./syndication.js";
 
 /** Serialize current revisions in database order; day-only timestamps are transport encodings, not source times. */
-export function buildJsonFeed(source: PersistedSourceSummary, notices: NoticeQueryResult[]) {
+export function buildJsonFeed(source: PersistedSourceSummary, notices: NoticeQueryResult[], context: SyndicationContext = {}) {
+  const feed = syndicationFeed(source, notices, context.generatedAt);
   return {
     version: "https://jsonfeed.org/version/1.1",
-    title: `${source.organization.name} — ${source.name}`,
+    title: feed.title,
     home_page_url: source.url,
+    ...(context.selfUrl ? { feed_url: context.selfUrl } : {}),
     _nju: { source_id: source.id, organization: source.organization },
-    items: notices.map((notice) => ({
-      id: `${encodeURIComponent(notice.sourceId)}:${encodeURIComponent(notice.sourceItemId)}`,
-      url: notice.url,
-      title: notice.title,
-      ...(notice.publishedOn === null ? {} : { date_published: `${notice.publishedOn}T00:00:00+08:00` }),
-      ...(notice.bodyHtml ? { content_html: notice.bodyHtml } : {}),
-      content_text: notice.bodyText,
-      ...(notice.attachments.length ? {
-        attachments: notice.attachments.map((attachment) => ({
+    items: feed.entries.map((entry) => ({
+      id: entry.id,
+      url: entry.url,
+      title: entry.title,
+      ...(entry.publishedAt ? { date_published: entry.publishedAt } : {}),
+      ...(entry.bodyHtml ? { content_html: entry.bodyHtml } : {}),
+      content_text: entry.bodyText,
+      ...(entry.attachments.length ? {
+        attachments: entry.attachments.map((attachment) => ({
           url: attachment.url,
-          mime_type: mimeType(attachment.url, attachment.title, attachment.mediaType),
+          mime_type: attachment.mimeType,
           title: attachment.title,
         })),
       } : {}),
       _nju: {
-        source_id: notice.sourceId,
-        source_name: notice.sourceName,
-        organization: notice.organization,
-        ...(notice.publishedOn === null ? {} : {
-          published_on: notice.publishedOn,
+        source_id: entry.sourceId,
+        source_name: entry.sourceName,
+        organization: entry.organization,
+        ...(entry.publishedOn === null ? {} : {
+          published_on: entry.publishedOn,
           date_precision: "day",
         }),
-        revision_number: notice.revisionNumber,
-        fetched_at: notice.provenance.fetchedAt,
-        content_sha256: notice.provenance.contentSha256,
+        revision_number: entry.revisionNumber,
+        fetched_at: entry.fetchedAt,
+        content_sha256: entry.contentSha256,
       },
     })),
   };

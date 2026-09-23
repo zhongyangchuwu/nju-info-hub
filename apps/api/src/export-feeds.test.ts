@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InfoHubDatabase, InfoHubDatabaseReader } from "@nju-info/db";
@@ -109,7 +110,9 @@ describe("static JSON Feed exporter", () => {
         },
       });
       expect(feed.items).toHaveLength(51);
-      expect(readdirSync(join(outputDirectory, "feeds"))).toEqual([`${GRADUATE_SOURCE.id}.json`]);
+      expect(readdirSync(join(outputDirectory, "feeds"))).toEqual([
+        `${GRADUATE_SOURCE.id}.atom`, `${GRADUATE_SOURCE.id}.json`, `${GRADUATE_SOURCE.id}.rss`,
+      ]);
     } finally {
       reader.close();
       rmSync(directory, { recursive: true, force: true });
@@ -128,7 +131,9 @@ describe("static JSON Feed exporter", () => {
     const reader = new InfoHubDatabaseReader(database);
     try {
       await exportFeeds(reader, outputDirectory, [GRADUATE_SOURCE.id]);
-      expect(readdirSync(feedsDirectory)).toEqual([`${GRADUATE_SOURCE.id}.json`]);
+      expect(readdirSync(feedsDirectory)).toEqual([
+        `${GRADUATE_SOURCE.id}.atom`, `${GRADUATE_SOURCE.id}.json`, `${GRADUATE_SOURCE.id}.rss`,
+      ]);
       expect(JSON.parse(readFileSync(join(feedsDirectory, `${GRADUATE_SOURCE.id}.json`), "utf8")).items)
         .toHaveLength(1);
       expect(readFileSync(siblingFile, "utf8")).toBe("keep this page");
@@ -146,8 +151,8 @@ describe("static JSON Feed exporter", () => {
     try {
       await exportFeeds(reader, outputDirectory);
       expect(readdirSync(join(outputDirectory, "feeds")).sort()).toEqual([
-        `${GRADUATE_SOURCE.id}.json`,
-        `${SEMINAR_SOURCE.id}.json`,
+        `${GRADUATE_SOURCE.id}.atom`, `${GRADUATE_SOURCE.id}.json`, `${GRADUATE_SOURCE.id}.rss`,
+        `${SEMINAR_SOURCE.id}.atom`, `${SEMINAR_SOURCE.id}.json`, `${SEMINAR_SOURCE.id}.rss`,
       ]);
     } finally {
       reader.close();
@@ -198,6 +203,118 @@ describe("static JSON Feed exporter", () => {
       expect(existsSync(outputDirectory)).toBe(false);
     } finally {
       reader.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("writes only selected sources to OPML in persisted order with absolute RSS subscriptions", async () => {
+    const directory = temporaryDirectory();
+    const database = createPersistedDatabase(directory);
+    const outputDirectory = join(directory, "published");
+    const reader = new InfoHubDatabaseReader(database);
+    try {
+      await exportFeeds(reader, outputDirectory, [SEMINAR_SOURCE.id, GRADUATE_SOURCE.id], {
+        publicBaseUrl: "https://example.org/pilot", opmlPath: "subscriptions/cs.opml",
+      });
+      const opml = readFileSync(join(outputDirectory, "subscriptions/cs.opml"), "utf8");
+      expect(opml).toContain('<opml version="2.0">');
+      expect(opml.match(/<outline /g)).toHaveLength(2);
+      expect(opml.indexOf("nju-cs-graduate.rss")).toBeLessThan(opml.indexOf("nju-cs-seminars.rss"));
+      expect(opml).toContain('text="School of Computer Science — Graduate notices" title="School of Computer Science — Graduate notices" type="rss"');
+      expect(opml).toContain('xmlUrl="https://example.org/pilot/feeds/nju-cs-graduate.rss" htmlUrl="https://cs.nju.edu.cn/graduate/list.htm"');
+      const json = JSON.parse(readFileSync(join(outputDirectory, "feeds/nju-cs-graduate.json"), "utf8"));
+      expect(json.feed_url).toBe("https://example.org/pilot/feeds/nju-cs-graduate.json");
+      expect(readFileSync(join(outputDirectory, "feeds/nju-cs-graduate.atom"), "utf8"))
+        .toContain('rel="self" type="application/atom+xml" href="https://example.org/pilot/feeds/nju-cs-graduate.atom"');
+      expect(readFileSync(join(outputDirectory, "feeds/nju-cs-graduate.rss"), "utf8")).not.toContain("<enclosure");
+    } finally {
+      reader.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("escapes OPML metadata and retains only requested IDs", async () => {
+    const directory = temporaryDirectory();
+    const outputDirectory = join(directory, "published");
+    const special = { ...GRADUATE_SOURCE, name: '通知 & <新> "甲"',
+      organization: { id: "nju-cs", name: '学院 & "乙"' },
+      url: "https://cs.nju.edu.cn/list.htm?x=1&y=2" };
+    const reader: FeedExportReader = {
+      listSources: () => [{ id: special.id, name: special.name, organization: special.organization,
+        url: special.url, enabled: true },
+      { id: SEMINAR_SOURCE.id, name: SEMINAR_SOURCE.name, organization: SEMINAR_SOURCE.organization,
+        url: SEMINAR_SOURCE.url, enabled: true }],
+      listRecentNotices: () => [],
+    };
+    try {
+      await exportFeeds(reader, outputDirectory, [special.id], {
+        publicBaseUrl: "https://example.org/", opmlPath: "subscriptions/cs.opml",
+      });
+      const opml = readFileSync(join(outputDirectory, "subscriptions/cs.opml"), "utf8");
+      expect(opml.match(/<outline /g)).toHaveLength(1);
+      expect(opml).toContain('text="学院 &amp; &quot;乙&quot; — 通知 &amp; &lt;新&gt; &quot;甲&quot;"');
+      expect(opml).toContain('htmlUrl="https://cs.nju.edu.cn/list.htm?x=1&amp;y=2"');
+      expect(opml).not.toContain("nju-cs-seminars.rss");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("fails unsafe OPML paths and invalid base URLs before replacing existing feeds", async () => {
+    const directory = temporaryDirectory();
+    const database = createPersistedDatabase(directory);
+    const outputDirectory = join(directory, "published");
+    mkdirSync(join(outputDirectory, "feeds"), { recursive: true });
+    writeFileSync(join(outputDirectory, "feeds/previous.json"), "previous");
+    const reader = new InfoHubDatabaseReader(database);
+    try {
+      const invalid = [
+        { opmlPath: "subscriptions/cs.opml" },
+        ...["relative", "file:///tmp/evil", "ftp://example.org/", "https://user:pass@example.org/",
+          "https://example.org/?x=1", "https://example.org/#a"].map((publicBaseUrl) =>
+          ({ publicBaseUrl, opmlPath: "subscriptions/cs.opml" })),
+        ...["../escape.opml", "/tmp/escape.opml", "subscriptions/../../escape.opml", "feeds/cs.opml",
+          "subscriptions\\escape.opml", "subscriptions//cs.opml", ""].map((opmlPath) =>
+          ({ publicBaseUrl: "https://example.org/", opmlPath })),
+      ];
+      for (const options of invalid) {
+        await expect(exportFeeds(reader, outputDirectory, [GRADUATE_SOURCE.id], options)).rejects.toThrow();
+        expect(readFileSync(join(outputDirectory, "feeds/previous.json"), "utf8")).toBe("previous");
+      }
+      symlinkSync(directory, join(outputDirectory, "subscriptions"));
+      await expect(exportFeeds(reader, outputDirectory, [GRADUATE_SOURCE.id], {
+        publicBaseUrl: "https://example.org/", opmlPath: "subscriptions/cs.opml",
+      })).rejects.toThrow("symbolic link");
+      expect(readFileSync(join(outputDirectory, "feeds/previous.json"), "utf8")).toBe("previous");
+    } finally {
+      reader.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("accepts legacy positional CLI and explicit base URL/OPML flags", () => {
+    const directory = temporaryDirectory();
+    const database = createPersistedDatabase(directory);
+    const outputDirectory = join(directory, "published");
+    const invoke = (...args: string[]) => spawnSync("pnpm", ["--filter", "@nju-info/api", "export-feeds", "--",
+      database, outputDirectory, ...args], { cwd: join(process.cwd(), "../.."), encoding: "utf8" });
+    try {
+      const legacy = invoke(GRADUATE_SOURCE.id);
+      expect(legacy.status, legacy.stderr).toBe(0);
+      expect(JSON.parse(readFileSync(join(outputDirectory, "feeds/nju-cs-graduate.json"), "utf8")))
+        .not.toHaveProperty("feed_url");
+      expect(existsSync(join(outputDirectory, "subscriptions/cs.opml"))).toBe(false);
+      const flagged = invoke(GRADUATE_SOURCE.id, "--base-url", "https://example.org/pilot/", "--opml", "subscriptions/cs.opml");
+      expect(flagged.status, flagged.stderr).toBe(0);
+      expect(readFileSync(join(outputDirectory, "subscriptions/cs.opml"), "utf8"))
+        .toContain("https://example.org/pilot/feeds/nju-cs-graduate.rss");
+      for (const args of [["--opml", "subscriptions/cs.opml"], ["--base-url"], ["--bogus", "x"],
+        ["--base-url", "https://example.org", "--base-url", "https://example.org"]]) {
+        expect(invoke(...args).status).not.toBe(0);
+        expect(readFileSync(join(outputDirectory, "subscriptions/cs.opml"), "utf8"))
+          .toContain("https://example.org/pilot/feeds/nju-cs-graduate.rss");
+      }
+    } finally {
       rmSync(directory, { recursive: true, force: true });
     }
   });
