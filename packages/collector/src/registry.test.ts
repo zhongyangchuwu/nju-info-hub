@@ -7,6 +7,7 @@ const EXPECTED_SOURCE_IDS = [
   "nju-cs-graduate",
   "nju-cs-internal-notices",
   "nju-cs-seminars",
+  "nju-graduate-school-notices",
   "nju-itsc-notices",
   "nju-science-tech",
   "nju-student-affairs-notices",

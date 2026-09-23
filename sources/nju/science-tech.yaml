@@ -4,7 +4,7 @@ name: 科学技术处通知公告
 organization:
   id: nju-science-tech-office
   name: 科学技术处
-url: https://scit.nju.edu.cn/10916/listm2.htm
+url: https://scit.nju.edu.cn/10916/list.htm
 adapter:
   type: webplus
 audience:

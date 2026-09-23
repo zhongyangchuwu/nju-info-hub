@@ -1,0 +1,17 @@
+schemaVersion: 1
+id: nju-graduate-school-notices
+name: 研究生院动态通知
+organization:
+  id: nju-graduate-school
+  name: 研究生院
+url: https://grawww.nju.edu.cn/905/list.htm
+adapter:
+  type: webplus
+audience:
+  - graduate
+categories:
+  - graduate
+  - student-affairs
+crawl:
+  intervalMinutes: 30
+enabled: true
