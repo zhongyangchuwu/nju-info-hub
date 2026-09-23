@@ -31,6 +31,22 @@ describe("fetchRawDocument", () => {
     expect(document.sha256).toHaveLength(64);
   });
 
+  it("records the final response URL after a redirect", async () => {
+    const requestedUrl = "https://example.edu/a/page.htm";
+    const response = new Response("<html>detail</html>", {
+      headers: { "content-type": "text/html" },
+    });
+    Object.defineProperty(response, "url", {
+      value: "https://example.edu/a/page.psp",
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => response));
+
+    const document = await fetchRawDocument("nju-test", requestedUrl);
+
+    expect(document.url).toBe(response.url);
+    expect(document.body).toBe("<html>detail</html>");
+  });
+
   it("sends conditional headers and returns null on 304", async () => {
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
       const headers = new Headers(init?.headers);

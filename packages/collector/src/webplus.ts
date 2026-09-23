@@ -98,7 +98,14 @@ export function discoverWebPlusPage(
       if (!href) return;
 
       const absolute = resolveHttpUrl(raw.url, href);
-      if (!absolute || !looksLikeArticleUrl(absolute)) return;
+      if (!absolute) return;
+      if (
+        !explicitListLink &&
+        !listItemSelector &&
+        !looksLikeArticleUrl(absolute)
+      ) {
+        return;
+      }
 
       const titleFromAttribute = normalizeText($(element).attr("title") ?? "");
       const title = titleFromAttribute || normalizeText($(element).text());
@@ -129,10 +136,14 @@ export function discoverWebPlusPage(
     scanLinks(DEFAULT_LIST_LINK_SELECTOR);
   }
 
-  const nextHref = $(".wp_paging a.next[href], .page_nav a.next[href]")
+  const nextHref = $(
+    ".wp_paging a.next[href], .page_nav a.next[href], .pb_sys_common .p_next a[href]",
+  )
     .first()
     .attr("href");
-  const lastHref = $(".wp_paging a.last[href], .page_nav a.last[href]")
+  const lastHref = $(
+    ".wp_paging a.last[href], .page_nav a.last[href], .pb_sys_common .p_last a[href]",
+  )
     .first()
     .attr("href");
   const currentPage = Number.parseInt(
@@ -281,15 +292,16 @@ export function parseWebPlusNotice(
 
   const bodyHtml = content.html() ?? "";
   const bodyText = normalizeText(content.text());
+  const url = discovered?.url ?? raw.url;
   const sourceItemId = createHash("sha256")
-    .update(raw.url)
+    .update(url)
     .digest("hex")
     .slice(0, 24);
 
   return {
     sourceId: source.id,
     sourceItemId,
-    url: raw.url,
+    url,
     title,
     ...(publishedAtRaw ? { publishedAtRaw } : {}),
     publishedOn: normalizePublicationDate(publishedAtRaw),
