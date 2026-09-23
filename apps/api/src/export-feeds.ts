@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { InfoHubDatabaseReader, PersistedSourceSummary } from "@nju-info/db";
 import { buildJsonFeed } from "./feed.js";
@@ -20,6 +20,7 @@ export async function exportFeeds(
   sourceIds?: readonly string[],
 ): Promise<void> {
   const sources = reader.listSources();
+  for (const source of sources) validateSourceId(source.id);
   let selectedSources: PersistedSourceSummary[];
 
   if (sourceIds === undefined) {
@@ -35,8 +36,8 @@ export async function exportFeeds(
     selectedSources = sources.filter((source) => requestedIds.has(source.id));
   }
 
-  for (const source of selectedSources) validateSourceId(source.id);
   const feedsDirectory = join(outputDirectory, "feeds");
+  await rm(feedsDirectory, { recursive: true, force: true });
   await mkdir(feedsDirectory, { recursive: true });
   for (const source of selectedSources) {
     const feed = buildJsonFeed(source, reader.listRecentNotices({ sourceId: source.id, limit: 100 }));

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InfoHubDatabase, InfoHubDatabaseReader } from "@nju-info/db";
@@ -116,6 +116,28 @@ describe("static JSON Feed exporter", () => {
     }
   });
 
+  it("replaces only the feeds directory on allow-listed export", async () => {
+    const directory = temporaryDirectory();
+    const database = createPersistedDatabase(directory);
+    const outputDirectory = join(directory, "published");
+    const feedsDirectory = join(outputDirectory, "feeds");
+    const siblingFile = join(outputDirectory, "index.html");
+    mkdirSync(feedsDirectory, { recursive: true });
+    writeFileSync(join(feedsDirectory, "stale.json"), "stale");
+    writeFileSync(siblingFile, "keep this page");
+    const reader = new InfoHubDatabaseReader(database);
+    try {
+      await exportFeeds(reader, outputDirectory, [GRADUATE_SOURCE.id]);
+      expect(readdirSync(feedsDirectory)).toEqual([`${GRADUATE_SOURCE.id}.json`]);
+      expect(JSON.parse(readFileSync(join(feedsDirectory, `${GRADUATE_SOURCE.id}.json`), "utf8")).items)
+        .toHaveLength(1);
+      expect(readFileSync(siblingFile, "utf8")).toBe("keep this page");
+    } finally {
+      reader.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("exports all persisted sources by default", async () => {
     const directory = temporaryDirectory();
     const database = createPersistedDatabase(directory);
@@ -133,15 +155,18 @@ describe("static JSON Feed exporter", () => {
     }
   });
 
-  it("rejects unknown IDs before creating the output directory", async () => {
+  it("rejects unknown IDs without replacing existing feeds", async () => {
     const directory = temporaryDirectory();
     const database = createPersistedDatabase(directory);
-    const outputDirectory = join(directory, "not-created");
+    const outputDirectory = join(directory, "published");
+    const feedsDirectory = join(outputDirectory, "feeds");
+    mkdirSync(feedsDirectory, { recursive: true });
+    writeFileSync(join(feedsDirectory, "previous.json"), "previous");
     const reader = new InfoHubDatabaseReader(database);
     try {
       await expect(exportFeeds(reader, outputDirectory, ["unknown-source"]))
         .rejects.toThrow("unknown source ID: unknown-source");
-      expect(existsSync(outputDirectory)).toBe(false);
+      expect(readFileSync(join(feedsDirectory, "previous.json"), "utf8")).toBe("previous");
     } finally {
       reader.close();
       rmSync(directory, { recursive: true, force: true });
@@ -166,6 +191,9 @@ describe("static JSON Feed exporter", () => {
         listRecentNotices: () => [],
       };
       await expect(exportFeeds(unsafeReader, outputDirectory))
+        .rejects.toThrow("unsafe source ID");
+      expect(existsSync(outputDirectory)).toBe(false);
+      await expect(exportFeeds(unsafeReader, outputDirectory, [GRADUATE_SOURCE.id]))
         .rejects.toThrow("unsafe source ID");
       expect(existsSync(outputDirectory)).toBe(false);
     } finally {
