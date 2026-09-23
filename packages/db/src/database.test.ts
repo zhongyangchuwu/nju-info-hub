@@ -1,14 +1,16 @@
 import { createHash } from "node:crypto";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
+import { normalizePublicationDate } from "@nju-info/core";
 import type {
   ParsedNotice,
   RawDocument,
   WebPlusSourceConfig,
 } from "@nju-info/core";
+import { migrateDatabase } from "./schema.js";
 import { InfoHubDatabase } from "./database.js";
 
 const SOURCE: WebPlusSourceConfig = {
@@ -49,6 +51,7 @@ function parsedNotice(
     url: raw.url,
     title: "Notice title",
     publishedAtRaw: "2026-09-23",
+    publishedOn: normalizePublicationDate(overrides.publishedAtRaw ?? "2026-09-23"),
     bodyText: "Notice body",
     bodyHtml: "<p>Notice body</p>",
     attachments: [
@@ -74,6 +77,44 @@ function temporaryDatabase(): {
   const directory = mkdtempSync(join(tmpdir(), "nju-info-db-"));
   const path = join(directory, "test.sqlite");
   return { directory, path, database: new InfoHubDatabase(path) };
+}
+
+const OTHER_SOURCE: WebPlusSourceConfig = {
+  ...SOURCE,
+  id: "nju-other-notices",
+  name: "Other notices",
+  organization: { id: "nju-other", name: "Other organization" },
+};
+
+const SIBLING_SOURCE: WebPlusSourceConfig = {
+  ...SOURCE,
+  id: "nju-sibling-notices",
+  name: "Sibling notices",
+};
+
+function ingestItem(
+  database: InfoHubDatabase,
+  source: WebPlusSourceConfig,
+  itemId: string,
+  publishedAtRaw: string | undefined,
+  fetchedAt = "2026-09-23T10:00:00.000Z",
+) {
+  const body = `<p>${itemId}</p>`;
+  const raw = {
+    ...rawDocument(body, fetchedAt),
+    sourceId: source.id,
+    url: `https://example.edu/notices/${itemId}/page.htm`,
+  };
+  const notice = parsedNotice(raw, {
+    sourceId: source.id,
+    sourceItemId: itemId,
+    ...(publishedAtRaw === undefined ? {} : { publishedAtRaw }),
+    publishedOn: normalizePublicationDate(publishedAtRaw),
+    bodyText: itemId,
+    bodyHtml: body,
+  });
+  if (publishedAtRaw === undefined) delete notice.publishedAtRaw;
+  return { raw, notice, result: database.ingestNotice(source, raw, notice) };
 }
 
 describe("InfoHubDatabase", () => {
@@ -102,6 +143,7 @@ describe("InfoHubDatabase", () => {
 
       const inspection = new DatabaseSync(temporary.path, { readOnly: true });
       try {
+        expect(inspection.prepare("PRAGMA user_version").get()).toEqual({ user_version: 2 });
         expect(
           inspection
             .prepare(
@@ -137,7 +179,7 @@ describe("InfoHubDatabase", () => {
           inspection
             .prepare(
               `SELECT source_items.source_item_id, notice_revisions.title,
-                      notice_revisions.raw_document_id
+                      notice_revisions.raw_document_id, notice_revisions.published_on
                  FROM notice_revisions
                  JOIN source_items
                    ON source_items.id = notice_revisions.source_item_row_id`,
@@ -147,6 +189,7 @@ describe("InfoHubDatabase", () => {
           source_item_id: notice.sourceItemId,
           title: notice.title,
           raw_document_id: result.rawDocumentId,
+          published_on: "2026-09-23",
         });
         expect(
           inspection
@@ -320,6 +363,235 @@ describe("InfoHubDatabase", () => {
     } finally {
       temporary.database.close();
       rmSync(temporary.directory, { recursive: true, force: true });
+    }
+  });
+  it("lists only current revisions in deterministic publication order with source filters", () => {
+    const temporary = temporaryDatabase();
+    try {
+      ingestItem(temporary.database, SOURCE, "old", "2026-08-20");
+      ingestItem(temporary.database, SOURCE, "tie-b", "09-21 2026");
+      ingestItem(temporary.database, SOURCE, "tie-a", "2026-09-21");
+      ingestItem(temporary.database, SIBLING_SOURCE, "same-date", "2026-09-21");
+      ingestItem(temporary.database, OTHER_SOURCE, "newest", "2026-09-22");
+      ingestItem(temporary.database, SOURCE, "invalid", "2026-02-29");
+      ingestItem(temporary.database, SOURCE, "missing", undefined);
+
+      const all = temporary.database.listRecentNotices();
+      expect(all.map(({ sourceItemId }) => sourceItemId)).toEqual([
+        "newest", "same-date", "tie-a", "tie-b", "old", "invalid", "missing",
+      ]);
+      expect(all.map(({ publishedOn }) => publishedOn)).toEqual([
+        "2026-09-22", "2026-09-21", "2026-09-21", "2026-09-21",
+        "2026-08-20", null, null,
+      ]);
+      expect(temporary.database.listRecentNotices({ limit: 2 }).map((row) => row.sourceItemId))
+        .toEqual(["newest", "same-date"]);
+      expect(temporary.database.listRecentNotices({ sourceId: SOURCE.id })
+        .map((row) => row.sourceItemId)).toEqual([
+          "tie-a", "tie-b", "old", "invalid", "missing",
+        ]);
+      expect(temporary.database.listRecentNotices({ organizationId: SOURCE.organization.id })
+        .map((row) => row.sourceItemId)).toEqual([
+          "same-date", "tie-a", "tie-b", "old", "invalid", "missing",
+        ]);
+      expect(temporary.database.listRecentNotices({
+        sourceId: SIBLING_SOURCE.id,
+        organizationId: SOURCE.organization.id,
+      }).map((row) => row.sourceItemId)).toEqual(["same-date"]);
+      expect(temporary.database.listRecentNotices({
+        sourceId: OTHER_SOURCE.id,
+        organizationId: SOURCE.organization.id,
+      })).toEqual([]);
+      expect(temporary.database.listRecentNotices({ sourceId: "unknown" })).toEqual([]);
+      for (const limit of [0, -1, 1.5, 101, Number.NaN]) {
+        expect(() => temporary.database.listRecentNotices({ limit })).toThrow(
+          "recent notice limit must be an integer from 1 to 100",
+        );
+      }
+    } finally {
+      temporary.database.close();
+      rmSync(temporary.directory, { recursive: true, force: true });
+    }
+  });
+
+  it("returns the latest snapshot with ordered attachments and linked raw provenance", () => {
+    const temporary = temporaryDatabase();
+    try {
+      const first = ingestItem(temporary.database, SOURCE, "changed", "2026-09-23");
+      const changedRaw = rawDocument("<p>updated</p>", "2026-09-24T12:00:00.000Z");
+      changedRaw.url = first.raw.url;
+      const changedNotice = parsedNotice(changedRaw, {
+        sourceItemId: "changed",
+        publishedAtRaw: "09-20 2026",
+        publishedOn: "2026-09-20",
+        title: "Updated title",
+        bodyText: "updated",
+        bodyHtml: "<p>updated</p>",
+        attachments: [
+          { url: "https://example.edu/z.pdf", title: "First" },
+          { url: "https://example.edu/z.pdf", title: "Second", mediaType: "application/pdf" },
+        ],
+      });
+      const second = temporary.database.ingestNotice(SOURCE, changedRaw, changedNotice);
+      expect(second.revisionNumber).toBe(2);
+      const replay = temporary.database.ingestNotice(SOURCE, first.raw, first.notice);
+      expect(replay).toMatchObject({ revisionNumber: 1, insertedRevision: false });
+
+      expect(temporary.database.listRecentNotices()).toEqual([{
+        sourceId: SOURCE.id,
+        sourceItemId: "changed",
+        sourceName: SOURCE.name,
+        organization: SOURCE.organization,
+        revisionNumber: 2,
+        url: changedRaw.url,
+        title: "Updated title",
+        publishedAtRaw: "09-20 2026",
+        publishedOn: "2026-09-20",
+        bodyText: "updated",
+        bodyHtml: "<p>updated</p>",
+        attachments: changedNotice.attachments,
+        provenance: {
+          fetchedAt: changedRaw.fetchedAt,
+          contentSha256: changedRaw.sha256,
+        },
+      }]);
+      ingestItem(temporary.database, SOURCE, "between", "2026-09-22");
+      expect(temporary.database.listRecentNotices().map((row) => row.sourceItemId))
+        .toEqual(["between", "changed"]);
+      expect(temporary.database.listRecentNotices({ limit: 1 })[0]?.sourceItemId)
+        .toBe("between");
+      expect(temporary.database.stats().noticeRevisions).toBe(3);
+    } finally {
+      temporary.database.close();
+      rmSync(temporary.directory, { recursive: true, force: true });
+    }
+  });
+  it("backfills a populated v1 database without changing history or identity", () => {
+    const directory = mkdtempSync(join(tmpdir(), "nju-info-v1-"));
+    const path = join(directory, "legacy.sqlite");
+    const raw = rawDocument("<html><p>Notice body</p></html>", "2026-09-23T10:00:00.000Z");
+    const notice = parsedNotice(raw, {
+      publishedAtRaw: "09-21 2026",
+      publishedOn: "2026-09-21",
+    });
+    const legacyNotices = [
+      notice,
+      parsedNotice(raw, {
+        title: "Year-first revision",
+        publishedAtRaw: "2026-09-22",
+        publishedOn: "2026-09-22",
+        attachments: [],
+      }),
+      parsedNotice(raw, {
+        title: "Invalid-date revision",
+        publishedAtRaw: "2026-02-29",
+        publishedOn: null,
+        attachments: [],
+      }),
+    ];
+
+    try {
+      const legacy = new DatabaseSync(path);
+      let before: Record<string, unknown>[] = [];
+      try {
+        legacy.exec(readFileSync(new URL("../fixtures/schema-v1.sql", import.meta.url), "utf8"));
+        legacy.prepare(
+          `INSERT INTO sources (id, name, organization_id, organization_name,
+             homepage_url, adapter_type, config_json, enabled, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(SOURCE.id, SOURCE.name, SOURCE.organization.id,
+          SOURCE.organization.name, SOURCE.url, "webplus", JSON.stringify(SOURCE),
+          1, raw.fetchedAt, raw.fetchedAt);
+        legacy.prepare(
+          `INSERT INTO raw_documents
+             (id, source_id, final_url, fetched_at, content_type, sha256, body, etag, last_modified)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(7, SOURCE.id, raw.url, raw.fetchedAt, raw.contentType, raw.sha256,
+          raw.body, raw.etag ?? null, raw.lastModified ?? null);
+        legacy.prepare(
+          `INSERT INTO source_items (id, source_id, source_item_id, url, first_seen_at)
+           VALUES (?, ?, ?, ?, ?)`,
+        ).run(11, SOURCE.id, notice.sourceItemId, notice.url, raw.fetchedAt);
+        const insertRevision = legacy.prepare(
+          `INSERT INTO notice_revisions
+             (id, source_item_row_id, revision_number, raw_document_id, content_sha256,
+              title, published_at_raw, body_text, body_html, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        );
+        for (const [index, revision] of legacyNotices.entries()) {
+          // The derived date must not change the original v1 revision identity.
+          const revisionHash = createHash("sha256")
+            .update(JSON.stringify({
+              url: revision.url,
+              title: revision.title,
+              publishedAtRaw: revision.publishedAtRaw,
+              bodyText: revision.bodyText,
+              bodyHtml: revision.bodyHtml,
+              attachments: revision.attachments.map(({ url, title, mediaType }) => ({
+                url, title, mediaType: mediaType ?? null,
+              })),
+            }))
+            .digest("hex");
+          insertRevision.run(13 + index, 11, index + 1, 7, revisionHash,
+            revision.title, revision.publishedAtRaw ?? null,
+            revision.bodyText, revision.bodyHtml, raw.fetchedAt);
+        }
+        legacy.prepare(
+          `INSERT INTO attachments (notice_revision_id, position, url, title, media_type)
+           VALUES (?, ?, ?, ?, ?)`,
+        ).run(13, 0, notice.attachments[0]!.url,
+          notice.attachments[0]!.title, notice.attachments[0]!.mediaType ?? null);
+        before = legacy.prepare("SELECT * FROM notice_revisions ORDER BY id").all();
+      } finally {
+        legacy.close();
+      }
+
+      const database = new InfoHubDatabase(path);
+      try {
+        const inspection = new DatabaseSync(path, { readOnly: true });
+        try {
+          expect(inspection.prepare("PRAGMA user_version").get()).toEqual({ user_version: 2 });
+          expect(inspection.prepare("SELECT * FROM notice_revisions ORDER BY id").all())
+            .toEqual(before.map((row, index) => ({
+              ...row,
+              published_on: ["2026-09-21", "2026-09-22", null][index],
+            })));
+          expect(inspection.prepare("SELECT notice_revision_id, position, url, title, media_type FROM attachments").all())
+            .toEqual([{ notice_revision_id: 13, position: 0,
+              url: notice.attachments[0]!.url, title: notice.attachments[0]!.title,
+              media_type: notice.attachments[0]!.mediaType ?? null }]);
+        } finally {
+          inspection.close();
+        }
+        expect(database.listRecentNotices()).toEqual([expect.objectContaining({
+          sourceItemId: notice.sourceItemId,
+          revisionNumber: 3,
+          publishedAtRaw: "2026-02-29",
+          publishedOn: null,
+          provenance: { fetchedAt: raw.fetchedAt, contentSha256: raw.sha256 },
+        })]);
+        expect(database.ingestNotice(SOURCE, raw, notice)).toMatchObject({
+          rawDocumentId: 7, sourceItemRowId: 11, noticeRevisionId: 13,
+          revisionNumber: 1, insertedRevision: false,
+        });
+        expect(database.stats().noticeRevisions).toBe(3);
+      } finally {
+        database.close();
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+  it("rejects unknown database schema versions without changing them", () => {
+    const database = new DatabaseSync(":memory:");
+    try {
+      database.exec("PRAGMA user_version = 3");
+      expect(() => migrateDatabase(database)).toThrow(
+        "unsupported database schema version 3; expected 2",
+      );
+      expect(database.prepare("PRAGMA user_version").get()).toEqual({ user_version: 3 });
+    } finally {
+      database.close();
     }
   });
 });

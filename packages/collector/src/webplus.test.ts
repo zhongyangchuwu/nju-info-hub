@@ -194,6 +194,7 @@ describe("WebPlus adapter", () => {
     const notice = parseWebPlusNotice(detail, config);
     expect(notice.title).toContain("研究生奖学金");
     expect(notice.publishedAtRaw).toBe("2026-09-21");
+    expect(notice.publishedOn).toBe("2026-09-21");
     expect(notice.bodyText).toContain("请按要求提交材料");
     expect(notice.attachments).toHaveLength(2);
     expect(notice.attachments.map((item) => item.url)).toEqual(
@@ -202,6 +203,39 @@ describe("WebPlus adapter", () => {
         "https://cs.nju.edu.cn/_upload/article/files/a/form.xlsx",
       ]),
     );
+  });
+
+  it("uses a split list date when detail metadata is absent", () => {
+    const config = source(
+      "nju-graduate-school-notices",
+      "研究生院动态通知",
+      "https://grawww.nju.edu.cn/905/list.htm",
+    );
+    const discovered = discoverWebPlusItems(
+      raw(config.id, config.url, fixture("graduate-list.html")),
+      config,
+    )[1];
+    expect(discovered).toBeDefined();
+    const detail = raw(
+      config.id,
+      discovered!.url,
+      '<h1 class="arti_title">Notice</h1><div class="wp_articlecontent">Body</div>',
+    );
+    const notice = parseWebPlusNotice(detail, config, discovered);
+    expect(notice.publishedAtRaw).toBe("09-21 2026");
+    expect(notice.publishedOn).toBe("2026-09-21");
+  });
+
+  it("keeps invalid publication dates as unparseable", () => {
+    const config = source("nju-test-notices", "Test", "https://example.edu/list.htm");
+    const detail = raw(
+      config.id,
+      "https://example.edu/a/page.htm",
+      '<h1 class="arti_title">Notice</h1><div class="arti_update">2026-02-29</div><div class="wp_articlecontent">Body</div>',
+    );
+    const notice = parseWebPlusNotice(detail, config);
+    expect(notice.publishedAtRaw).toBe("2026-02-29");
+    expect(notice.publishedOn).toBeNull();
   });
 
   it("ignores upload links outside the article content", () => {

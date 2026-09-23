@@ -36,6 +36,7 @@ export interface ParsedNotice {
   url: string;
   title: string;
   publishedAtRaw?: string;
+  publishedOn: string | null;
   bodyText: string;
   bodyHtml: string;
   attachments: Attachment[];
