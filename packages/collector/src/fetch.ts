@@ -109,7 +109,7 @@ export async function fetchRawDocument(
 
   return {
     sourceId,
-    url,
+    url: response.url,
     fetchedAt: new Date().toISOString(),
     contentType,
     body,

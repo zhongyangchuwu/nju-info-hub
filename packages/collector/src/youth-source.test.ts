@@ -86,23 +86,23 @@ describe("NJU Youth League source", () => {
 
   it("parses a public attachment-centric announcement with little body prose", async () => {
     const source = await loadYouthSource();
-    const detailUrl =
+    const publicUrl =
       "https://tuanwei.nju.edu.cn/e2/71/c24691a844401/page.htm";
+    const finalUrl =
+      "https://tuanwei.nju.edu.cn/e2/71/c24691a844401/page.psp";
     const discovered = discoverWebPlusPage(
       raw(source.id, source.url, fixture("youth-list.html")),
       source,
     ).items[1];
     expect(discovered).toBeDefined();
 
-    const notice = parseWebPlusNotice(
-      raw(source.id, detailUrl, fixture("youth-attachments.html")),
-      source,
-      discovered,
-    );
+    const detail = raw(source.id, finalUrl, fixture("youth-attachments.html"));
+    const notice = parseWebPlusNotice(detail, source, discovered);
 
+    expect(discovered?.url).toBe(publicUrl);
     expect(notice).toMatchObject({
       sourceId: source.id,
-      url: detailUrl,
+      url: publicUrl,
       title:
         "关于组织开展“立德树人扬清风 廉洁铸魂担使命”廉洁教育作品征集活动的通知",
       publishedAtRaw: "2026-09-20",
@@ -110,6 +110,17 @@ describe("NJU Youth League source", () => {
       bodyText:
         "附件1：廉洁教育作品推荐表.docx附件2：廉洁教育作品推荐汇总表.docx附件3：廉洁教育作品信息表.docx",
     });
+    expect(notice.provenance).toEqual({
+      fetchedAt: detail.fetchedAt,
+      contentSha256: detail.sha256,
+    });
+    expect(notice.sourceItemId).toBe(
+      parseWebPlusNotice(
+        raw(source.id, publicUrl, fixture("youth-attachments.html")),
+        source,
+        discovered,
+      ).sourceItemId,
+    );
     expect(notice.attachments).toEqual([
       {
         url: "https://tuanwei.nju.edu.cn/_upload/article/files/a1/88/b7f63ae741caac0814b42d89e8ad/ad54938a-42fd-4cc5-b550-f8b64944f633.docx",

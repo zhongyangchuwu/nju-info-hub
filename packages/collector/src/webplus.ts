@@ -292,15 +292,16 @@ export function parseWebPlusNotice(
 
   const bodyHtml = content.html() ?? "";
   const bodyText = normalizeText(content.text());
+  const url = discovered?.url ?? raw.url;
   const sourceItemId = createHash("sha256")
-    .update(raw.url)
+    .update(url)
     .digest("hex")
     .slice(0, 24);
 
   return {
     sourceId: source.id,
     sourceItemId,
-    url: raw.url,
+    url,
     title,
     ...(publishedAtRaw ? { publishedAtRaw } : {}),
     publishedOn: normalizePublicationDate(publishedAtRaw),

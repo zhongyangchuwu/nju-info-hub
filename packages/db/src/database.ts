@@ -296,11 +296,6 @@ export class InfoHubDatabase implements Disposable {
         `source mismatch: config ${source.id}, notice ${notice.sourceId}`,
       );
     }
-    if (notice.url !== rawDocument.url) {
-      throw new Error(
-        `URL mismatch: raw document ${rawDocument.url}, notice ${notice.url}`,
-      );
-    }
     if (notice.provenance.contentSha256 !== rawDocument.sha256) {
       throw new Error("notice provenance hash does not match raw document");
     }
@@ -548,7 +543,7 @@ class DatabaseQueries {
         `SELECT r.id AS revision_id, s.id AS source_id,
                 si.source_item_id, s.name AS source_name,
                 s.organization_id, s.organization_name,
-                r.revision_number, d.final_url AS url, r.title,
+                r.revision_number, si.url, r.title,
                 r.published_at_raw, r.published_on, r.body_text, r.body_html,
                 d.fetched_at, d.sha256 AS raw_sha256
            FROM notice_revisions r

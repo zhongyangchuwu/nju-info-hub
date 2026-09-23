@@ -213,6 +213,59 @@ describe("InfoHubDatabase", () => {
     }
   });
 
+  it("keeps the public item URL while storing the redirect target as raw provenance", () => {
+    const temporary = temporaryDatabase();
+    try {
+      const raw = rawDocument("<p>Redirected notice</p>", "2026-09-23T10:00:00.000Z");
+      const publicUrl = raw.url;
+      raw.url = "https://example.edu/notices/1/page.psp";
+      const notice = parsedNotice(raw, { url: publicUrl });
+
+      expect(temporary.database.ingestNotice(SOURCE, raw, notice)).toMatchObject({
+        insertedRevision: true,
+      });
+      expect(temporary.database.listRecentNotices()).toEqual([
+        expect.objectContaining({
+          url: publicUrl,
+          provenance: {
+            fetchedAt: raw.fetchedAt,
+            contentSha256: raw.sha256,
+          },
+        }),
+      ]);
+
+      const inspection = new DatabaseSync(temporary.path, { readOnly: true });
+      try {
+        expect(inspection.prepare("SELECT final_url FROM raw_documents").get()).toEqual({
+          final_url: raw.url,
+        });
+        expect(inspection.prepare("SELECT url FROM source_items").get()).toEqual({
+          url: publicUrl,
+        });
+      } finally {
+        inspection.close();
+      }
+      const reader = new InfoHubDatabaseReader(temporary.path);
+      try {
+        expect(reader.listRecentNotices()[0]?.url).toBe(publicUrl);
+      } finally {
+        reader.close();
+      }
+
+      expect(() => temporary.database.ingestNotice(SOURCE, raw, {
+        ...notice,
+        provenance: { ...notice.provenance, contentSha256: "0".repeat(64) },
+      })).toThrow("notice provenance hash does not match raw document");
+      expect(() => temporary.database.ingestNotice(SOURCE, raw, {
+        ...notice,
+        sourceId: "other-source",
+      })).toThrow("source mismatch");
+    } finally {
+      temporary.database.close();
+      rmSync(temporary.directory, { recursive: true, force: true });
+    }
+  });
+
   it("preserves repeated attachment URLs at distinct positions", () => {
     const temporary = temporaryDatabase();
     try {
