@@ -1,0 +1,68 @@
+name: CS feed pilot
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */2 * * *'
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.5.1
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Prepare cache and Pages output
+        run: mkdir -p .cache/nju-info _site
+      - name: Restore SQLite database cache
+        uses: actions/cache/restore@v4
+        continue-on-error: true
+        with:
+          path: .cache/nju-info
+          key: cs-feeds-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            cs-feeds-${{ runner.os }}-
+      - name: Collect the three CS feeds
+        run: |
+          pnpm worker -- ingest nju-cs-graduate .cache/nju-info/feeds.sqlite 10
+          pnpm worker -- ingest nju-cs-internal-notices .cache/nju-info/feeds.sqlite 10
+          pnpm worker -- ingest nju-cs-seminars .cache/nju-info/feeds.sqlite 10
+      - name: Export static JSON Feeds
+        run: pnpm --filter @nju-info/api export-feeds -- .cache/nju-info/feeds.sqlite _site nju-cs-graduate nju-cs-internal-notices nju-cs-seminars
+      - name: Save SQLite database cache
+        uses: actions/cache/save@v4
+        continue-on-error: true
+        with:
+          path: .cache/nju-info
+          key: cs-feeds-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

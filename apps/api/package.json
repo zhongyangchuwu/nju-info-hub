@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
+    "export-feeds": "tsx src/export-feeds-cli.ts",
     "test": "vitest run src",
     "dev": "tsx src/cli.ts"
   },
