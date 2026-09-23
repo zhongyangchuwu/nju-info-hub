@@ -172,14 +172,14 @@ describe("read-only API", () => {
       home_page_url: source.url,
       items: [{ id: "notices-a:item-a", url: "https://example.edu/item-a/page.htm",
         title: "new", content_html: "<p>new</p>", content_text: "new",
+        date_published: "2026-09-23T00:00:00+08:00",
         attachments: [
           { mime_type: "application/pdf", title: "First" },
           { mime_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", title: "Second" },
         ],
-        _nju: { published_on: "2026-09-23", revision_number: 2 },
+        _nju: { published_on: "2026-09-23", date_precision: "day", revision_number: 2 },
       }],
     });
-    expect(result.body.items[0]).not.toHaveProperty("date_published");
   });
 
   it("uses only reader summaries and current notices for feed responses", async () => {
