@@ -13,6 +13,7 @@ The public ingestion foundation and two read-only delivery adapters are in place
 - the generic WebPlus/Sudy collector has multi-site fixture coverage, pagination, resilient fetching, and parser hardening;
 - raw documents, source items, notice revisions, and attachments are persisted in SQLite;
 - a local-facing REST/JSON API serves persisted sources, organizations, and recent notices without collecting or modifying data;
+- a per-source JSON Feed 1.1 publisher serves current persisted notices for reader clients without contacting upstreams;
 - a local stdio MCP adapter exposes three read-only tools over the same persisted queries;
 - Node.js 26 is the default repository runtime and Node.js 24 remains the compatibility floor.
 
@@ -125,16 +126,21 @@ Worker fetch and ingest commands access public NJU websites. Unit tests use loca
 
 The API requires an existing current-schema SQLite database; it does not create or migrate one. It binds only to localhost by default. Stop it with SIGINT or SIGTERM; active requests finish before the reader closes. Live WAL reads require the database and SQLite sidecar files to be accessible (see [`docs/database.md`](docs/database.md)).
 
-All success responses are JSON with a `data` field. For example:
+The `/v1` success responses are JSON with a `data` field. For example:
 
 ```bash
 curl http://127.0.0.1:3000/v1/health
 curl http://127.0.0.1:3000/v1/sources
 curl http://127.0.0.1:3000/v1/organizations
 curl 'http://127.0.0.1:3000/v1/notices/recent?sourceId=nju-cs-graduate&limit=10'
+curl http://127.0.0.1:3000/feeds/nju-cs-graduate.json
 ```
 
 Only the recent-notices route accepts `sourceId`, `organizationId`, and `limit`; filters combine, and the default limit is 50 (maximum 100). Unknown IDs return an empty `data` array. Invalid queries return `400`, unknown paths `404`, non-GET methods on known paths `405` (`Allow: GET`), and internal failures `500`, each as `{"error":{"code":"…","message":"…"}}`. Dates and provenance follow the persisted query contract; health is liveness only.
+
+`GET /feeds/{sourceId}.json` publishes up to 100 current notices per persisted source in database recency order. The response is a JSON Feed 1.1 document (`application/feed+json; charset=utf-8`), not the REST `{ data }` envelope. Unknown sources return a JSON `404`; query parameters are not supported. Feed `title` identifies the source and its organization, `home_page_url` links to the original source list, and each item `url` links to its original public page. IDs combine the source ID and source item ID (percent-encoded, colon-separated) and stay stable across revisions. `feed_url` is omitted because the API cannot reliably determine its public URL behind proxies or local binds.
+
+The namespaced `_nju` extension carries feed-level `source_id` and `organization: { id, name }`; item-level fields are `source_id`, `source_name`, `organization`, `revision_number`, `fetched_at`, and `content_sha256`. When a calendar date exists, the item also has `published_on` (`YYYY-MM-DD`) and `date_precision: "day"`. No `date_published` timestamp is inferred from a day-only date. `fetched_at` is the raw-document fetch time and `content_sha256` is the linked raw response hash, not the revision identity. Original HTML/text and all ordered attachments are included; missing attachment media types use a known document extension when available, otherwise `application/octet-stream`.
 
 The MCP command requires an existing current-schema SQLite database. It exposes only `list_sources`, `list_organizations`, and `list_recent_notices` over stdio; the first two take `{}`, and the third accepts optional `sourceId`, `organizationId`, and `limit` (1–100). Results include matching JSON text and structured content. Configure an MCP host to launch the command as a subprocess; stdout is reserved for protocol messages and startup diagnostics go to stderr. Closing the connection releases the read-only database reader.
 

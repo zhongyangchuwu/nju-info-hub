@@ -152,6 +152,73 @@ describe("read-only API", () => {
     const recent = (await response(base, "/v1/notices/recent")).body;
     expect(recent.data).toHaveLength(50);
     expect((await response(base, "/v1/notices/recent?limit=100")).body.data).toHaveLength(51);
+    expect((await response(base, "/feeds/notices-a.json")).body.items).toHaveLength(51);
+  });
+
+  it("serves up to 100 current persisted items as JSON Feed", async () => {
+    const { path, writer } = database();
+    notice(writer, source, "item-a", "old", "2026-09-21");
+    notice(writer, source, "item-a", "new", "2026-09-23", [
+      { url: "https://example.edu/first.pdf", title: "First" },
+      { url: "https://example.edu/second.docx", title: "Second" },
+    ]);
+    const base = await serving(path);
+    const result = await response(base, "/feeds/notices-a.json");
+    expect(result.status).toBe(200);
+    expect(result.contentType).toBe("application/feed+json; charset=utf-8");
+    expect(result.body).toMatchObject({
+      version: "https://jsonfeed.org/version/1.1",
+      title: "First organization — First source",
+      home_page_url: source.url,
+      items: [{ id: "notices-a:item-a", url: "https://example.edu/item-a/page.htm",
+        title: "new", content_html: "<p>new</p>", content_text: "new",
+        attachments: [
+          { mime_type: "application/pdf", title: "First" },
+          { mime_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", title: "Second" },
+        ],
+        _nju: { published_on: "2026-09-23", revision_number: 2 },
+      }],
+    });
+    expect(result.body.items[0]).not.toHaveProperty("date_published");
+  });
+
+  it("uses only reader summaries and current notices for feed responses", async () => {
+    const listRecentNotices = vi.fn(() => []);
+    const listSources = vi.fn(() => [{ id: source.id, name: source.name,
+      organization: source.organization, url: source.url, enabled: true }]);
+    const server = createApiServer({ listSources, listRecentNotices,
+      listOrganizations: vi.fn(() => []) });
+    extraServers.push(server);
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("expected TCP address");
+    const base = `http://127.0.0.1:${address.port}`;
+    expect((await response(base, "/feeds/notices-a.json")).body).toMatchObject({
+      items: [], _nju: { source_id: "notices-a" },
+    });
+    expect(listRecentNotices).toHaveBeenCalledExactlyOnceWith({ sourceId: "notices-a", limit: 100 });
+    expect(await response(base, "/feeds/unknown.json")).toMatchObject({
+      status: 404, contentType: "application/json; charset=utf-8",
+      body: { error: { code: "not_found", message: "Not found" } },
+    });
+    expect(listRecentNotices).toHaveBeenCalledTimes(1);
+    expect(listSources).toHaveBeenCalledTimes(2);
+    for (const route of ["/feeds/notices-a.json?limit=1", "/feeds/notices-a.json?limit=1&limit=2"]) {
+      expect(await response(base, route)).toMatchObject({ status: 400,
+        body: { error: { code: "invalid_query", message: "Invalid query parameters" } },
+      });
+    }
+    for (const method of ["POST", "PUT", "OPTIONS", "HEAD"]) {
+      const result = await fetch(`${base}/feeds/notices-a.json`, { method });
+      expect(result.status).toBe(405);
+      expect(result.headers.get("allow")).toBe("GET");
+      expect(result.headers.get("content-type")).toBe("application/json; charset=utf-8");
+      if (method !== "HEAD") {
+        expect(await result.json()).toEqual({ error: { code: "method_not_allowed", message: "Method not allowed" } });
+      }
+    }
+    expect(listSources).toHaveBeenCalledTimes(2);
+    expect(listRecentNotices).toHaveBeenCalledTimes(1);
   });
 
   it("rejects malformed, repeated, unknown, and misrouted query parameters", async () => {
