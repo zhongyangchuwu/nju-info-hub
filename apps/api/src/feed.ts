@@ -20,7 +20,7 @@ function mimeType(url: string, title: string, stored: string | undefined): strin
     (titleExtension && mimeTypes[titleExtension]) || "application/octet-stream";
 }
 
-/** Serialize the current persisted revisions, in database order, without inferring publication times. */
+/** Serialize current revisions in database order; day-only timestamps are transport encodings, not source times. */
 export function buildJsonFeed(source: PersistedSourceSummary, notices: NoticeQueryResult[]) {
   return {
     version: "https://jsonfeed.org/version/1.1",
@@ -31,6 +31,7 @@ export function buildJsonFeed(source: PersistedSourceSummary, notices: NoticeQue
       id: `${encodeURIComponent(notice.sourceId)}:${encodeURIComponent(notice.sourceItemId)}`,
       url: notice.url,
       title: notice.title,
+      ...(notice.publishedOn === null ? {} : { date_published: `${notice.publishedOn}T00:00:00+08:00` }),
       ...(notice.bodyHtml ? { content_html: notice.bodyHtml } : {}),
       content_text: notice.bodyText,
       ...(notice.attachments.length ? {
