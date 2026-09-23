@@ -62,7 +62,7 @@ Issue #5 is complete via PR #7.
 
 It corrected the stale Science & Technology source, added Graduate School coverage, supported split/month-first list dates, separated source/DOM order from publication-recency ordering, and added regression coverage for pinned old notices.
 
-P1 persisted queries and the first read-only REST/JSON output adapter are implemented. GitHub Issues remain authoritative for current work; other delivery formats are not implied by this milestone.
+P1 persisted queries and read-only REST/JSON and local stdio MCP output adapters are implemented. GitHub Issues remain authoritative for current work; other delivery formats are not implied by this milestone.
 
 ## Phase roadmap
 

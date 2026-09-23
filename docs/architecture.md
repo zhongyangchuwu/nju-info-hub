@@ -28,7 +28,7 @@ canonical record + revisions
     +--> MCP
 ```
 
-The registry, WebPlus/Sudy adapter, raw-document and notice persistence, and first read-only REST/JSON output adapter are implemented. The HTTP process reads existing canonical records; collection remains a separate process.
+The registry, WebPlus/Sudy adapter, raw-document and notice persistence, and read-only REST/JSON and local stdio MCP output adapters are implemented. Both output processes read existing canonical records through `@nju-info/db`; collection remains a separate process.
 
 ## Source registry
 
@@ -89,7 +89,11 @@ Direct `fetch` remains sufficient for the current public WebPlus sources; persis
 
 ## Read-only HTTP delivery
 
-`apps/api` uses Node's HTTP server and only the `@nju-info/db` reader. It serves health, persisted source and organization summaries, and current recent notice revisions. It cannot ingest, create, or migrate a database and does not load the source registry. The server defaults to a local bind; see the README for its command and routes. RSS/Atom, MCP, and search remain separate future output/query capabilities.
+`apps/api` uses Node's HTTP server and only the `@nju-info/db` reader. It serves health, persisted source and organization summaries, and current recent notice revisions. It cannot ingest, create, or migrate a database and does not load the source registry. The server defaults to a local bind; see the README for its command and routes. RSS/Atom and search remain separate future output/query capabilities.
+
+## Read-only local MCP delivery
+
+`apps/mcp` serves stdio tools over the same `InfoHubDatabaseReader` queries: source summaries, organization summaries, and current recent notices with optional source/organization filters and limit. It opens an existing current-schema database read-only, never imports collectors or the source registry, and does not own query ordering, revisions, or provenance semantics. stdout carries MCP messages only; diagnostics use stderr.
 
 ## Future adapters
 
@@ -117,7 +121,6 @@ The following are deliberately not part of the current milestone:
 - vector databases;
 - LLM extraction;
 - RSS/Atom and search interfaces;
-- MCP server;
 - web frontend.
 
 They should be introduced only when a concrete requirement appears.
