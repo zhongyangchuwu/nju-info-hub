@@ -155,7 +155,7 @@ JSON preserves original HTML/text and every ordered attachment with inferred MIM
 
 ## Static CS feeds
 
-The `CS feed pilot` workflow runs every two hours or by manual dispatch. It centrally collects the latest 10 items from exactly `nju-cs-graduate`, `nju-cs-internal-notices`, and `nju-cs-seminars` into one SQLite database, then exports all three formats for each source and `subscriptions/cs.opml` as a GitHub Pages artifact. Readers never trigger a crawl. GitHub Pages is configured at https://zhongyangchuwu.github.io/nju-info-hub/; an earlier [JSON pilot deployment](https://github.com/zhongyangchuwu/nju-info-hub/actions/runs/35901389130) succeeded and Folo's production API parsed its JSON files with `code=0` and `errorMessage=null`. This is not a claim that the new formats are deployed yet.
+The `CS feed pilot` workflow runs every two hours or by manual dispatch. It centrally collects the latest 10 items from exactly `nju-cs-graduate`, `nju-cs-internal-notices`, and `nju-cs-seminars` into one SQLite database, then exports all three formats for each source and `subscriptions/cs.opml` as a GitHub Pages artifact. Readers never trigger a crawl. GitHub Pages is configured at https://zhongyangchuwu.github.io/nju-info-hub/; [the standards-feed deployment](https://github.com/zhongyangchuwu/nju-info-hub/actions/runs/35905071208) succeeded. All nine public JSON/Atom/RSS URLs and the CS OPML catalog are live; Folo's production feed parser accepted all nine per-source feed URLs with `code=0` and `errorMessage=null`.
 
 Public per-source URL patterns (substitute each of the three IDs above):
 
