@@ -14,7 +14,7 @@ The public ingestion foundation is in place:
 - raw documents, source items, notice revisions, and attachments are persisted in SQLite;
 - Node.js 26 is the default repository runtime and Node.js 24 remains the compatibility floor.
 
-The current P0 task is [Issue #5](https://github.com/zhongyangchuwu/nju-info-hub/issues/5): source freshness and trustworthy "latest" discovery semantics.
+The latest P0 correctness pass, [Issue #5](https://github.com/zhongyangchuwu/nju-info-hub/issues/5), is complete via PR #7. No subsequent active implementation task is designated here; use GitHub Issues for the current work queue.
 
 GitHub is the source of truth for implementation status:
 
