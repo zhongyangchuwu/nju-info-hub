@@ -365,6 +365,93 @@ describe("InfoHubDatabase", () => {
       rmSync(temporary.directory, { recursive: true, force: true });
     }
   });
+  it("returns no metadata from an empty database", () => {
+    const temporary = temporaryDatabase();
+    try {
+      expect(temporary.database.listSources()).toEqual([]);
+      expect(temporary.database.listOrganizations()).toEqual([]);
+    } finally {
+      temporary.database.close();
+      rmSync(temporary.directory, { recursive: true, force: true });
+    }
+  });
+
+  it("discovers persisted source and organization filters without requiring notices", () => {
+    const temporary = temporaryDatabase();
+    try {
+      const disabledSibling = { ...SIBLING_SOURCE, enabled: false };
+      temporary.database.upsertSource(SOURCE);
+      temporary.database.upsertSource(disabledSibling);
+      temporary.database.upsertSource(OTHER_SOURCE);
+      ingestItem(temporary.database, SOURCE, "notice", "2026-09-23");
+
+      const sources = temporary.database.listSources();
+      const organizations = temporary.database.listOrganizations();
+      expect(sources).toEqual([
+        {
+          id: OTHER_SOURCE.id, name: OTHER_SOURCE.name,
+          organization: OTHER_SOURCE.organization, url: OTHER_SOURCE.url, enabled: true,
+        },
+        {
+          id: disabledSibling.id, name: disabledSibling.name,
+          organization: disabledSibling.organization, url: disabledSibling.url, enabled: false,
+        },
+        {
+          id: SOURCE.id, name: SOURCE.name,
+          organization: SOURCE.organization, url: SOURCE.url, enabled: true,
+        },
+      ]);
+      expect(organizations).toEqual([
+        OTHER_SOURCE.organization,
+        SOURCE.organization,
+      ]);
+      const noticeSource = sources[2];
+      const disabledSource = sources[1];
+      const noticeOrganization = organizations[1];
+      if (!noticeSource || !disabledSource || !noticeOrganization) {
+        throw new Error("expected persisted source and organization filters");
+      }
+      expect(temporary.database.listRecentNotices({ sourceId: noticeSource.id })
+        .map((row) => row.sourceItemId)).toEqual(["notice"]);
+      expect(temporary.database.listRecentNotices({ organizationId: noticeOrganization.id })
+        .map((row) => row.sourceItemId)).toEqual(["notice"]);
+      expect(temporary.database.listRecentNotices({ sourceId: disabledSource.id })).toEqual([]);
+    } finally {
+      temporary.database.close();
+      rmSync(temporary.directory, { recursive: true, force: true });
+    }
+  });
+
+  it("uses the lowest source ID for conflicting organization names after metadata updates", () => {
+    const temporary = temporaryDatabase();
+    try {
+      temporary.database.upsertSource(SOURCE);
+      temporary.database.upsertSource(SIBLING_SOURCE);
+      const updatedSibling = {
+        ...SIBLING_SOURCE,
+        name: "Updated sibling",
+        url: "https://example.edu/updated/list.htm",
+        organization: { id: SOURCE.organization.id, name: "Z alternate name" },
+      };
+      temporary.database.upsertSource(updatedSibling);
+
+      expect(temporary.database.listSources()).toEqual([
+        {
+          id: updatedSibling.id, name: updatedSibling.name,
+          organization: updatedSibling.organization, url: updatedSibling.url, enabled: true,
+        },
+        {
+          id: SOURCE.id, name: SOURCE.name,
+          organization: SOURCE.organization, url: SOURCE.url, enabled: true,
+        },
+      ]);
+      expect(temporary.database.listOrganizations()).toEqual([updatedSibling.organization]);
+    } finally {
+      temporary.database.close();
+      rmSync(temporary.directory, { recursive: true, force: true });
+    }
+  });
+
   it("lists only current revisions in deterministic publication order with source filters", () => {
     const temporary = temporaryDatabase();
     try {

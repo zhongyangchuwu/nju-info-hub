@@ -26,6 +26,19 @@ export interface DatabaseStats {
   attachments: number;
 }
 
+export interface PersistedOrganizationSummary {
+  id: string;
+  name: string;
+}
+
+export interface PersistedSourceSummary {
+  id: string;
+  name: string;
+  organization: PersistedOrganizationSummary;
+  url: string;
+  enabled: boolean;
+}
+
 export interface RecentNoticeOptions {
   sourceId?: string;
   organizationId?: string;
@@ -47,6 +60,15 @@ export interface NoticeQueryResult {
   bodyHtml: string;
   attachments: Attachment[];
   provenance: { fetchedAt: string; contentSha256: string };
+}
+
+interface SourceSummaryRow {
+  id: string;
+  name: string;
+  organization_id: string;
+  organization_name: string;
+  homepage_url: string;
+  enabled: number;
 }
 
 interface NoticeQueryRow {
@@ -235,6 +257,39 @@ export class InfoHubDatabase implements Disposable {
         insertedRevision: true,
       };
     });
+  }
+
+  listSources(): PersistedSourceSummary[] {
+    const rows = this.#database
+      .prepare(
+        `SELECT id, name, organization_id, organization_name, homepage_url, enabled
+           FROM sources
+          ORDER BY id`,
+      )
+      .all() as unknown as SourceSummaryRow[];
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      organization: { id: row.organization_id, name: row.organization_name },
+      url: row.homepage_url,
+      enabled: row.enabled === 1,
+    }));
+  }
+
+  listOrganizations(): PersistedOrganizationSummary[] {
+    return this.#database
+      .prepare(
+        `WITH ranked AS (
+           SELECT organization_id, organization_name,
+                  ROW_NUMBER() OVER (PARTITION BY organization_id ORDER BY id) AS position
+             FROM sources
+         )
+         SELECT organization_id AS id, organization_name AS name
+           FROM ranked
+          WHERE position = 1
+          ORDER BY id`,
+      )
+      .all() as unknown as PersistedOrganizationSummary[];
   }
 
   listRecentNotices(options: RecentNoticeOptions = {}): NoticeQueryResult[] {
