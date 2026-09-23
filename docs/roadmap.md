@@ -62,7 +62,7 @@ Issue #5 is complete via PR #7.
 
 It corrected the stale Science & Technology source, added Graduate School coverage, supported split/month-first list dates, separated source/DOM order from publication-recency ordering, and added regression coverage for pinned old notices.
 
-No subsequent active implementation task is designated in this roadmap. GitHub Issues are authoritative for the current work queue; new engineering work should be opened there before implementation.
+P1 persisted queries and the first read-only REST/JSON output adapter are implemented. GitHub Issues remain authoritative for current work; other delivery formats are not implied by this milestone.
 
 ## Phase roadmap
 
@@ -164,5 +164,3 @@ Potential higher-level fields include organization, category, audience, deadline
 ## Tracking work
 
 For current implementation status, use the GitHub issue and pull-request trackers rather than this file.
-
-At the time of this update, Issue #5 is complete and no subsequent active implementation issue is designated here.

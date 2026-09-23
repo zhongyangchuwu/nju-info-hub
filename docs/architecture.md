@@ -28,7 +28,7 @@ canonical record + revisions
     +--> MCP
 ```
 
-The current proof of concept implements the registry, WebPlus/Sudy adapter, raw-document and parsed-notice representations, and SQLite persistence for source items and revisions.
+The registry, WebPlus/Sudy adapter, raw-document and notice persistence, and first read-only REST/JSON output adapter are implemented. The HTTP process reads existing canonical records; collection remains a separate process.
 
 ## Source registry
 
@@ -87,6 +87,10 @@ There is no separate canonical `notices` table yet. Cross-source semantic dedupl
 
 Direct `fetch` remains sufficient for the current public WebPlus sources; persistence does not introduce a requirement for Crawlee or browser orchestration.
 
+## Read-only HTTP delivery
+
+`apps/api` uses Node's HTTP server and only the `@nju-info/db` reader. It serves health, persisted source and organization summaries, and current recent notice revisions. It cannot ingest, create, or migrate a database and does not load the source registry. The server defaults to a local bind; see the README for its command and routes. RSS/Atom, MCP, and search remain separate future output/query capabilities.
+
 ## Future adapters
 
 Potential public adapters:
@@ -112,7 +116,7 @@ The following are deliberately not part of the current milestone:
 - PostgreSQL;
 - vector databases;
 - LLM extraction;
-- REST API;
+- RSS/Atom and search interfaces;
 - MCP server;
 - web frontend.
 
