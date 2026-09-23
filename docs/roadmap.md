@@ -54,22 +54,15 @@ Relevant merged work:
 
 - PR #2 — Harden WebPlus discovery and fixtures.
 - PR #4 — Persist WebPlus notices in SQLite.
+- PR #7 — Harden recent WebPlus discovery and source freshness.
 
-### Current P0 work
+### Latest P0 correctness pass
 
-The current task is Issue #5: source freshness and trustworthy latest-item discovery.
+Issue #5 is complete via PR #7.
 
-Goals:
+It corrected the stale Science & Technology source, added Graduate School coverage, supported split/month-first list dates, separated source/DOM order from publication-recency ordering, and added regression coverage for pinned old notices.
 
-- correct stale Science & Technology source configuration;
-- add the Graduate School source;
-- support its split/month-first list date representation;
-- distinguish source/DOM order from publication-time order;
-- prevent pinned old notices from displacing genuinely recent notices in "latest N" flows;
-- keep full crawl/ingest deterministic and preserve pinned notices;
-- re-run fixture, compatibility, and live smoke validation.
-
-Do not start query/MCP work until this correctness pass is complete.
+No subsequent active implementation task is designated in this roadmap. GitHub Issues are authoritative for the current work queue; new engineering work should be opened there before implementation.
 
 ## Phase roadmap
 
@@ -172,4 +165,4 @@ Potential higher-level fields include organization, category, audience, deadline
 
 For current implementation status, use the GitHub issue and pull-request trackers rather than this file.
 
-At the time of this update, Issue #5 is the active project task.
+At the time of this update, Issue #5 is complete and no subsequent active implementation issue is designated here.
