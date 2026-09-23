@@ -24,11 +24,11 @@ canonical record + revisions
     |
     +--> search
     +--> REST / JSON
-    +--> RSS / Atom
+    +--> standard syndication (JSON Feed / Atom / RSS; OPML catalog)
     +--> MCP
 ```
 
-The registry, WebPlus/Sudy adapter, raw-document and notice persistence, and read-only REST/JSON and local stdio MCP output adapters are implemented. Both output processes read existing canonical records through `@nju-info/db`; collection remains a separate process.
+The registry, WebPlus/Sudy adapter, raw-document and notice persistence, read-only REST/standard syndication output, and local stdio MCP adapter are implemented. Output processes read existing canonical records through `@nju-info/db`; collection remains a separate process.
 
 ## Source registry
 
@@ -89,11 +89,13 @@ Direct `fetch` remains sufficient for the current public WebPlus sources; persis
 
 ## Read-only HTTP delivery
 
-`apps/api` uses Node's HTTP server and only the `@nju-info/db` reader. It serves health, persisted source and organization summaries, current recent notice revisions, and one JSON Feed 1.1 per persisted source. Feeds publish up to 100 current items with original links and source provenance; day-only dates stay day-only in the database and `/v1` API. For reader compatibility, JSON Feed alone encodes a known calendar date as `date_published` at `YYYY-MM-DDT00:00:00+08:00` (Asia/Shanghai), not an exact source publication time; `_nju.published_on` and `_nju.date_precision` preserve the day precision. The server cannot ingest, create, or migrate a database and does not load the source registry. The server defaults to a local bind; see the README for its command and routes. RSS/Atom and search remain separate future output/query capabilities.
+`apps/api` uses Node's HTTP server and only the `@nju-info/db` reader. It serves health, persisted source and organization summaries, current recent notice revisions, and per-source JSON Feed 1.1, Atom 1.0, and RSS 2.0. The server cannot ingest, create, or migrate a database and does not load the source registry. Its local feeds omit self URLs because a reliable public origin is unknown. The server defaults to a local bind; see the README for commands and routes.
 
-## Computer Science static feed pilot
+## Standard syndication output layer
 
-The scheduled GitHub Actions pilot ingests only the three public Computer Science sources (`nju-cs-graduate`, `nju-cs-internal-notices`, and `nju-cs-seminars`) into SQLite, then exports their JSON Feed files as a GitHub Pages artifact. The exporter lives in `apps/api`, reads an existing database through `InfoHubDatabaseReader`, and reuses `buildJsonFeed`; it neither imports the collector nor contacts upstream sites. Readers of the published files do not trigger collection. GitHub Actions cache may retain the SQLite database between runs, but it is best-effort and can be evicted; the collector must be able to rebuild the pilot state. GitHub Pages is enabled, and the CS pilot has completed one successful public deployment; this does not establish durable storage or extend the pilot beyond these sources.
+The read-only output layer projects current canonical SQLite notice revisions into a small format-neutral feed model before serialization. Stable source-item IDs, organization/source identity, original item and source URLs, day transport value, current-revision fetch time, content, and inferred attachment MIME types share one mapping. JSON Feed retains structured `_nju` provenance and all attachments; Atom uses standard enclosure links; RSS uses item-description attachment links, not `<enclosure>` without reliable byte length. No format triggers upstream crawling, changes database precision, or introduces a new collector. Publication days remain `YYYY-MM-DD` in the database and `/v1` API; transport uses start-of-day Asia/Shanghai (`YYYY-MM-DDT00:00:00+08:00`), not an exact source time. Atom `updated` is observed current-revision fetch time and feed `updated` is its maximum (explicit generation time for empty feeds). RSS `lastBuildDate` is likewise hub observation/build metadata, not upstream modification time. The Atom and RSS XML deliberately omit content hashes and custom namespaces.
+
+The static exporter reads the same persisted current revisions and writes `.json`, `.atom`, `.rss` for each selected source; it owns/replaces only the `feeds` directory and optionally writes an OPML subscription catalog under the output directory. A validated public base URL supplies JSON/Atom canonical self URLs and absolute RSS subscriptions in OPML. The catalog is selected-source metadata, not a personalized feed or user state. Pages currently selects only the three public CS sources, refreshes the shared SQLite cache on its two-hour schedule, and publishes `subscriptions/cs.opml` along with their feeds. The best-effort cache can be rebuilt after eviction; readers of static files do not run a collector. Earlier JSON-only CS Pages deployment succeeded, but this does not establish durable storage or imply the new formats have already been deployed.
 
 ## Read-only local MCP delivery
 
@@ -124,7 +126,7 @@ The following are deliberately not part of the current milestone:
 - PostgreSQL;
 - vector databases;
 - LLM extraction;
-- RSS/Atom and search interfaces;
+- combined personalized feeds and source selection;
 - web frontend.
 
 They should be introduced only when a concrete requirement appears.

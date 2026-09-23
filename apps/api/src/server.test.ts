@@ -182,6 +182,42 @@ describe("read-only API", () => {
     });
   });
 
+  it("serves Atom and RSS with feed query, method, and unknown-source parity", async () => {
+    const { path, writer } = database();
+    notice(writer, source, "item-a", "new", "2026-09-23", [
+      { url: "https://example.edu/a.pdf", title: "A" },
+      { url: "https://example.edu/b.pdf", title: "B" },
+    ]);
+    const base = await serving(path);
+    for (const [format, contentType, root] of [
+      ["atom", "application/atom+xml; charset=utf-8", '<feed xmlns="http://www.w3.org/2005/Atom">'],
+      ["rss", "application/rss+xml; charset=utf-8", '<rss version="2.0">'],
+    ]) {
+      const result = await fetch(`${base}/feeds/notices-a.${format}`);
+      expect(result.status).toBe(200);
+      expect(result.headers.get("content-type")).toBe(contentType);
+      const document = await result.text();
+      expect(document).toContain(root);
+      expect(document).toContain("https://example.edu/item-a/page.htm");
+      expect(document).toContain("notices-a:item-a");
+      expect(document).toContain("https://example.edu/a.pdf");
+      expect(document).toContain("https://example.edu/b.pdf");
+      expect(await response(base, `/feeds/unknown.${format}`)).toMatchObject({ status: 404,
+        body: { error: { code: "not_found" } },
+      });
+      for (const query of ["limit=1", "limit=1&limit=2"]) {
+        expect(await response(base, `/feeds/notices-a.${format}?${query}`)).toMatchObject({ status: 400,
+          body: { error: { code: "invalid_query" } },
+        });
+      }
+      for (const method of ["POST", "PUT", "OPTIONS", "HEAD"]) {
+        const rejected = await fetch(`${base}/feeds/notices-a.${format}`, { method });
+        expect(rejected.status).toBe(405);
+        expect(rejected.headers.get("allow")).toBe("GET");
+      }
+    }
+  });
+
   it("uses only reader summaries and current notices for feed responses", async () => {
     const listRecentNotices = vi.fn(() => []);
     const listSources = vi.fn(() => [{ id: source.id, name: source.name,

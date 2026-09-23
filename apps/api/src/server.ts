@@ -2,6 +2,7 @@ import { createServer, type Server, type ServerResponse } from "node:http";
 import { InfoHubDatabaseReader, type RecentNoticeOptions } from "@nju-info/db";
 import type { ApiConfig } from "./config.js";
 import { buildJsonFeed } from "./feed.js";
+import { buildAtomFeed, buildRssFeed } from "./xml-feeds.js";
 
 const paths: Record<string, true> = {
   "/v1/health": true,
@@ -57,7 +58,8 @@ export function createApiServer(reader: Reader): Server {
       return;
     }
     const path = (request.url ?? "").split("?", 1)[0];
-    const feedSourceId = /^\/feeds\/([a-z0-9]+(?:-[a-z0-9]+)*)\.json$/.exec(path ?? "")?.[1];
+    const feedMatch = /^\/feeds\/([a-z0-9]+(?:-[a-z0-9]+)*)\.(json|atom|rss)$/.exec(path ?? "");
+    const feedSourceId = feedMatch?.[1];
     if (path === undefined || (paths[path] !== true && feedSourceId === undefined)) {
       error(response, 404, "not_found", "Not found");
       return;
@@ -81,8 +83,16 @@ export function createApiServer(reader: Reader): Server {
           error(response, 404, "not_found", "Not found");
           return;
         }
-        json(response, 200, buildJsonFeed(source, reader.listRecentNotices({ sourceId: feedSourceId, limit: 100 })),
-          undefined, "application/feed+json; charset=utf-8");
+        const notices = reader.listRecentNotices({ sourceId: feedSourceId, limit: 100 });
+        if (feedMatch?.[2] === "json") {
+          json(response, 200, buildJsonFeed(source, notices), undefined, "application/feed+json; charset=utf-8");
+        } else {
+          const atom = feedMatch?.[2] === "atom";
+          const document = atom ? buildAtomFeed(source, notices) : buildRssFeed(source, notices);
+          response.writeHead(200, { "Content-Type": atom
+            ? "application/atom+xml; charset=utf-8" : "application/rss+xml; charset=utf-8" });
+          response.end(document);
+        }
         return;
       }
       switch (path) {
