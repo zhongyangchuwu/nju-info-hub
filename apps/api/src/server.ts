@@ -1,6 +1,7 @@
 import { createServer, type Server, type ServerResponse } from "node:http";
 import { InfoHubDatabaseReader, type RecentNoticeOptions } from "@nju-info/db";
 import type { ApiConfig } from "./config.js";
+import { buildJsonFeed } from "./feed.js";
 
 const paths: Record<string, true> = {
   "/v1/health": true,
@@ -12,9 +13,10 @@ const paths: Record<string, true> = {
 type Reader = Pick<InfoHubDatabaseReader,
   "listSources" | "listOrganizations" | "listRecentNotices">;
 
-function json(response: ServerResponse, status: number, body: unknown, allow?: string): void {
+function json(response: ServerResponse, status: number, body: unknown, allow?: string,
+  contentType = "application/json; charset=utf-8"): void {
   response.writeHead(status, {
-    "Content-Type": "application/json; charset=utf-8",
+    "Content-Type": contentType,
     ...(allow === undefined ? {} : { Allow: allow }),
   });
   response.end(JSON.stringify(body));
@@ -55,7 +57,8 @@ export function createApiServer(reader: Reader): Server {
       return;
     }
     const path = (request.url ?? "").split("?", 1)[0];
-    if (path === undefined || paths[path] !== true) {
+    const feedSourceId = /^\/feeds\/([a-z0-9]+(?:-[a-z0-9]+)*)\.json$/.exec(path ?? "")?.[1];
+    if (path === undefined || (paths[path] !== true && feedSourceId === undefined)) {
       error(response, 404, "not_found", "Not found");
       return;
     }
@@ -72,6 +75,16 @@ export function createApiServer(reader: Reader): Server {
     }
 
     try {
+      if (feedSourceId !== undefined) {
+        const source = reader.listSources().find((candidate) => candidate.id === feedSourceId);
+        if (source === undefined) {
+          error(response, 404, "not_found", "Not found");
+          return;
+        }
+        json(response, 200, buildJsonFeed(source, reader.listRecentNotices({ sourceId: feedSourceId, limit: 100 })),
+          undefined, "application/feed+json; charset=utf-8");
+        return;
+      }
       switch (path) {
         case "/v1/health":
           json(response, 200, { data: { status: "ok" } });

@@ -89,7 +89,7 @@ Direct `fetch` remains sufficient for the current public WebPlus sources; persis
 
 ## Read-only HTTP delivery
 
-`apps/api` uses Node's HTTP server and only the `@nju-info/db` reader. It serves health, persisted source and organization summaries, and current recent notice revisions. It cannot ingest, create, or migrate a database and does not load the source registry. The server defaults to a local bind; see the README for its command and routes. RSS/Atom and search remain separate future output/query capabilities.
+`apps/api` uses Node's HTTP server and only the `@nju-info/db` reader. It serves health, persisted source and organization summaries, current recent notice revisions, and one JSON Feed 1.1 per persisted source. Feeds publish up to 100 current items with original links and source provenance; day-only dates remain day-only metadata. The server cannot ingest, create, or migrate a database and does not load the source registry. The server defaults to a local bind; see the README for its command and routes. RSS/Atom and search remain separate future output/query capabilities.
 
 ## Read-only local MCP delivery
 
