@@ -69,6 +69,8 @@ For read-only delivery, use `new InfoHubDatabaseReader(path)` from `@nju-info/db
 
 `InfoHubDatabase.listSources()` returns persisted source summaries (`id`, `name`, `organization: { id, name }`, `url`, `enabled`) ordered by source ID. `InfoHubDatabase.listOrganizations()` returns unique `{ id, name }` summaries derived from persisted sources, ordered by organization ID. If sources sharing an organization ID disagree on its name, the name from the lowest source ID wins; there is no separate organization table. Both queries reflect current persisted source metadata and return empty arrays for an empty database. They include sources with no notices and disabled sources; `enabled` does not change notice-filter behavior. Consumers can discover `sourceId` and `organizationId` for `listRecentNotices` using only this database package, without loading registry YAML.
 
+`apps/api` opens this reader once at startup and serves the persisted query results without accessing registry YAML or the ingestion API. Its default loopback bind does not change SQLite's live-WAL sidecar requirements above; a reader must be able to access the live database and its sidecars. API startup fails for missing or unsupported-schema files rather than initializing them.
+
 ## Worker command
 
 ```bash

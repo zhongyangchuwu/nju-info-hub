@@ -8,13 +8,14 @@ NJU Info Hub aims to turn fragmented public campus information into a normalized
 
 ## Status
 
-The public ingestion foundation is in place:
+The public ingestion foundation and first read-only delivery adapter are in place:
 
 - the generic WebPlus/Sudy collector has multi-site fixture coverage, pagination, resilient fetching, and parser hardening;
 - raw documents, source items, notice revisions, and attachments are persisted in SQLite;
+- a local-facing REST/JSON API serves persisted sources, organizations, and recent notices without collecting or modifying data;
 - Node.js 26 is the default repository runtime and Node.js 24 remains the compatibility floor.
 
-The latest P0 correctness pass, [Issue #5](https://github.com/zhongyangchuwu/nju-info-hub/issues/5), is complete via PR #7. No subsequent active implementation task is designated here; use GitHub Issues for the current work queue.
+Use GitHub Issues for the current work queue; Issue #16 tracks the first P1 REST/JSON output adapter.
 
 GitHub is the source of truth for implementation status:
 
@@ -50,7 +51,7 @@ normalize / enrich
         v
 canonical records + revisions
         |
-        +--> REST / JSON   [planned]
+        +--> REST / JSON   [implemented]
         +--> RSS / Atom    [planned]
         +--> MCP           [planned]
 ```
@@ -62,10 +63,11 @@ The source adapter boundary is intentionally independent of MCP. Future WeChat/Q
 ```text
 apps/
   worker/        development CLI for discovery, parsing, and ingestion
+  api/           read-only HTTP adapter over persisted queries
 packages/
   core/          shared schemas and canonical types
   collector/     source registry loader and source adapters
-  db/            SQLite schema, migrations, and persistence API
+  db/            SQLite schema, migrations, and read/write database APIs
 sources/
   nju/           declarative source definitions
 ```
@@ -106,9 +108,28 @@ pnpm worker -- fetch nju-cs-graduate 1
 
 # ingest the most recent dated notices and raw documents into SQLite
 pnpm worker -- ingest nju-cs-graduate /tmp/nju-info.sqlite 10
+
+# serve an existing current-schema database on 127.0.0.1:3000
+pnpm api -- /tmp/nju-info.sqlite
+
+# choose an explicit host and port if local defaults do not fit
+pnpm api -- /tmp/nju-info.sqlite --host 127.0.0.1 --port 3001
 ```
 
-Live commands access public NJU websites. Unit tests use local fixtures instead.
+Worker fetch and ingest commands access public NJU websites. Unit tests use local fixtures instead.
+
+The API requires an existing current-schema SQLite database; it does not create or migrate one. It binds only to localhost by default. Stop it with SIGINT or SIGTERM; active requests finish before the reader closes. Live WAL reads require the database and SQLite sidecar files to be accessible (see [`docs/database.md`](docs/database.md)).
+
+All success responses are JSON with a `data` field. For example:
+
+```bash
+curl http://127.0.0.1:3000/v1/health
+curl http://127.0.0.1:3000/v1/sources
+curl http://127.0.0.1:3000/v1/organizations
+curl 'http://127.0.0.1:3000/v1/notices/recent?sourceId=nju-cs-graduate&limit=10'
+```
+
+Only the recent-notices route accepts `sourceId`, `organizationId`, and `limit`; filters combine, and the default limit is 50 (maximum 100). Unknown IDs return an empty `data` array. Invalid queries return `400`, unknown paths `404`, non-GET methods on known paths `405` (`Allow: GET`), and internal failures `500`, each as `{"error":{"code":"…","message":"…"}}`. Dates and provenance follow the persisted query contract; health is liveness only.
 
 WebPlus discovery preserves list-page source/DOM order. Limited `fetch` and `ingest` commands instead rank parseable publication dates newest-first, with stable source-order fallback for equal, missing, or unparseable dates. They inspect one page beyond the point where enough candidates were found; `discover-pages` keeps full source order and pinned items.
 
