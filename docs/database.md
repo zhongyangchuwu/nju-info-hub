@@ -4,7 +4,7 @@
 
 The persistence package uses Node.js 24's built-in `node:sqlite` `DatabaseSync` API. The schema and ingestion path need only prepared statements, transactions, foreign keys, and migrations; Drizzle would add an ORM and driver dependency without removing meaningful code at this stage. The synchronous API is acceptable because the current worker is a single-process command-line collector. A concurrent service would need a separate connection and concurrency design.
 
-The database opens with foreign keys enabled, a five-second busy timeout, WAL journaling, and `synchronous = NORMAL`. Schema versioning uses SQLite's `user_version` pragma. Fresh databases use v2; existing v1 databases migrate transactionally, backfilling `published_on` from the original raw publication text. Unknown versions are rejected rather than modified implicitly.
+`InfoHubDatabase` is the writer: it opens with foreign keys enabled, a five-second busy timeout, WAL journaling, and `synchronous = NORMAL`. Schema versioning uses SQLite's `user_version` pragma. Fresh databases use v2; existing v1 databases migrate transactionally, backfilling `published_on` from the original raw publication text. Unknown versions are rejected rather than modified implicitly.
 
 ## Schema
 
@@ -62,6 +62,8 @@ A notice ingest runs in one `BEGIN IMMEDIATE` transaction:
 Constraint failures roll back the whole notice ingest. Repeating the same source, raw document, notice, and attachments leaves row counts unchanged.
 
 ## Persisted query
+
+For read-only delivery, use `new InfoHubDatabaseReader(path)` from `@nju-info/db`. It exposes only `listRecentNotices`, `listSources`, `listOrganizations`, `stats`, `close`, and `[Symbol.dispose]`; these queries share their implementation with `InfoHubDatabase`. The reader opens an existing SQLite file with `DatabaseSync`'s `readOnly: true` option. It checks `PRAGMA user_version` and accepts only the current schema version; it does not create a missing file, migrate an old schema, configure journal/synchronous mode, or checkpoint. Upgrade an older database using the existing writer/ingest path before starting read-only delivery. SQLite permits reading a live WAL database subject to its WAL and filesystem sidecar requirements; a read-only SQLite connection may create `-wal`/`-shm` sidecars when permitted. Do not use `immutable=1` with a live writer because it disables change detection and locking.
 
 `InfoHubDatabase.listRecentNotices({ sourceId?, organizationId?, limit? })` returns current revisions, not raw documents or a cross-source deduplicated identity. Both filters can be combined. The default limit is 50; limits must be integers from 1 to 100. A source item contributes only its highest revision number—even if older content is ingested again later. Results sort by `published_on` descending with nulls last, then source ID and source-item ID ascending. The query result includes current source name/organization, original publication text, normalized date, body, position-ordered attachments, and the linked raw document's fetch time and response SHA-256. An item's URL comes from the raw document linked to its selected revision.
 

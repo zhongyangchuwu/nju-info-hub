@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { normalizePublicationDate } from "@nju-info/core";
 import type { Attachment, ParsedNotice, RawDocument, SourceConfig } from "@nju-info/core";
-import { migrateDatabase } from "./schema.js";
+import { DATABASE_SCHEMA_VERSION, migrateDatabase } from "./schema.js";
 
 export interface PersistedRawDocument {
   id: number;
@@ -130,6 +130,7 @@ function noticeContentSha256(notice: ParsedNotice): string {
 
 export class InfoHubDatabase implements Disposable {
   readonly #database: DatabaseSync;
+  readonly #queries: DatabaseQueries;
 
   constructor(path: string) {
     this.#database = new DatabaseSync(path, {
@@ -139,6 +140,7 @@ export class InfoHubDatabase implements Disposable {
     this.#database.exec("PRAGMA journal_mode = WAL");
     this.#database.exec("PRAGMA synchronous = NORMAL");
     migrateDatabase(this.#database);
+    this.#queries = new DatabaseQueries(this.#database);
   }
 
   close(): void {
@@ -260,131 +262,19 @@ export class InfoHubDatabase implements Disposable {
   }
 
   listSources(): PersistedSourceSummary[] {
-    const rows = this.#database
-      .prepare(
-        `SELECT id, name, organization_id, organization_name, homepage_url, enabled
-           FROM sources
-          ORDER BY id`,
-      )
-      .all() as unknown as SourceSummaryRow[];
-    return rows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      organization: { id: row.organization_id, name: row.organization_name },
-      url: row.homepage_url,
-      enabled: row.enabled === 1,
-    }));
+    return this.#queries.listSources();
   }
 
   listOrganizations(): PersistedOrganizationSummary[] {
-    return this.#database
-      .prepare(
-        `WITH ranked AS (
-           SELECT organization_id, organization_name,
-                  ROW_NUMBER() OVER (PARTITION BY organization_id ORDER BY id) AS position
-             FROM sources
-         )
-         SELECT organization_id AS id, organization_name AS name
-           FROM ranked
-          WHERE position = 1
-          ORDER BY id`,
-      )
-      .all() as unknown as PersistedOrganizationSummary[];
+    return this.#queries.listOrganizations();
   }
 
   listRecentNotices(options: RecentNoticeOptions = {}): NoticeQueryResult[] {
-    const limit = options.limit ?? 50;
-    if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
-      throw new Error("recent notice limit must be an integer from 1 to 100");
-    }
-
-    const filters: string[] = [];
-    const parameters: string[] = [];
-    if (options.sourceId !== undefined) {
-      filters.push("s.id = ?");
-      parameters.push(options.sourceId);
-    }
-    if (options.organizationId !== undefined) {
-      filters.push("s.organization_id = ?");
-      parameters.push(options.organizationId);
-    }
-    const rows = this.#database
-      .prepare(
-        `SELECT r.id AS revision_id, s.id AS source_id,
-                si.source_item_id, s.name AS source_name,
-                s.organization_id, s.organization_name,
-                r.revision_number, d.final_url AS url, r.title,
-                r.published_at_raw, r.published_on, r.body_text, r.body_html,
-                d.fetched_at, d.sha256 AS raw_sha256
-           FROM notice_revisions r
-           JOIN source_items si ON si.id = r.source_item_row_id
-           JOIN sources s ON s.id = si.source_id
-           JOIN raw_documents d ON d.id = r.raw_document_id
-          WHERE NOT EXISTS (
-            SELECT 1 FROM notice_revisions newer
-             WHERE newer.source_item_row_id = r.source_item_row_id
-               AND newer.revision_number > r.revision_number
-          )${filters.length ? ` AND ${filters.join(" AND ")}` : ""}
-          ORDER BY r.published_on IS NULL, r.published_on DESC,
-                   s.id, si.source_item_id
-          LIMIT ?`,
-      )
-      .all(...parameters, limit) as unknown as NoticeQueryRow[];
-    if (rows.length === 0) return [];
-
-    const attachments = new Map<number, Attachment[]>();
-    const attachmentRows = this.#database
-      .prepare(
-        `SELECT notice_revision_id, url, title, media_type
-           FROM attachments
-          WHERE notice_revision_id IN (${rows.map(() => "?").join(", ")})
-          ORDER BY notice_revision_id, position`,
-      )
-      .all(...rows.map((row) => row.revision_id)) as unknown as AttachmentRow[];
-    for (const row of attachmentRows) {
-      const ordered = attachments.get(row.notice_revision_id) ?? [];
-      ordered.push({
-        url: row.url,
-        title: row.title,
-        ...(row.media_type === null ? {} : { mediaType: row.media_type }),
-      });
-      attachments.set(row.notice_revision_id, ordered);
-    }
-
-    return rows.map((row) => ({
-      sourceId: row.source_id,
-      sourceItemId: row.source_item_id,
-      sourceName: row.source_name,
-      organization: { id: row.organization_id, name: row.organization_name },
-      revisionNumber: row.revision_number,
-      url: row.url,
-      title: row.title,
-      publishedAtRaw: row.published_at_raw,
-      publishedOn: row.published_on,
-      bodyText: row.body_text,
-      bodyHtml: row.body_html,
-      attachments: attachments.get(row.revision_id) ?? [],
-      provenance: {
-        fetchedAt: row.fetched_at,
-        contentSha256: row.raw_sha256,
-      },
-    }));
+    return this.#queries.listRecentNotices(options);
   }
 
   stats(): DatabaseStats {
-    const count = (table: string): number =>
-      numberField(
-        this.#database.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get(),
-        "count",
-      );
-
-    return {
-      sources: count("sources"),
-      rawDocuments: count("raw_documents"),
-      sourceItems: count("source_items"),
-      noticeRevisions: count("notice_revisions"),
-      attachments: count("attachments"),
-    };
+    return this.#queries.stats();
   }
 
   #validateSource(source: SourceConfig, rawDocument: RawDocument): void {
@@ -541,5 +431,194 @@ export class InfoHubDatabase implements Disposable {
       this.#database.exec("ROLLBACK");
       throw error;
     }
+  }
+}
+
+/** Read-only access to an existing database at the current schema version. */
+export class InfoHubDatabaseReader implements Disposable {
+  readonly #database: DatabaseSync;
+  readonly #queries: DatabaseQueries;
+
+  constructor(path: string) {
+    this.#database = new DatabaseSync(path, {
+      readOnly: true,
+      enableForeignKeyConstraints: true,
+      timeout: 5_000,
+    });
+    try {
+      const version = numberField(
+        this.#database.prepare("PRAGMA user_version").get(),
+        "user_version",
+      );
+      if (version !== DATABASE_SCHEMA_VERSION) {
+        throw new Error(
+          `unsupported database schema version ${version}; expected ${DATABASE_SCHEMA_VERSION}`,
+        );
+      }
+    } catch (error) {
+      this.#database.close();
+      throw error;
+    }
+    this.#queries = new DatabaseQueries(this.#database);
+  }
+
+  listRecentNotices(options: RecentNoticeOptions = {}): NoticeQueryResult[] {
+    return this.#queries.listRecentNotices(options);
+  }
+
+  listSources(): PersistedSourceSummary[] {
+    return this.#queries.listSources();
+  }
+
+  listOrganizations(): PersistedOrganizationSummary[] {
+    return this.#queries.listOrganizations();
+  }
+
+  stats(): DatabaseStats {
+    return this.#queries.stats();
+  }
+
+  close(): void {
+    this.#database.close();
+  }
+
+  [Symbol.dispose](): void {
+    this.close();
+  }
+}
+
+class DatabaseQueries {
+  readonly #database: DatabaseSync;
+
+  constructor(database: DatabaseSync) {
+    this.#database = database;
+  }
+
+  listSources(): PersistedSourceSummary[] {
+    const rows = this.#database
+      .prepare(
+        `SELECT id, name, organization_id, organization_name, homepage_url, enabled
+           FROM sources
+          ORDER BY id`,
+      )
+      .all() as unknown as SourceSummaryRow[];
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      organization: { id: row.organization_id, name: row.organization_name },
+      url: row.homepage_url,
+      enabled: row.enabled === 1,
+    }));
+  }
+
+  listOrganizations(): PersistedOrganizationSummary[] {
+    return this.#database
+      .prepare(
+        `WITH ranked AS (
+           SELECT organization_id, organization_name,
+                  ROW_NUMBER() OVER (PARTITION BY organization_id ORDER BY id) AS position
+             FROM sources
+         )
+         SELECT organization_id AS id, organization_name AS name
+           FROM ranked
+          WHERE position = 1
+          ORDER BY id`,
+      )
+      .all() as unknown as PersistedOrganizationSummary[];
+  }
+
+  listRecentNotices(options: RecentNoticeOptions = {}): NoticeQueryResult[] {
+    const limit = options.limit ?? 50;
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+      throw new Error("recent notice limit must be an integer from 1 to 100");
+    }
+
+    const filters: string[] = [];
+    const parameters: string[] = [];
+    if (options.sourceId !== undefined) {
+      filters.push("s.id = ?");
+      parameters.push(options.sourceId);
+    }
+    if (options.organizationId !== undefined) {
+      filters.push("s.organization_id = ?");
+      parameters.push(options.organizationId);
+    }
+    const rows = this.#database
+      .prepare(
+        `SELECT r.id AS revision_id, s.id AS source_id,
+                si.source_item_id, s.name AS source_name,
+                s.organization_id, s.organization_name,
+                r.revision_number, d.final_url AS url, r.title,
+                r.published_at_raw, r.published_on, r.body_text, r.body_html,
+                d.fetched_at, d.sha256 AS raw_sha256
+           FROM notice_revisions r
+           JOIN source_items si ON si.id = r.source_item_row_id
+           JOIN sources s ON s.id = si.source_id
+           JOIN raw_documents d ON d.id = r.raw_document_id
+          WHERE NOT EXISTS (
+            SELECT 1 FROM notice_revisions newer
+             WHERE newer.source_item_row_id = r.source_item_row_id
+               AND newer.revision_number > r.revision_number
+          )${filters.length ? ` AND ${filters.join(" AND ")}` : ""}
+          ORDER BY r.published_on IS NULL, r.published_on DESC,
+                   s.id, si.source_item_id
+          LIMIT ?`,
+      )
+      .all(...parameters, limit) as unknown as NoticeQueryRow[];
+    if (rows.length === 0) return [];
+
+    const attachments = new Map<number, Attachment[]>();
+    const attachmentRows = this.#database
+      .prepare(
+        `SELECT notice_revision_id, url, title, media_type
+           FROM attachments
+          WHERE notice_revision_id IN (${rows.map(() => "?").join(", ")})
+          ORDER BY notice_revision_id, position`,
+      )
+      .all(...rows.map((row) => row.revision_id)) as unknown as AttachmentRow[];
+    for (const row of attachmentRows) {
+      const ordered = attachments.get(row.notice_revision_id) ?? [];
+      ordered.push({
+        url: row.url,
+        title: row.title,
+        ...(row.media_type === null ? {} : { mediaType: row.media_type }),
+      });
+      attachments.set(row.notice_revision_id, ordered);
+    }
+
+    return rows.map((row) => ({
+      sourceId: row.source_id,
+      sourceItemId: row.source_item_id,
+      sourceName: row.source_name,
+      organization: { id: row.organization_id, name: row.organization_name },
+      revisionNumber: row.revision_number,
+      url: row.url,
+      title: row.title,
+      publishedAtRaw: row.published_at_raw,
+      publishedOn: row.published_on,
+      bodyText: row.body_text,
+      bodyHtml: row.body_html,
+      attachments: attachments.get(row.revision_id) ?? [],
+      provenance: {
+        fetchedAt: row.fetched_at,
+        contentSha256: row.raw_sha256,
+      },
+    }));
+  }
+
+  stats(): DatabaseStats {
+    const count = (table: string): number =>
+      numberField(
+        this.#database.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get(),
+        "count",
+      );
+
+    return {
+      sources: count("sources"),
+      rawDocuments: count("raw_documents"),
+      sourceItems: count("source_items"),
+      noticeRevisions: count("notice_revisions"),
+      attachments: count("attachments"),
+    };
   }
 }

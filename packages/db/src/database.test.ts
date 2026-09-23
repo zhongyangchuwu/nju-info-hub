@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -10,8 +10,8 @@ import type {
   RawDocument,
   WebPlusSourceConfig,
 } from "@nju-info/core";
-import { migrateDatabase } from "./schema.js";
-import { InfoHubDatabase } from "./database.js";
+import { DATABASE_SCHEMA_VERSION, migrateDatabase } from "./schema.js";
+import { InfoHubDatabase, InfoHubDatabaseReader } from "./database.js";
 
 const SOURCE: WebPlusSourceConfig = {
   schemaVersion: 1,
@@ -679,6 +679,136 @@ describe("InfoHubDatabase", () => {
       expect(database.prepare("PRAGMA user_version").get()).toEqual({ user_version: 3 });
     } finally {
       database.close();
+    }
+  });
+});
+
+describe("InfoHubDatabaseReader", () => {
+  it("returns the same persisted queries as the writer without exposing ingestion", () => {
+    const temporary = temporaryDatabase();
+    try {
+      temporary.database.upsertSource(SIBLING_SOURCE);
+      ingestItem(temporary.database, SOURCE, "first", "2026-09-23");
+      ingestItem(temporary.database, OTHER_SOURCE, "second", "2026-09-22");
+
+      const reader = new InfoHubDatabaseReader(temporary.path);
+      try {
+        expect(reader.listSources()).toEqual(temporary.database.listSources());
+        expect(reader.listOrganizations()).toEqual(temporary.database.listOrganizations());
+        expect(reader.listRecentNotices()).toEqual(temporary.database.listRecentNotices());
+        expect(reader.listRecentNotices({ sourceId: SOURCE.id, limit: 1 }))
+          .toEqual(temporary.database.listRecentNotices({ sourceId: SOURCE.id, limit: 1 }));
+        expect(reader.stats()).toEqual(temporary.database.stats());
+        expect("ingestNotice" in reader).toBe(false);
+        expect("persistRawDocument" in reader).toBe(false);
+        expect("upsertSource" in reader).toBe(false);
+      } finally {
+        reader[Symbol.dispose]();
+      }
+    } finally {
+      temporary.database.close();
+      rmSync(temporary.directory, { recursive: true, force: true });
+    }
+  });
+
+  it("reads committed WAL content while the writer remains open", () => {
+    const temporary = temporaryDatabase();
+    try {
+      ingestItem(temporary.database, SOURCE, "first", "2026-09-23");
+      expect(existsSync(`${temporary.path}-wal`)).toBe(true);
+      const reader = new InfoHubDatabaseReader(temporary.path);
+      try {
+        expect(reader.listRecentNotices().map((notice) => notice.sourceItemId))
+          .toEqual(["first"]);
+        ingestItem(temporary.database, SOURCE, "second", "2026-09-24");
+        expect(reader.listRecentNotices().map((notice) => notice.sourceItemId))
+          .toEqual(["second", "first"]);
+      } finally {
+        reader.close();
+      }
+    } finally {
+      temporary.database.close();
+      rmSync(temporary.directory, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a missing path without creating it", () => {
+    const directory = mkdtempSync(join(tmpdir(), "nju-info-missing-"));
+    const path = join(directory, "absent.sqlite");
+    try {
+      expect(() => new InfoHubDatabaseReader(path)).toThrow();
+      expect(existsSync(path)).toBe(false);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it.each([0, DATABASE_SCHEMA_VERSION + 1])(
+    "rejects schema version %i without changing the database",
+    (version) => {
+      const directory = mkdtempSync(join(tmpdir(), "nju-info-version-"));
+      const path = join(directory, "version.sqlite");
+      try {
+        const database = new DatabaseSync(path);
+        try {
+          database.exec("CREATE TABLE sentinel (value TEXT)");
+          database.prepare("INSERT INTO sentinel (value) VALUES (?)").run("preserved");
+          database.exec(`PRAGMA user_version = ${version}`);
+        } finally {
+          database.close();
+        }
+        const before = readFileSync(path);
+        expect(() => new InfoHubDatabaseReader(path)).toThrow(
+          `unsupported database schema version ${version}; expected ${DATABASE_SCHEMA_VERSION}`,
+        );
+        expect(readFileSync(path)).toEqual(before);
+        const inspection = new DatabaseSync(path, { readOnly: true });
+        try {
+          expect(inspection.prepare("PRAGMA user_version").get()).toEqual({ user_version: version });
+          expect(inspection.prepare("SELECT value FROM sentinel").get())
+            .toEqual({ value: "preserved" });
+          expect(inspection.prepare("SELECT name FROM sqlite_schema WHERE type = 'table'").all())
+            .toEqual([{ name: "sentinel" }]);
+        } finally {
+          inspection.close();
+        }
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it("rejects a populated v1 WAL database without migration and closes on failure", () => {
+    const directory = mkdtempSync(join(tmpdir(), "nju-info-reader-v1-"));
+    const path = join(directory, "legacy.sqlite");
+    try {
+      const database = new DatabaseSync(path);
+      try {
+        database.exec(readFileSync(new URL("../fixtures/schema-v1.sql", import.meta.url), "utf8"));
+        database.prepare(
+          `INSERT INTO sources (id, name, organization_id, organization_name,
+             homepage_url, adapter_type, config_json, enabled, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(SOURCE.id, SOURCE.name, SOURCE.organization.id,
+          SOURCE.organization.name, SOURCE.url, "webplus", JSON.stringify(SOURCE),
+          1, "2026-09-23", "2026-09-23");
+        database.exec("PRAGMA journal_mode = WAL");
+        const before = database.prepare("SELECT * FROM sources").all();
+        const columns = database.prepare("PRAGMA table_info(notice_revisions)").all();
+        expect(() => new InfoHubDatabaseReader(path)).toThrow(
+          `unsupported database schema version 1; expected ${DATABASE_SCHEMA_VERSION}`,
+        );
+        expect(database.prepare("PRAGMA user_version").get()).toEqual({ user_version: 1 });
+        expect(database.prepare("SELECT * FROM sources").all()).toEqual(before);
+        expect(database.prepare("PRAGMA table_info(notice_revisions)").all()).toEqual(columns);
+        expect(columns).not.toContainEqual(expect.objectContaining({ name: "published_on" }));
+      } finally {
+        database.close();
+      }
+      expect(existsSync(`${path}-wal`)).toBe(false);
+      expect(existsSync(`${path}-shm`)).toBe(false);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
     }
   });
 });
