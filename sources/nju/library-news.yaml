@@ -1,0 +1,22 @@
+schemaVersion: 1
+id: nju-library-news-notices
+name: 图书馆新闻、活动与通知
+organization:
+  id: nju-library
+  name: 南京大学图书馆
+url: https://lib.nju.edu.cn/xw/xwtz.htm
+adapter:
+  type: webplus
+  selectors:
+    listItem: '.gqzx-list li'
+    listLink: '.gqzx-list li > a[href]'
+    title: .title h3
+    publishedAt: .title .time
+    content: '#vsb_content'
+audience:
+  - all
+categories:
+  - library
+crawl:
+  intervalMinutes: 60
+enabled: true

@@ -1,0 +1,18 @@
+schemaVersion: 1
+id: nju-youth-league-announcements
+name: 共青团南京大学委员会公告通知
+organization:
+  id: nju-youth-league
+  name: 共青团南京大学委员会
+url: https://tuanwei.nju.edu.cn/ggtz/list.htm
+adapter:
+  type: webplus
+audience:
+  - undergraduate
+  - graduate
+categories:
+  - notice
+  - student-affairs
+crawl:
+  intervalMinutes: 30
+enabled: true
