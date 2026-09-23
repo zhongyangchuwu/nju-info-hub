@@ -2,9 +2,9 @@
 
 ## Driver decision
 
-The v0.1 persistence package uses Node.js 24's built-in `node:sqlite` `DatabaseSync` API. The schema and ingestion path need only prepared statements, transactions, foreign keys, and migrations; Drizzle would add an ORM and driver dependency without removing meaningful code at this stage. The synchronous API is acceptable because the current worker is a single-process command-line collector. A concurrent service would need a separate connection and concurrency design.
+The persistence package uses Node.js 24's built-in `node:sqlite` `DatabaseSync` API. The schema and ingestion path need only prepared statements, transactions, foreign keys, and migrations; Drizzle would add an ORM and driver dependency without removing meaningful code at this stage. The synchronous API is acceptable because the current worker is a single-process command-line collector. A concurrent service would need a separate connection and concurrency design.
 
-The database opens with foreign keys enabled, a five-second busy timeout, WAL journaling, and `synchronous = NORMAL`. Schema versioning uses SQLite's `user_version` pragma. A database with an unknown nonzero version is rejected rather than modified implicitly.
+The database opens with foreign keys enabled, a five-second busy timeout, WAL journaling, and `synchronous = NORMAL`. Schema versioning uses SQLite's `user_version` pragma. Fresh databases use v2; existing v1 databases migrate transactionally, backfilling `published_on` from the original raw publication text. Unknown versions are rejected rather than modified implicitly.
 
 ## Schema
 
@@ -41,7 +41,9 @@ Represents one publication identity at one source. Its stable key is `(source_id
 
 Stores a complete parsed-notice snapshot linked to both its source item and the raw document that produced it. Revision numbers increase per source item.
 
-Revision identity is `(source_item, content_sha256)`, where `content_sha256` hashes the parsed URL, title, raw publication date, text body, HTML body, and ordered attachment metadata. Re-ingesting the same parsed content is idempotent. A meaningful parser-output or source-content change creates a new revision; an irrelevant raw markup change that normalizes to the same parsed notice does not.
+`published_at_raw` retains the source text. Nullable `published_on` is a validated `YYYY-MM-DD` calendar date, not a timestamp or an inferred timezone; missing/invalid dates remain null. The same normalizer drives WebPlus recency ordering and the v1 backfill.
+
+Revision identity is `(source_item, content_sha256)`, where `content_sha256` hashes the parsed URL, title, raw publication date, text body, HTML body, and ordered attachment metadata. The derived `published_on` is deliberately excluded, preserving existing revision hashes and idempotency across migration. A meaningful parser-output or source-content change creates a new revision; an irrelevant raw markup change that normalizes to the same parsed notice does not.
 
 ### `attachments`
 
@@ -59,6 +61,10 @@ A notice ingest runs in one `BEGIN IMMEDIATE` transaction:
 
 Constraint failures roll back the whole notice ingest. Repeating the same source, raw document, notice, and attachments leaves row counts unchanged.
 
+## Persisted query
+
+`InfoHubDatabase.listRecentNotices({ sourceId?, organizationId?, limit? })` returns current revisions, not raw documents or a cross-source deduplicated identity. Both filters can be combined. The default limit is 50; limits must be integers from 1 to 100. A source item contributes only its highest revision number—even if older content is ingested again later. Results sort by `published_on` descending with nulls last, then source ID and source-item ID ascending. The query result includes current source name/organization, original publication text, normalized date, body, position-ordered attachments, and the linked raw document's fetch time and response SHA-256. An item's URL comes from the raw document linked to its selected revision.
+
 ## Worker command
 
 ```bash
@@ -72,4 +78,4 @@ The command persists list-page raw documents, fetches and parses up to the reque
 
 ## Deferred
 
-The v0.1 schema deliberately omits canonical cross-source notices, semantic deduplication, fetch-attempt history, REST/MCP output tables, FTS/vector indexes, queues, PostgreSQL, and parser-version tracking. Raw documents remain available for a later reparsing or migration path.
+The schema deliberately omits canonical cross-source notices, semantic deduplication, fetch-attempt history, REST/MCP output tables, FTS/vector indexes, queues, PostgreSQL, and parser-version tracking. Raw documents remain available for a later reparsing or migration path.

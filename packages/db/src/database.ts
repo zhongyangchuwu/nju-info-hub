@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
-import type { ParsedNotice, RawDocument, SourceConfig } from "@nju-info/core";
+import { normalizePublicationDate } from "@nju-info/core";
+import type { Attachment, ParsedNotice, RawDocument, SourceConfig } from "@nju-info/core";
 import { migrateDatabase } from "./schema.js";
 
 export interface PersistedRawDocument {
@@ -23,6 +24,54 @@ export interface DatabaseStats {
   sourceItems: number;
   noticeRevisions: number;
   attachments: number;
+}
+
+export interface RecentNoticeOptions {
+  sourceId?: string;
+  organizationId?: string;
+  limit?: number;
+}
+
+/** A current, source-scoped revision; source metadata reflects the latest registry state. */
+export interface NoticeQueryResult {
+  sourceId: string;
+  sourceItemId: string;
+  sourceName: string;
+  organization: { id: string; name: string };
+  revisionNumber: number;
+  url: string;
+  title: string;
+  publishedAtRaw: string | null;
+  publishedOn: string | null;
+  bodyText: string;
+  bodyHtml: string;
+  attachments: Attachment[];
+  provenance: { fetchedAt: string; contentSha256: string };
+}
+
+interface NoticeQueryRow {
+  revision_id: number;
+  source_id: string;
+  source_item_id: string;
+  source_name: string;
+  organization_id: string;
+  organization_name: string;
+  revision_number: number;
+  url: string;
+  title: string;
+  published_at_raw: string | null;
+  published_on: string | null;
+  body_text: string;
+  body_html: string;
+  fetched_at: string;
+  raw_sha256: string;
+}
+
+interface AttachmentRow {
+  notice_revision_id: number;
+  url: string;
+  title: string;
+  media_type: string | null;
 }
 
 interface RevisionRow {
@@ -143,10 +192,11 @@ export class InfoHubDatabase implements Disposable {
              content_sha256,
              title,
              published_at_raw,
+             published_on,
              body_text,
              body_html,
              created_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           sourceItemRowId,
@@ -155,6 +205,7 @@ export class InfoHubDatabase implements Disposable {
           contentSha256,
           notice.title,
           notice.publishedAtRaw ?? null,
+          notice.publishedOn,
           notice.bodyText,
           notice.bodyHtml,
           rawDocument.fetchedAt,
@@ -184,6 +235,85 @@ export class InfoHubDatabase implements Disposable {
         insertedRevision: true,
       };
     });
+  }
+
+  listRecentNotices(options: RecentNoticeOptions = {}): NoticeQueryResult[] {
+    const limit = options.limit ?? 50;
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+      throw new Error("recent notice limit must be an integer from 1 to 100");
+    }
+
+    const filters: string[] = [];
+    const parameters: string[] = [];
+    if (options.sourceId !== undefined) {
+      filters.push("s.id = ?");
+      parameters.push(options.sourceId);
+    }
+    if (options.organizationId !== undefined) {
+      filters.push("s.organization_id = ?");
+      parameters.push(options.organizationId);
+    }
+    const rows = this.#database
+      .prepare(
+        `SELECT r.id AS revision_id, s.id AS source_id,
+                si.source_item_id, s.name AS source_name,
+                s.organization_id, s.organization_name,
+                r.revision_number, d.final_url AS url, r.title,
+                r.published_at_raw, r.published_on, r.body_text, r.body_html,
+                d.fetched_at, d.sha256 AS raw_sha256
+           FROM notice_revisions r
+           JOIN source_items si ON si.id = r.source_item_row_id
+           JOIN sources s ON s.id = si.source_id
+           JOIN raw_documents d ON d.id = r.raw_document_id
+          WHERE NOT EXISTS (
+            SELECT 1 FROM notice_revisions newer
+             WHERE newer.source_item_row_id = r.source_item_row_id
+               AND newer.revision_number > r.revision_number
+          )${filters.length ? ` AND ${filters.join(" AND ")}` : ""}
+          ORDER BY r.published_on IS NULL, r.published_on DESC,
+                   s.id, si.source_item_id
+          LIMIT ?`,
+      )
+      .all(...parameters, limit) as unknown as NoticeQueryRow[];
+    if (rows.length === 0) return [];
+
+    const attachments = new Map<number, Attachment[]>();
+    const attachmentRows = this.#database
+      .prepare(
+        `SELECT notice_revision_id, url, title, media_type
+           FROM attachments
+          WHERE notice_revision_id IN (${rows.map(() => "?").join(", ")})
+          ORDER BY notice_revision_id, position`,
+      )
+      .all(...rows.map((row) => row.revision_id)) as unknown as AttachmentRow[];
+    for (const row of attachmentRows) {
+      const ordered = attachments.get(row.notice_revision_id) ?? [];
+      ordered.push({
+        url: row.url,
+        title: row.title,
+        ...(row.media_type === null ? {} : { mediaType: row.media_type }),
+      });
+      attachments.set(row.notice_revision_id, ordered);
+    }
+
+    return rows.map((row) => ({
+      sourceId: row.source_id,
+      sourceItemId: row.source_item_id,
+      sourceName: row.source_name,
+      organization: { id: row.organization_id, name: row.organization_name },
+      revisionNumber: row.revision_number,
+      url: row.url,
+      title: row.title,
+      publishedAtRaw: row.published_at_raw,
+      publishedOn: row.published_on,
+      bodyText: row.body_text,
+      bodyHtml: row.body_html,
+      attachments: attachments.get(row.revision_id) ?? [],
+      provenance: {
+        fetchedAt: row.fetched_at,
+        contentSha256: row.raw_sha256,
+      },
+    }));
   }
 
   stats(): DatabaseStats {
@@ -231,6 +361,9 @@ export class InfoHubDatabase implements Disposable {
     }
     if (notice.provenance.fetchedAt !== rawDocument.fetchedAt) {
       throw new Error("notice provenance timestamp does not match raw document");
+    }
+    if (notice.publishedOn !== normalizePublicationDate(notice.publishedAtRaw)) {
+      throw new Error("notice publishedOn does not match publishedAtRaw");
     }
   }
 

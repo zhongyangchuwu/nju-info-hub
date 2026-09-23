@@ -67,7 +67,7 @@ List discovery preserves source/DOM order, including pinned or featured items. P
 
 The raw/canonical split is deliberate. A future database should retain raw payloads so parser improvements can be replayed without fetching historical pages again.
 
-`ParsedNotice` currently contains the source item identity, title, publication text, normalized text/HTML content, attachments, and provenance. Deadline extraction, audience classification, cross-source deduplication, and canonical notice identity are intentionally deferred.
+`ParsedNotice` contains the source item identity, title, original publication text, nullable normalized calendar date (`publishedOn`), normalized text/HTML content, attachments, and provenance. The date is not a timestamp or inferred timezone. Deadline extraction, audience classification, cross-source deduplication, and canonical notice identity are intentionally deferred.
 
 ## Persistence
 
@@ -81,7 +81,7 @@ notice_revisions
 attachments
 ```
 
-A source item is one publication identity at one source. A notice revision is a parsed snapshot linked to the raw document that produced it. The revision content hash covers the parsed URL, title, publication text, body, and attachment metadata. Re-ingesting identical parsed content is idempotent; changed parsed content creates the next revision for that source item.
+A source item is one publication identity at one source. A notice revision is a parsed snapshot linked to the raw document that produced it. The revision content hash covers the parsed URL, title, raw publication text, body, and attachment metadata; the deterministic derived date is not part of revision identity. Re-ingesting identical parsed content is idempotent; changed parsed content creates the next revision for that source item.
 
 There is no separate canonical `notices` table yet. Cross-source semantic deduplication is deferred until real consumers require it. Detailed schema and transaction semantics are documented in [`database.md`](database.md).
 

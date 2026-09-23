@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
+import { normalizePublicationDate } from "@nju-info/core";
 import type {
   Attachment,
   DiscoveredItem,
@@ -12,9 +13,6 @@ import type {
 
 const DATE_RE =
   /20\d{2}[-/.年]\d{1,2}[-/.月]\d{1,2}(?:日)?|\d{1,2}[-/.]\d{1,2}\s+20\d{2}/;
-const YEAR_FIRST_DATE_PARTS_RE =
-  /^(20\d{2})[-/.年](\d{1,2})[-/.月](\d{1,2})(?:日)?$/;
-const MONTH_FIRST_DATE_PARTS_RE = /^(\d{1,2})[-/.](\d{1,2})\s+(20\d{2})$/;
 const DEFAULT_LIST_LINK_SELECTOR = [
   ".news_list a[href]",
   ".wp_article_list a[href]",
@@ -46,26 +44,6 @@ function textWithElementBoundaries(
     .get()
     .join(" ");
   return normalizeText(text);
-}
-
-function publicationDateTimestamp(value: string): number | undefined {
-  const yearFirst = value.match(YEAR_FIRST_DATE_PARTS_RE);
-  const monthFirst = value.match(MONTH_FIRST_DATE_PARTS_RE);
-  if (!yearFirst && !monthFirst) return undefined;
-
-  const year = Number(yearFirst?.[1] ?? monthFirst?.[3]);
-  const month = Number(yearFirst?.[2] ?? monthFirst?.[1]);
-  const day = Number(yearFirst?.[3] ?? monthFirst?.[2]);
-  const timestamp = Date.UTC(year, month - 1, day);
-  const date = new Date(timestamp);
-  if (
-    date.getUTCFullYear() !== year ||
-    date.getUTCMonth() !== month - 1 ||
-    date.getUTCDate() !== day
-  ) {
-    return undefined;
-  }
-  return timestamp;
 }
 
 function resolveHttpUrl(baseUrl: string, href: string): URL | undefined {
@@ -222,19 +200,17 @@ export function orderDiscoveredItemsByPublicationRecency(
     .map((item, sourceIndex) => ({
       item,
       sourceIndex,
-      timestamp:
-        item.publishedAtRaw === undefined
-          ? undefined
-          : publicationDateTimestamp(item.publishedAtRaw),
+      publishedOn: normalizePublicationDate(item.publishedAtRaw),
     }))
     .sort((left, right) => {
-      if (left.timestamp === undefined && right.timestamp === undefined) {
+      if (left.publishedOn === null && right.publishedOn === null) {
         return left.sourceIndex - right.sourceIndex;
       }
-      if (left.timestamp === undefined) return 1;
-      if (right.timestamp === undefined) return -1;
+      if (left.publishedOn === null) return 1;
+      if (right.publishedOn === null) return -1;
       return (
-        right.timestamp - left.timestamp || left.sourceIndex - right.sourceIndex
+        right.publishedOn.localeCompare(left.publishedOn) ||
+        left.sourceIndex - right.sourceIndex
       );
     })
     .map(({ item }) => item);
@@ -316,6 +292,7 @@ export function parseWebPlusNotice(
     url: raw.url,
     title,
     ...(publishedAtRaw ? { publishedAtRaw } : {}),
+    publishedOn: normalizePublicationDate(publishedAtRaw),
     bodyText,
     bodyHtml,
     attachments: collectAttachments($, content, raw.url),
