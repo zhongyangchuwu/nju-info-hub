@@ -65,6 +65,8 @@ Constraint failures roll back the whole notice ingest. Repeating the same source
 
 `InfoHubDatabase.listRecentNotices({ sourceId?, organizationId?, limit? })` returns current revisions, not raw documents or a cross-source deduplicated identity. Both filters can be combined. The default limit is 50; limits must be integers from 1 to 100. A source item contributes only its highest revision number—even if older content is ingested again later. Results sort by `published_on` descending with nulls last, then source ID and source-item ID ascending. The query result includes current source name/organization, original publication text, normalized date, body, position-ordered attachments, and the linked raw document's fetch time and response SHA-256. An item's URL comes from the raw document linked to its selected revision.
 
+`InfoHubDatabase.listSources()` returns persisted source summaries (`id`, `name`, `organization: { id, name }`, `url`, `enabled`) ordered by source ID. `InfoHubDatabase.listOrganizations()` returns unique `{ id, name }` summaries derived from persisted sources, ordered by organization ID. If sources sharing an organization ID disagree on its name, the name from the lowest source ID wins; there is no separate organization table. Both queries reflect current persisted source metadata and return empty arrays for an empty database. They include sources with no notices and disabled sources; `enabled` does not change notice-filter behavior. Consumers can discover `sourceId` and `organizationId` for `listRecentNotices` using only this database package, without loading registry YAML.
+
 ## Worker command
 
 ```bash
