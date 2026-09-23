@@ -142,6 +142,22 @@ Only the recent-notices route accepts `sourceId`, `organizationId`, and `limit`;
 
 The namespaced `_nju` extension carries feed-level `source_id` and `organization: { id, name }`; item-level fields are `source_id`, `source_name`, `organization`, `revision_number`, `fetched_at`, and `content_sha256`. When a calendar date exists, the item also has `published_on` (`YYYY-MM-DD`) and `date_precision: "day"`. JSON Feed `date_published` encodes that day deterministically as `YYYY-MM-DDT00:00:00+08:00` (start of day in Asia/Shanghai) for Folo/reader compatibility; it does not assert an exact source publication time. Unknown dates omit all three date fields. The canonical database and `/v1` API retain day-only precision. `fetched_at` is the raw-document fetch time and `content_sha256` is the linked raw response hash, not the revision identity. Original HTML/text and all ordered attachments are included; missing attachment media types use a known document extension when available, otherwise `application/octet-stream`.
 
+## Static CS feeds
+
+The `CS feed pilot` workflow runs on a two-hour schedule or by manual dispatch. It centrally collects the latest 10 items from `nju-cs-graduate`, `nju-cs-internal-notices`, and `nju-cs-seminars` into one SQLite database, then exports the same three feeds as static JSON Feed files for public readers. The workflow uploads those files as a GitHub Pages artifact; the site must be enabled/configured separately, and this project does not claim that Pages is currently enabled or provide a public URL.
+
+To collect and export the same feeds locally:
+
+```bash
+mkdir -p .cache/nju-info _site
+pnpm worker -- ingest nju-cs-graduate .cache/nju-info/feeds.sqlite 10
+pnpm worker -- ingest nju-cs-internal-notices .cache/nju-info/feeds.sqlite 10
+pnpm worker -- ingest nju-cs-seminars .cache/nju-info/feeds.sqlite 10
+pnpm --filter @nju-info/api export-feeds -- .cache/nju-info/feeds.sqlite _site nju-cs-graduate nju-cs-internal-notices nju-cs-seminars
+```
+
+The GitHub Actions SQLite cache includes the database and SQLite sidecars, but is best-effort and may be evicted. It is not durable storage: collection must be able to rebuild the database from public sources after a cache miss, and older local cache history is not guaranteed to survive.
+
 The MCP command requires an existing current-schema SQLite database. It exposes only `list_sources`, `list_organizations`, and `list_recent_notices` over stdio; the first two take `{}`, and the third accepts optional `sourceId`, `organizationId`, and `limit` (1–100). Results include matching JSON text and structured content. Configure an MCP host to launch the command as a subprocess; stdout is reserved for protocol messages and startup diagnostics go to stderr. Closing the connection releases the read-only database reader.
 
 WebPlus discovery preserves list-page source/DOM order. Limited `fetch` and `ingest` commands instead rank parseable publication dates newest-first, with stable source-order fallback for equal, missing, or unparseable dates. They inspect one page beyond the point where enough candidates were found; `discover-pages` keeps full source order and pinned items.
