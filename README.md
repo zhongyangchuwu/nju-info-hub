@@ -8,11 +8,23 @@ NJU Info Hub aims to turn fragmented public campus information into a normalized
 
 ## Status
 
-Early proof of concept. The first milestone focuses on public NJU websites, especially sites built on the WebPlus/Sudy website platform.
+The public ingestion foundation is in place:
 
-Planned source families:
+- the generic WebPlus/Sudy collector has multi-site fixture coverage, pagination, resilient fetching, and parser hardening;
+- raw documents, source items, notice revisions, and attachments are persisted in SQLite;
+- Node.js 26 is the default repository runtime and Node.js 24 remains the compatibility floor.
 
-- public NJU websites and existing RSSHub routes;
+The current P0 task is [Issue #5](https://github.com/zhongyangchuwu/nju-info-hub/issues/5): source freshness and trustworthy "latest" discovery semantics.
+
+GitHub is the source of truth for implementation status:
+
+- [Project roadmap](docs/roadmap.md) — long-term phases and architectural boundaries;
+- [Issues](https://github.com/zhongyangchuwu/nju-info-hub/issues) — active/planned work;
+- [Pull requests](https://github.com/zhongyangchuwu/nju-info-hub/pulls) — implementation and review history.
+
+Planned source families include:
+
+- public NJU websites and existing RSSHub routes where useful;
 - public WeChat-account articles through replaceable adapters;
 - optional local sidecars for private QQ/WeChat groups in a later phase.
 
@@ -100,15 +112,10 @@ Live commands access public NJU websites. Unit tests use local fixtures instead.
 
 ## Initial sources
 
-The first P0 fixtures/configs cover:
-
-- NJU Computer Science graduate notices;
-- NJU Student Affairs public notices;
-- NJU student exchange notices.
+The current public-source registry and fixtures cover multiple NJU WebPlus/Sudy sites, including Computer Science graduate notices, Student Affairs public notices, and student exchange notices. Additional high-value public sources are tracked through the roadmap and GitHub Issues.
 
 More sources should preferably be added by contributing YAML under `sources/nju/` rather than adding a new crawler.
 
 ## License
 
 License selection is still pending. Until a license is added, normal copyright rules apply.
-
