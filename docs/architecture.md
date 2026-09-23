@@ -93,7 +93,7 @@ Direct `fetch` remains sufficient for the current public WebPlus sources; persis
 
 ## Computer Science static feed pilot
 
-The scheduled GitHub Actions pilot ingests only the three public Computer Science sources (`nju-cs-graduate`, `nju-cs-internal-notices`, and `nju-cs-seminars`) into SQLite, then exports their JSON Feed files as a GitHub Pages artifact. The exporter lives in `apps/api`, reads an existing database through `InfoHubDatabaseReader`, and reuses `buildJsonFeed`; it neither imports the collector nor contacts upstream sites. Readers of the published files do not trigger collection. GitHub Actions cache may retain the SQLite database between runs, but it is best-effort and can be evicted; the collector must be able to rebuild the pilot state. Pages enablement and a successful deployment are separate operational steps, not implied by the workflow file.
+The scheduled GitHub Actions pilot ingests only the three public Computer Science sources (`nju-cs-graduate`, `nju-cs-internal-notices`, and `nju-cs-seminars`) into SQLite, then exports their JSON Feed files as a GitHub Pages artifact. The exporter lives in `apps/api`, reads an existing database through `InfoHubDatabaseReader`, and reuses `buildJsonFeed`; it neither imports the collector nor contacts upstream sites. Readers of the published files do not trigger collection. GitHub Actions cache may retain the SQLite database between runs, but it is best-effort and can be evicted; the collector must be able to rebuild the pilot state. GitHub Pages is enabled, and the CS pilot has completed one successful public deployment; this does not establish durable storage or extend the pilot beyond these sources.
 
 ## Read-only local MCP delivery
 
