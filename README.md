@@ -144,16 +144,23 @@ The namespaced `_nju` extension carries feed-level `source_id` and `organization
 
 ## Static CS feeds
 
-The `CS feed pilot` workflow runs on a two-hour schedule or by manual dispatch. It centrally collects the latest 10 items from `nju-cs-graduate`, `nju-cs-internal-notices`, and `nju-cs-seminars` into one SQLite database, then exports the same three feeds as static JSON Feed files for public readers. The workflow uploads those files as a GitHub Pages artifact; the site must be enabled/configured separately, and this project does not claim that Pages is currently enabled or provide a public URL.
+The `CS feed pilot` workflow runs on a two-hour schedule or by manual dispatch. It centrally collects the latest 10 items from `nju-cs-graduate`, `nju-cs-internal-notices`, and `nju-cs-seminars` into one SQLite database, then exports the same three feeds as static JSON Feed files for public readers. GitHub Pages is enabled with workflow deployment at https://zhongyangchuwu.github.io/nju-info-hub/; the [pilot deployment](https://github.com/zhongyangchuwu/nju-info-hub/actions/runs/35901389130) succeeded. The public feeds are:
 
-To collect and export the same feeds locally:
+- https://zhongyangchuwu.github.io/nju-info-hub/feeds/nju-cs-graduate.json
+- https://zhongyangchuwu.github.io/nju-info-hub/feeds/nju-cs-internal-notices.json
+- https://zhongyangchuwu.github.io/nju-info-hub/feeds/nju-cs-seminars.json
+
+Pages serves these files as `application/json`; Folo's production API parsed all three with `code=0` and `errorMessage=null`. These direct per-source URLs are the current pilot interface, not the final user subscription experience or source-selection design.
+
+To collect and export the same feeds locally, run from the repository root (package scripts use their own working directories):
 
 ```bash
-mkdir -p .cache/nju-info _site
-pnpm worker -- ingest nju-cs-graduate .cache/nju-info/feeds.sqlite 10
-pnpm worker -- ingest nju-cs-internal-notices .cache/nju-info/feeds.sqlite 10
-pnpm worker -- ingest nju-cs-seminars .cache/nju-info/feeds.sqlite 10
-pnpm --filter @nju-info/api export-feeds -- .cache/nju-info/feeds.sqlite _site nju-cs-graduate nju-cs-internal-notices nju-cs-seminars
+ROOT="$PWD"
+mkdir -p "$ROOT/.cache/nju-info" "$ROOT/_site"
+pnpm worker -- ingest nju-cs-graduate "$ROOT/.cache/nju-info/feeds.sqlite" 10
+pnpm worker -- ingest nju-cs-internal-notices "$ROOT/.cache/nju-info/feeds.sqlite" 10
+pnpm worker -- ingest nju-cs-seminars "$ROOT/.cache/nju-info/feeds.sqlite" 10
+pnpm --filter @nju-info/api export-feeds -- "$ROOT/.cache/nju-info/feeds.sqlite" "$ROOT/_site" nju-cs-graduate nju-cs-internal-notices nju-cs-seminars
 ```
 
 The GitHub Actions SQLite cache includes the database and SQLite sidecars, but is best-effort and may be evicted. It is not durable storage: collection must be able to rebuild the database from public sources after a cache miss, and older local cache history is not guaranteed to survive.
