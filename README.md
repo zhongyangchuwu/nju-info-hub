@@ -8,14 +8,15 @@ NJU Info Hub aims to turn fragmented public campus information into a normalized
 
 ## Status
 
-The public ingestion foundation and first read-only delivery adapter are in place:
+The public ingestion foundation and two read-only delivery adapters are in place:
 
 - the generic WebPlus/Sudy collector has multi-site fixture coverage, pagination, resilient fetching, and parser hardening;
 - raw documents, source items, notice revisions, and attachments are persisted in SQLite;
 - a local-facing REST/JSON API serves persisted sources, organizations, and recent notices without collecting or modifying data;
+- a local stdio MCP adapter exposes three read-only tools over the same persisted queries;
 - Node.js 26 is the default repository runtime and Node.js 24 remains the compatibility floor.
 
-Use GitHub Issues for the current work queue; Issue #16 tracks the first P1 REST/JSON output adapter.
+Use GitHub Issues for the current work queue; Issue #18 tracks the local MCP adapter.
 
 GitHub is the source of truth for implementation status:
 
@@ -53,7 +54,7 @@ canonical records + revisions
         |
         +--> REST / JSON   [implemented]
         +--> RSS / Atom    [planned]
-        +--> MCP           [planned]
+        +--> MCP (local stdio) [implemented]
 ```
 
 The source adapter boundary is intentionally independent of MCP. Future WeChat/QQ support should add new adapters or a local sidecar without changing the canonical data model.
@@ -64,6 +65,7 @@ The source adapter boundary is intentionally independent of MCP. Future WeChat/Q
 apps/
   worker/        development CLI for discovery, parsing, and ingestion
   api/           read-only HTTP adapter over persisted queries
+  mcp/           read-only local stdio MCP adapter over persisted queries
 packages/
   core/          shared schemas and canonical types
   collector/     source registry loader and source adapters
@@ -114,6 +116,9 @@ pnpm api -- /tmp/nju-info.sqlite
 
 # choose an explicit host and port if local defaults do not fit
 pnpm api -- /tmp/nju-info.sqlite --host 127.0.0.1 --port 3001
+
+# serve an existing current-schema database to a local MCP host over stdio
+pnpm mcp -- /tmp/nju-info.sqlite
 ```
 
 Worker fetch and ingest commands access public NJU websites. Unit tests use local fixtures instead.
@@ -130,6 +135,8 @@ curl 'http://127.0.0.1:3000/v1/notices/recent?sourceId=nju-cs-graduate&limit=10'
 ```
 
 Only the recent-notices route accepts `sourceId`, `organizationId`, and `limit`; filters combine, and the default limit is 50 (maximum 100). Unknown IDs return an empty `data` array. Invalid queries return `400`, unknown paths `404`, non-GET methods on known paths `405` (`Allow: GET`), and internal failures `500`, each as `{"error":{"code":"…","message":"…"}}`. Dates and provenance follow the persisted query contract; health is liveness only.
+
+The MCP command requires an existing current-schema SQLite database. It exposes only `list_sources`, `list_organizations`, and `list_recent_notices` over stdio; the first two take `{}`, and the third accepts optional `sourceId`, `organizationId`, and `limit` (1–100). Results include matching JSON text and structured content. Configure an MCP host to launch the command as a subprocess; stdout is reserved for protocol messages and startup diagnostics go to stderr. Closing the connection releases the read-only database reader.
 
 WebPlus discovery preserves list-page source/DOM order. Limited `fetch` and `ingest` commands instead rank parseable publication dates newest-first, with stable source-order fallback for equal, missing, or unparseable dates. They inspect one page beyond the point where enough candidates were found; `discover-pages` keeps full source order and pinned items.
 
