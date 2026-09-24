@@ -25,6 +25,7 @@ canonical record + revisions
     +--> search
     +--> REST / JSON
     +--> standard syndication (JSON Feed / Atom / RSS; OPML catalog)
+    +--> published-source catalog / source sets
     +--> MCP
 ```
 
@@ -95,7 +96,7 @@ Direct `fetch` remains sufficient for the current public WebPlus sources; persis
 
 The read-only output layer projects current canonical SQLite notice revisions into a small format-neutral feed model before serialization. Stable source-item IDs, organization/source identity, original item and source URLs, day transport value, current-revision fetch time, content, and inferred attachment MIME types share one mapping. JSON Feed retains structured `_nju` provenance and all attachments; Atom uses standard enclosure links; RSS uses item-description attachment links, not `<enclosure>` without reliable byte length. No format triggers upstream crawling, changes database precision, or introduces a new collector. Publication days remain `YYYY-MM-DD` in the database and `/v1` API; transport uses start-of-day Asia/Shanghai (`YYYY-MM-DDT00:00:00+08:00`), not an exact source time. Atom `updated` is observed current-revision fetch time and feed `updated` is its maximum (explicit generation time for empty feeds). RSS `lastBuildDate` is likewise hub observation/build metadata, not upstream modification time. The Atom and RSS XML deliberately omit content hashes and custom namespaces.
 
-The static exporter reads the same persisted current revisions and writes `.json`, `.atom`, `.rss` for each selected source; it owns/replaces only the `feeds` directory and optionally writes an OPML subscription catalog under the output directory. A validated public base URL supplies JSON/Atom canonical self URLs and absolute RSS subscriptions in OPML. The catalog is selected-source metadata, not a personalized feed or user state. Pages currently selects only the three public CS sources, refreshes the shared SQLite cache on its two-hour schedule, and publishes `subscriptions/cs.opml` along with their feeds. The best-effort cache can be rebuilt after eviction; readers of static files do not run a collector. The standards-feed CS Pages deployment has succeeded publicly for JSON, Atom, RSS, and the CS OPML catalog; this still does not establish durable storage or extend the pilot beyond these three sources.
+The static exporter reads the same persisted current revisions and writes `.json`, `.atom`, `.rss` for each selected source. With a validated public base URL it also writes `catalog/sources.json`, which describes only the sources included in that publication and their absolute feed URLs; this is not the complete audited NJU source map and does not invent channel/authority fields that are not persisted. A reusable source-set definition contains only an ID, display title, and selected source IDs. The same resolved set can generate OPML (independent per-source subscriptions) and combined JSON/Atom/RSS bundle feeds (one merged timeline) without duplicating notices or triggering another crawl. Combined entries preserve the original stable item ID and NJU item URL; Atom and RSS use their standard per-entry source elements to retain source identity. Pages currently uses one CS source set over the three public CS sources. The best-effort cache can be rebuilt after eviction; readers of static files do not run a collector. The existing per-source standards deployment is live, while catalog/bundle publication requires its first post-merge Pages run before being considered publicly verified.
 
 ## Read-only local MCP delivery
 
@@ -126,8 +127,8 @@ The following are deliberately not part of the current milestone:
 - PostgreSQL;
 - vector databases;
 - LLM extraction;
-- combined personalized feeds and source selection;
-- web frontend.
+- saved personal source sets / read state;
+- source-selection web frontend.
 
 They should be introduced only when a concrete requirement appears.
 

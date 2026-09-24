@@ -14,6 +14,7 @@ The public ingestion foundation and two read-only delivery adapters are in place
 - raw documents, source items, notice revisions, and attachments are persisted in SQLite;
 - a local-facing REST/JSON API serves persisted sources, organizations, and recent notices without collecting or modifying data;
 - per-source JSON Feed 1.1, Atom 1.0, and RSS 2.0 publishers serve the same current persisted notices without contacting upstreams;
+- static publication can expose a machine-readable published-source catalog plus reusable source sets as OPML or combined JSON/Atom/RSS timelines;
 - a local stdio MCP adapter exposes three read-only tools over the same persisted queries;
 - Node.js 26 is the default repository runtime and Node.js 24 remains the compatibility floor.
 
@@ -55,6 +56,7 @@ canonical records + revisions
         |
         +--> REST / JSON   [implemented]
         +--> JSON Feed / Atom / RSS [implemented]
+        +--> source catalog / source sets [implemented]
         +--> MCP (local stdio) [implemented]
 ```
 
@@ -151,11 +153,13 @@ JSON preserves original HTML/text and every ordered attachment with inferred MIM
 | JSON Feed 1.1 | `feeds/<sourceId>.json` | Folo, Miniflux, NetNewsWire |
 | Atom 1.0 | `feeds/<sourceId>.atom` | Zotero, Miniflux, NetNewsWire, general readers |
 | RSS 2.0 | `feeds/<sourceId>.rss` | Zotero, Miniflux, NetNewsWire, general readers |
-| OPML 2.0 catalog | `subscriptions/cs.opml` | Bulk import into Zotero and general readers |
+| OPML 2.0 catalog | `subscriptions/<setId>.opml` | Keep selected sources as separate subscriptions in Zotero/general readers |
+| Combined source-set feeds | `bundles/<setId>.{json,atom,rss}` | One merged timeline for the selected sources |
+| Published-source catalog | `catalog/sources.json` | Machine-readable discovery of the sources included in this publication |
 
 ## Static CS feeds
 
-The `CS feed pilot` workflow runs every two hours or by manual dispatch. It centrally collects the latest 10 items from exactly `nju-cs-graduate`, `nju-cs-internal-notices`, and `nju-cs-seminars` into one SQLite database, then exports all three formats for each source and `subscriptions/cs.opml` as a GitHub Pages artifact. Readers never trigger a crawl. GitHub Pages is configured at https://zhongyangchuwu.github.io/nju-info-hub/; [the standards-feed deployment](https://github.com/zhongyangchuwu/nju-info-hub/actions/runs/35905071208) succeeded. All nine public JSON/Atom/RSS URLs and the CS OPML catalog are live; Folo's production feed parser accepted all nine per-source feed URLs with `code=0` and `errorMessage=null`.
+The `CS feed pilot` workflow runs every two hours or by manual dispatch. It centrally collects the latest 10 items from exactly `nju-cs-graduate`, `nju-cs-internal-notices`, and `nju-cs-seminars` into one SQLite database, then exports all three per-source formats. The same selected source set also drives `subscriptions/cs.opml`, `catalog/sources.json`, and combined `bundles/cs.{json,atom,rss}` output without another upstream crawl. Readers never trigger collection. GitHub Pages is configured at https://zhongyangchuwu.github.io/nju-info-hub/; the existing per-source standards feeds are live, while the new catalog/bundle paths require the first post-merge pilot deployment before they are considered publicly verified.
 
 Public per-source URL patterns (substitute each of the three IDs above):
 
@@ -163,8 +167,12 @@ Public per-source URL patterns (substitute each of the three IDs above):
 - `https://zhongyangchuwu.github.io/nju-info-hub/feeds/<sourceId>.atom`
 - `https://zhongyangchuwu.github.io/nju-info-hub/feeds/<sourceId>.rss`
 - CS OPML: `https://zhongyangchuwu.github.io/nju-info-hub/subscriptions/cs.opml`
+- published-source catalog: `https://zhongyangchuwu.github.io/nju-info-hub/catalog/sources.json`
+- combined CS timeline: `https://zhongyangchuwu.github.io/nju-info-hub/bundles/cs.{json,atom,rss}`
 
-OPML contains exactly the selected source subscriptions, each pointing to its absolute RSS feed and original NJU source page. These direct per-source URLs and CS OPML are pilot interfaces; a future Source Catalog/source selection will generate appropriate sets. Static export accepts an optional `--base-url` for canonical JSON/Atom self URLs, and requires it when `--opml` is supplied; RSS does not add a nonstandard self extension. The original invocation without flags still works.
+The catalog lists only the sources included in the current publication, with their original NJU home pages and absolute JSON/Atom/RSS URLs. It is not yet the complete audited NJU source map from Issue #21 and does not invent channel/authority metadata that is not persisted. OPML keeps the selected sources as separate subscriptions, while a bundle merges the same source set into one timeline; bundle entries retain their original item URL and per-entry source identity. These are still pilot interfaces: future source-selection UI or clients can consume the catalog and produce source sets without changing collection.
+
+Static export accepts an optional `--base-url` for canonical URLs. `--set-id` and `--set-title` publish one combined set from the selected source IDs. The original invocation without flags still works.
 
 To collect and export the same feeds locally, run from the repository root (package scripts use their own working directories):
 
@@ -174,9 +182,8 @@ mkdir -p "$ROOT/.cache/nju-info" "$ROOT/_site"
 pnpm worker -- ingest nju-cs-graduate "$ROOT/.cache/nju-info/feeds.sqlite" 10
 pnpm worker -- ingest nju-cs-internal-notices "$ROOT/.cache/nju-info/feeds.sqlite" 10
 pnpm worker -- ingest nju-cs-seminars "$ROOT/.cache/nju-info/feeds.sqlite" 10
-pnpm --filter @nju-info/api export-feeds -- "$ROOT/.cache/nju-info/feeds.sqlite" "$ROOT/_site" nju-cs-graduate nju-cs-internal-notices nju-cs-seminars --base-url https://zhongyangchuwu.github.io/nju-info-hub/ --opml subscriptions/cs.opml
+pnpm --filter @nju-info/api export-feeds -- "$ROOT/.cache/nju-info/feeds.sqlite" "$ROOT/_site" nju-cs-graduate nju-cs-internal-notices nju-cs-seminars --base-url https://zhongyangchuwu.github.io/nju-info-hub/ --opml subscriptions/cs.opml --set-id cs --set-title "计算机学院公开信息"
 ```
-
 The GitHub Actions SQLite cache includes the database and SQLite sidecars, but is best-effort and may be evicted. It is not durable storage: collection must be able to rebuild the database from public sources after a cache miss, and older local cache history is not guaranteed to survive.
 
 The MCP command requires an existing current-schema SQLite database. It exposes only `list_sources`, `list_organizations`, and `list_recent_notices` over stdio; the first two take `{}`, and the third accepts optional `sourceId`, `organizationId`, and `limit` (1–100). Results include matching JSON text and structured content. Configure an MCP host to launch the command as a subprocess; stdout is reserved for protocol messages and startup diagnostics go to stderr. Closing the connection releases the read-only database reader.
