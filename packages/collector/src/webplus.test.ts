@@ -2,12 +2,14 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { RawDocument, WebPlusSourceConfig } from "@nju-info/core";
+import { webPlusSourceConfigSchema } from "@nju-info/core";
 import {
   discoverWebPlusItems,
   discoverWebPlusPage,
   orderDiscoveredItemsByPublicationRecency,
   parseWebPlusNotice,
 } from "./webplus.js";
+import { loadSourceFile } from "./registry.js";
 
 function fixture(name: string): string {
   return readFileSync(
@@ -133,23 +135,27 @@ describe("WebPlus adapter", () => {
       {
         sourceId: "test",
         url: "https://example.edu/old",
+        acquisitionKind: "webplus-detail" as const,
         title: "old",
         publishedAtRaw: "2026-01-01",
       },
       {
         sourceId: "test",
         url: "https://example.edu/missing",
+        acquisitionKind: "webplus-detail" as const,
         title: "missing",
       },
       {
         sourceId: "test",
         url: "https://example.edu/new",
+        acquisitionKind: "webplus-detail" as const,
         title: "new",
         publishedAtRaw: "2026-09-01",
       },
       {
         sourceId: "test",
         url: "https://example.edu/invalid",
+        acquisitionKind: "webplus-detail" as const,
         title: "invalid",
         publishedAtRaw: "unknown",
       },
@@ -166,19 +172,95 @@ describe("WebPlus adapter", () => {
       "nju-student-affairs-notices",
       "https://xgb.nju.edu.cn/gsgg/list.htm",
       "关于开展2026年度南京大学研究生奖学金评选工作的通知",
+      2,
     ],
     [
       "stuex-list.html",
       "nju-student-exchange",
       "https://stuex.nju.edu.cn/2539/list.htm",
       "【奥地利-本科生】2027年春季学期格拉茨大学Erasmus+交换项目通知",
+      1,
     ],
-  ])("parses list structure from %s", (file, id, url, title) => {
+  ])("parses list structure from %s", (file, id, url, title, count) => {
     const config = source(id, id, url);
     const items = discoverWebPlusItems(raw(id, url, fixture(file)), config);
 
-    expect(items).toHaveLength(1);
+    expect(items).toHaveLength(count);
     expect(items[0]?.title).toBe(title);
+    expect(items.every((item) => item.acquisitionKind === "webplus-detail")).toBe(true);
+  });
+
+  it("preserves Student Affairs official list items across acquisition classes", async () => {
+    const config = webPlusSourceConfigSchema.parse(
+      await loadSourceFile(
+        new URL("../../../sources/nju/student-affairs.yaml", import.meta.url).pathname,
+      ),
+    );
+    const items = discoverWebPlusItems(
+      raw(config.id, config.url, fixture("xgb-list.html")),
+      config,
+    );
+
+    expect(items).toEqual([
+      {
+        sourceId: config.id,
+        url: "https://xgb.nju.edu.cn/e2/b3/c62106a844467/page.htm",
+        title: "关于开展2026年度南京大学研究生奖学金评选工作的通知",
+        publishedAtRaw: "2026-09-20",
+        acquisitionKind: "webplus-detail",
+      },
+      {
+        sourceId: config.id,
+        url: "https://grawww.nju.edu.cn/d8/32/c905a841778/page.htm",
+        title: "南京大学2026级研究生新生入学报到日程安排",
+        publishedAtRaw: "2026-08-28",
+        acquisitionKind: "webplus-detail",
+      },
+      {
+        sourceId: config.id,
+        url: "https://mp.weixin.qq.com/s/thJbuquZGdmdHDoeIe-fOg",
+        title: "@NJUer！“白海豚”来了，这份防台指南请收好",
+        publishedAtRaw: "2026-08-08",
+        acquisitionKind: "public-wechat",
+      },
+    ]);
+  });
+
+  it("keeps default discovery from following arbitrary external navigation", () => {
+    const config = source("nju-test", "Test", "https://test.nju.edu.cn/list.htm");
+    const items = discoverWebPlusItems(
+      raw(config.id, config.url, `
+        <ul class="news_list">
+          <li><a href="/a/page.htm">Official article</a></li>
+          <li><a href="https://mp.weixin.qq.com/s/article">WeChat navigation</a></li>
+          <li><a href="https://outside.example/news">External navigation</a></li>
+        </ul>`),
+      config,
+    );
+
+    expect(items.map(({ url, acquisitionKind }) => ({ url, acquisitionKind }))).toEqual([
+      { url: "https://test.nju.edu.cn/a/page.htm", acquisitionKind: "webplus-detail" },
+    ]);
+  });
+
+  it("classifies explicitly listed non-WebPlus HTTP links without trusting host lookalikes", () => {
+    const config = source("nju-test", "Test", "https://test.nju.edu.cn/list.htm");
+    config.adapter.selectors = { listItem: ".news_list li.news" };
+    const items = discoverWebPlusItems(
+      raw(config.id, config.url, `
+        <ul class="news_list">
+          <li class="news"><a href="https://outside.example/news">External public</a></li>
+          <li class="news"><a href="https://mp.weixin.qq.com.evil.example/s/article">Impostor</a></li>
+          <li class="news"><a href="https://mp.weixin.qq.com/s">WeChat short path</a></li>
+        </ul>`),
+      config,
+    );
+
+    expect(items.map(({ acquisitionKind }) => acquisitionKind)).toEqual([
+      "external-public",
+      "external-public",
+      "public-wechat",
+    ]);
   });
 
   it("parses content and both link/pdf-player attachments", () => {

@@ -7,6 +7,8 @@ organization:
 url: https://xgb.nju.edu.cn/gsgg/list.htm
 adapter:
   type: webplus
+  selectors:
+    listItem: .news_list li.news
 audience:
   - undergraduate
   - graduate

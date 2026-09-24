@@ -87,6 +87,17 @@ function publishedDateNearAnchor(
   );
 }
 
+function acquisitionKind(url: URL): DiscoveredItem["acquisitionKind"] {
+  if (looksLikeArticleUrl(url)) return "webplus-detail";
+  if (
+    url.hostname === "mp.weixin.qq.com" &&
+    (url.pathname === "/s" || url.pathname.startsWith("/s/"))
+  ) {
+    return "public-wechat";
+  }
+  return "external-public";
+}
+
 /** Discovers one list page without changing its source/DOM item order. */
 export function discoverWebPlusPage(
   raw: RawDocument,
@@ -127,6 +138,7 @@ export function discoverWebPlusPage(
       items.set(url, {
         sourceId: source.id,
         url,
+        acquisitionKind: acquisitionKind(absolute),
         title,
         ...(publishedAtRaw ? { publishedAtRaw } : {}),
       });

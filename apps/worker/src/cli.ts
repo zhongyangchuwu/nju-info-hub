@@ -16,6 +16,7 @@ import type {
   SourceConfig,
   WebPlusSourceConfig,
 } from "@nju-info/core";
+import { fetchWebPlusDetail } from "./detail-acquisition.js";
 
 function sourceDirectory(): string {
   return fileURLToPath(new URL("../../../sources/nju/", import.meta.url));
@@ -127,7 +128,7 @@ async function ingestSource(
     let unchangedRevisions = 0;
 
     for (const item of items) {
-      const detailRaw = await fetchRawDocument(source.id, item.url);
+      const detailRaw = await fetchWebPlusDetail(item);
       const notice = parseWebPlusNotice(detailRaw, source, item);
       const result = database.ingestNotice(source, detailRaw, notice);
       if (result.insertedRevision) insertedRevisions += 1;
@@ -221,7 +222,7 @@ async function main(): Promise<void> {
   });
   const notices = [];
   for (const item of items) {
-    const detailRaw = await fetchRawDocument(source.id, item.url);
+    const detailRaw = await fetchWebPlusDetail(item);
     notices.push(parseWebPlusNotice(detailRaw, source, item));
   }
   console.log(JSON.stringify(notices, null, 2));

@@ -18,6 +18,8 @@ The public ingestion foundation and two read-only delivery adapters are in place
 - a local stdio MCP adapter exposes three read-only tools over the same persisted queries;
 - Node.js 26 is the default repository runtime and Node.js 24 remains the compatibility floor.
 
+Student Affairs discovery preserves official-list WebPlus and public WeChat links with an in-memory acquisition class. Fetch/ingest currently stops with an explicit unsupported-acquisition error at the first WeChat item; those items are not published or persisted as notices. See [#46](https://github.com/zhongyangchuwu/nju-info-hub/issues/46) and [#39](https://github.com/zhongyangchuwu/nju-info-hub/issues/39).
+
 Use GitHub Issues for the current work queue; Issue #18 tracks the local MCP adapter.
 
 GitHub is the source of truth for implementation status:
