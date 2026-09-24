@@ -159,11 +159,11 @@ JSON preserves original HTML/text and every ordered attachment with inferred MIM
 | Curated source-set catalog | `catalog/sets.json` | Versioned metadata for server-published named sets and their absolute OPML/bundle URLs |
 | Static source selector | `catalog/` | Pilot browser client of the published catalogs; no account or dynamic feed generation |
 
-## Static CS feeds
+## Static published feeds and curated CS set
 
-The `CS feed pilot` workflow runs every two hours or by manual dispatch. It centrally collects the latest 10 items from exactly `nju-cs-graduate`, `nju-cs-internal-notices`, and `nju-cs-seminars` into one SQLite database. Those three IDs form both the current publication allow-list and the explicitly supplied `cs` curated-set membership, so this deployment retains its existing three-source behavior. Export produces all three per-source formats and publishes OPML and combined `bundles/cs.{json,atom,rss}` for the curated membership. After export, the workflow stages the static selector assets in `catalog/` alongside the generated JSON. Readers never trigger collection. GitHub Pages is configured at https://zhongyangchuwu.github.io/nju-info-hub/; the per-source feeds, OPML, published-source catalog, combined CS feeds, curated-set catalog, …
+The `CS feed pilot` workflow runs every two hours or by manual dispatch. The updated workflow collects the latest 10 items from six explicit sources into one SQLite database: `nju-cs-graduate`, `nju-cs-internal-notices`, `nju-cs-seminars`, `nju-itsc-notices`, `nju-library-news-notices`, and `nju-graduate-school-notices`. Once deployed, all six are included in the published catalog, selector, and per-source JSON/Atom/RSS feeds. The curated `cs` set remains exactly the three CS sources; only those members appear in its OPML and combined `bundles/cs.{json,atom,rss}` timeline. After export, the workflow stages static selector assets in `catalog/`. Readers never trigger collection. Pages is configured at https://zhongyangchuwu.github.io/nju-info-hub/; this six-source workflow has not yet been deployed.
 
-Public per-source URL patterns (substitute each of the three IDs above):
+Public per-source URL patterns (for the six IDs above, after deployment):
 
 - `https://zhongyangchuwu.github.io/nju-info-hub/feeds/<sourceId>.json`
 - `https://zhongyangchuwu.github.io/nju-info-hub/feeds/<sourceId>.atom`
@@ -186,7 +186,10 @@ mkdir -p "$ROOT/.cache/nju-info" "$ROOT/_site"
 pnpm worker -- ingest nju-cs-graduate "$ROOT/.cache/nju-info/feeds.sqlite" 10
 pnpm worker -- ingest nju-cs-internal-notices "$ROOT/.cache/nju-info/feeds.sqlite" 10
 pnpm worker -- ingest nju-cs-seminars "$ROOT/.cache/nju-info/feeds.sqlite" 10
-pnpm --filter @nju-info/api export-feeds -- "$ROOT/.cache/nju-info/feeds.sqlite" "$ROOT/_site" nju-cs-graduate nju-cs-internal-notices nju-cs-seminars --base-url https://zhongyangchuwu.github.io/nju-info-hub/ --opml subscriptions/cs.opml --set-id cs --set-title "计算机学院公开信息" --set-source nju-cs-graduate --set-source nju-cs-internal-notices --set-source nju-cs-seminars
+pnpm worker -- ingest nju-itsc-notices "$ROOT/.cache/nju-info/feeds.sqlite" 10
+pnpm worker -- ingest nju-library-news-notices "$ROOT/.cache/nju-info/feeds.sqlite" 10
+pnpm worker -- ingest nju-graduate-school-notices "$ROOT/.cache/nju-info/feeds.sqlite" 10
+pnpm --filter @nju-info/api export-feeds -- "$ROOT/.cache/nju-info/feeds.sqlite" "$ROOT/_site" nju-cs-graduate nju-cs-internal-notices nju-cs-seminars nju-itsc-notices nju-library-news-notices nju-graduate-school-notices --base-url https://zhongyangchuwu.github.io/nju-info-hub/ --opml subscriptions/cs.opml --set-id cs --set-title "计算机学院公开信息" --set-source nju-cs-graduate --set-source nju-cs-internal-notices --set-source nju-cs-seminars
 ```
 The GitHub Actions SQLite cache includes the database and SQLite sidecars, but is best-effort and may be evicted. It is not durable storage: collection must be able to rebuild the database from public sources after a cache miss, and older local cache history is not guaranteed to survive.
 
@@ -196,7 +199,7 @@ WebPlus discovery preserves list-page source/DOM order. Limited `fetch` and `ing
 
 ## Initial sources
 
-The current public-source registry and fixtures cover multiple NJU WebPlus/Sudy sites, including Computer Science, Graduate School, ITSC, Science & Technology, Student Affairs, and student exchange notices. Additional high-value public sources are tracked through the project roadmap and GitHub Issues.
+The public-source registry and fixtures cover several NJU WebPlus/Sudy sites, including the Undergraduate School announcements source `nju-undergraduate-notices`. That source is registered but excluded from Pages publication until Issue #39's access-restricted-item handling and limited-ingest live smoke are accepted. Youth League and Student Exchange are likewise not in the six-source publication allow-list.
 
 More sources should preferably be added by contributing YAML under `sources/nju/` rather than adding a new crawler.
 
