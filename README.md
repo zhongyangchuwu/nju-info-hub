@@ -161,9 +161,9 @@ JSON preserves original HTML/text and every ordered attachment with inferred MIM
 
 ## Static published feeds and curated CS set
 
-The `CS feed pilot` workflow runs every two hours or by manual dispatch. The updated workflow collects the latest 10 items from six explicit sources into one SQLite database: `nju-cs-graduate`, `nju-cs-internal-notices`, `nju-cs-seminars`, `nju-itsc-notices`, `nju-library-news-notices`, and `nju-graduate-school-notices`. Once deployed, all six are included in the published catalog, selector, and per-source JSON/Atom/RSS feeds. The curated `cs` set remains exactly the three CS sources; only those members appear in its OPML and combined `bundles/cs.{json,atom,rss}` timeline. After export, the workflow stages static selector assets in `catalog/`. Readers never trigger collection. Pages is configured at https://zhongyangchuwu.github.io/nju-info-hub/; this six-source workflow has not yet been deployed.
+The `CS feed pilot` workflow runs every two hours or by manual dispatch. It collects the latest 10 items from six explicit sources into one SQLite database: `nju-cs-graduate`, `nju-cs-internal-notices`, `nju-cs-seminars`, `nju-itsc-notices`, `nju-library-news-notices`, and `nju-graduate-school-notices`. All six are included in the published catalog, selector, and per-source JSON/Atom/RSS feeds. The curated `cs` set remains exactly the three CS sources; only those members appear in its OPML and combined `bundles/cs.{json,atom,rss}` timeline. After export, the workflow stages static selector assets in `catalog/`. Readers never trigger collection. Pages is configured at https://zhongyangchuwu.github.io/nju-info-hub/; the six-source deployment was verified in [workflow run #11](https://github.com/zhongyangchuwu/nju-info-hub/actions/runs/36039458159).
 
-Public per-source URL patterns (for the six IDs above, after deployment):
+Public per-source URL patterns (for the six IDs above):
 
 - `https://zhongyangchuwu.github.io/nju-info-hub/feeds/<sourceId>.json`
 - `https://zhongyangchuwu.github.io/nju-info-hub/feeds/<sourceId>.atom`

@@ -98,7 +98,7 @@ The read-only output layer projects current canonical SQLite notice revisions in
 
 The static exporter takes a publication allow-list and writes `.json`, `.atom`, and `.rss` for each selected source. With a validated public base URL it writes `catalog/sources.json` for that complete publication selection, with absolute feed URLs. A named curated set is explicit and separate: its required source IDs are resolved against the published selection, and only those members appear in the set's OPML and combined feeds. The versioned `catalog/sets.json` records the resolved membership and absolute OPML (defaulting to `subscriptions/<setId>.opml`) and combined JSON/Atom/RSS bundle URLs. Without a named set, OPML uses the publication selection. The exporter owns and replaces the generated catalog directory; Pages copies static `index.html`, JavaScript, and CSS there only after export. The pilot selector reads these static catalogs; it does not generate server-side arbitrary combined feeds or expand the central publication allow-list.
 
-The Pages workflow's pending six-source publication adds ITSC, Library, and Graduate School to the three CS sources. Its `cs` set still contains only those three CS IDs. The registered Undergraduate School announcements source remains unpublished pending Issue #39's restricted-detail acceptance and limited-ingest smoke.
+The Pages workflow publishes ITSC, Library, and Graduate School alongside the three CS sources; the six-source deployment is live. Its `cs` set still contains only those three CS IDs. The registered Undergraduate School announcements source remains unpublished pending Issue #39's restricted-detail acceptance and limited-ingest smoke.
 
 ## Read-only local MCP delivery
 
