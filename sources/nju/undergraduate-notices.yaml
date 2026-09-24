@@ -1,0 +1,17 @@
+schemaVersion: 1
+id: nju-undergraduate-notices
+name: 本科生院公告通知
+organization:
+  id: nju-undergraduate-school
+  name: 本科生院
+url: https://jw.nju.edu.cn/ggtz/list.htm
+adapter:
+  type: webplus
+audience:
+  - undergraduate
+categories:
+  - teaching
+  - notice
+crawl:
+  intervalMinutes: 30
+enabled: true

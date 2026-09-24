@@ -78,8 +78,13 @@ function publishedDateNearAnchor(
     listItemSelector ?? "li, tr, .news, .list_item, .list-item, .item",
   );
   const scope = container.length ? container : $(element).parent();
-  const text = textWithElementBoundaries($, scope);
-  return text.match(DATE_RE)?.[0];
+  const publishedText = normalizeText(
+    scope.find(DEFAULT_PUBLISHED_AT_SELECTOR).first().text(),
+  );
+  return (
+    publishedText.match(DATE_RE)?.[0] ??
+    textWithElementBoundaries($, scope).match(DATE_RE)?.[0]
+  );
 }
 
 /** Discovers one list page without changing its source/DOM item order. */
