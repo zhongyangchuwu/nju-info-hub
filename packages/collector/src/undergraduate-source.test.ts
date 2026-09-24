@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { webPlusSourceConfigSchema, type RawDocument } from "@nju-info/core";
 import { loadSourceFile } from "./registry.js";
-import { discoverWebPlusPage } from "./webplus.js";
+import { discoverWebPlusPage, parseWebPlusNotice } from "./webplus.js";
 
 const sourcePath = new URL(
   "../../../sources/nju/undergraduate-notices.yaml",
@@ -11,6 +11,10 @@ const sourcePath = new URL(
 );
 const listFixture = new URL(
   "../fixtures/webplus/undergraduate-list.html",
+  import.meta.url,
+);
+const detailFixture = new URL(
+  "../fixtures/webplus/undergraduate-detail.html",
   import.meta.url,
 );
 
@@ -87,5 +91,43 @@ describe("NJU Undergraduate School announcements", () => {
       currentPage: 1,
       totalPages: 209,
     });
+  });
+
+  it("parses a public detail body with its original URL and publication day", async () => {
+    const source = webPlusSourceConfigSchema.parse(
+      await loadSourceFile(sourcePath.pathname),
+    );
+    const body = readFileSync(detailFixture, "utf8");
+    const url = "https://jw.nju.edu.cn/dd/80/c26263a843136/page.htm";
+    const raw: RawDocument = {
+      sourceId: source.id,
+      url,
+      fetchedAt: "2026-09-25T00:00:00.000Z",
+      contentType: "text/html; charset=utf-8",
+      body,
+      sha256: createHash("sha256").update(body).digest("hex"),
+    };
+    const listBody = readFileSync(listFixture, "utf8");
+    const [discovered] = discoverWebPlusPage({
+      ...raw,
+      url: source.url,
+      body: listBody,
+      sha256: createHash("sha256").update(listBody).digest("hex"),
+    }, source).items.filter((item) => item.url === url);
+    expect(discovered).toBeDefined();
+    const notice = parseWebPlusNotice(raw, source, discovered);
+
+    expect(notice).toMatchObject({
+      sourceId: source.id,
+      url,
+      title: "【2026级新生】“悦读经典计划”选课通知",
+      publishedAtRaw: "2026-09-07",
+      publishedOn: "2026-09-07",
+      attachments: [],
+      provenance: { fetchedAt: raw.fetchedAt, contentSha256: raw.sha256 },
+    });
+    expect(notice.bodyText).toContain("欢迎开启悦读之旅！");
+    expect(notice.bodyHtml).toContain('href="https://yunshu.njupco.com/yuedu"');
+    expect(notice.bodyText).not.toContain("发布者：");
   });
 });
