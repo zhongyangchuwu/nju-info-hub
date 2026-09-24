@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -55,6 +55,9 @@ describe("source catalog and source-set export", () => {
     };
     const directory = mkdtempSync(join(tmpdir(), "nju-info-source-set-"));
     try {
+      mkdirSync(join(directory, "catalog"), { recursive: true });
+      writeFileSync(join(directory, "catalog/index.html"), "workflow-restaged later");
+      writeFileSync(join(directory, "catalog/sets.json"), "stale");
       await exportFeeds(reader, directory, [sources[0]!.id, sources[1]!.id], {
         publicBaseUrl: "https://example.org/nju/",
         opmlPath: "subscriptions/cs.opml",
@@ -66,6 +69,22 @@ describe("source catalog and source-set export", () => {
         .toEqual([sources[0]!.id, sources[1]!.id]);
       expect(catalog.sources[0].feeds.rss)
         .toBe("https://example.org/nju/feeds/nju-cs-graduate.rss");
+      const setCatalog = JSON.parse(readFileSync(join(directory, "catalog/sets.json"), "utf8"));
+      expect(setCatalog).toEqual({
+        version: 1,
+        sets: [{
+          id: "cs",
+          title: "Computer Science public information",
+          source_ids: [sources[0]!.id, sources[1]!.id],
+          subscriptions: { opml: "https://example.org/nju/subscriptions/cs.opml" },
+          bundles: {
+            json: "https://example.org/nju/bundles/cs.json",
+            atom: "https://example.org/nju/bundles/cs.atom",
+            rss: "https://example.org/nju/bundles/cs.rss",
+          },
+        }],
+      });
+      expect(readdirSync(join(directory, "catalog")).sort()).toEqual(["sets.json", "sources.json"]);
 
       const bundle = JSON.parse(readFileSync(join(directory, "bundles/cs.json"), "utf8"));
       expect(bundle.items.map((item: { id: string }) => item.id)).toEqual([
@@ -98,6 +117,49 @@ describe("source catalog and source-set export", () => {
         sourceSet: { id: "cs", title: "CS" },
       })).rejects.toThrow("public base URL");
       expect(existsSync(join(directory, "bundles/cs.json"))).toBe(false);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("publishes a default set OPML path and removes stale set catalog entries", async () => {
+    const reader: FeedExportReader = { listSources: () => sources, listRecentNotices: () => [] };
+    const directory = mkdtempSync(join(tmpdir(), "nju-info-source-set-"));
+    try {
+      const options = { publicBaseUrl: "https://example.org/nju", sourceSet: { id: "cs", title: "CS" } };
+      await exportFeeds(reader, directory, sources.map((source) => source.id), options);
+      expect(existsSync(join(directory, "subscriptions/cs.opml"))).toBe(true);
+      expect(JSON.parse(readFileSync(join(directory, "catalog/sets.json"), "utf8")).sets[0].subscriptions.opml)
+        .toBe("https://example.org/nju/subscriptions/cs.opml");
+
+      await exportFeeds(reader, directory, sources.map((source) => source.id), {
+        publicBaseUrl: "https://example.org/nju",
+      });
+      expect(readdirSync(join(directory, "catalog"))).toEqual(["sources.json"]);
+      await exportFeeds(reader, directory, sources.map((source) => source.id));
+      expect(existsSync(join(directory, "catalog"))).toBe(false);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects invalid set OPML paths before replacing published output", async () => {
+    const reader: FeedExportReader = { listSources: () => sources, listRecentNotices: () => [] };
+    const directory = mkdtempSync(join(tmpdir(), "nju-info-source-set-"));
+    const previousCatalog = "previous catalog";
+    const previousFeed = "previous feed";
+    try {
+      mkdirSync(join(directory, "catalog"), { recursive: true });
+      mkdirSync(join(directory, "feeds"), { recursive: true });
+      writeFileSync(join(directory, "catalog/sources.json"), previousCatalog);
+      writeFileSync(join(directory, "feeds/previous.json"), previousFeed);
+      await expect(exportFeeds(reader, directory, sources.map((source) => source.id), {
+        publicBaseUrl: "https://example.org/nju",
+        opmlPath: "../escape.opml",
+        sourceSet: { id: "cs", title: "CS" },
+      })).rejects.toThrow("unsafe OPML path");
+      expect(readFileSync(join(directory, "catalog/sources.json"), "utf8")).toBe(previousCatalog);
+      expect(readFileSync(join(directory, "feeds/previous.json"), "utf8")).toBe(previousFeed);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

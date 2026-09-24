@@ -156,10 +156,12 @@ JSON preserves original HTML/text and every ordered attachment with inferred MIM
 | OPML 2.0 catalog | `subscriptions/<setId>.opml` | Keep selected sources as separate subscriptions in Zotero/general readers |
 | Combined source-set feeds | `bundles/<setId>.{json,atom,rss}` | One merged timeline for the selected sources |
 | Published-source catalog | `catalog/sources.json` | Machine-readable discovery of the sources included in this publication |
+| Curated source-set catalog | `catalog/sets.json` | Versioned metadata for server-published named sets and their absolute OPML/bundle URLs |
+| Static source selector | `catalog/` | Pilot browser client of the published catalogs; no account or dynamic feed generation |
 
 ## Static CS feeds
 
-The `CS feed pilot` workflow runs every two hours or by manual dispatch. It centrally collects the latest 10 items from exactly `nju-cs-graduate`, `nju-cs-internal-notices`, and `nju-cs-seminars` into one SQLite database, then exports all three per-source formats. The same selected source set also drives `subscriptions/cs.opml`, `catalog/sources.json`, and combined `bundles/cs.{json,atom,rss}` output without another upstream crawl. Readers never trigger collection. GitHub Pages is configured at https://zhongyangchuwu.github.io/nju-info-hub/; the existing per-source standards feeds are live, while the new catalog/bundle paths require the first post-merge pilot deployment before they are considered publicly verified.
+The `CS feed pilot` workflow runs every two hours or by manual dispatch. It centrally collects the latest 10 items from exactly `nju-cs-graduate`, `nju-cs-internal-notices`, and `nju-cs-seminars` into one SQLite database, then exports all three per-source formats. The same selected source set also drives `subscriptions/cs.opml`, `catalog/sources.json`, `catalog/sets.json`, and combined `bundles/cs.{json,atom,rss}` output without another upstream crawl. After export, the workflow stages the static selector assets in `catalog/` alongside the generated JSON. Readers never trigger collection. GitHub Pages is configured at https://zhongyangchuwu.github.io/nju-info-hub/; the per-source feeds, OPML, published-source catalog, and combined CS feeds are live (public acceptance run #35989422809). The selector and `sets.json` require this change's first deployment; local verification does not establish public availability.
 
 Public per-source URL patterns (substitute each of the three IDs above):
 
@@ -167,12 +169,14 @@ Public per-source URL patterns (substitute each of the three IDs above):
 - `https://zhongyangchuwu.github.io/nju-info-hub/feeds/<sourceId>.atom`
 - `https://zhongyangchuwu.github.io/nju-info-hub/feeds/<sourceId>.rss`
 - CS OPML: `https://zhongyangchuwu.github.io/nju-info-hub/subscriptions/cs.opml`
-- published-source catalog: `https://zhongyangchuwu.github.io/nju-info-hub/catalog/sources.json`
+- published-source catalog: `https://zhongyangchuwu.github.io/nju-info-hub/catalog/sources.json` (live)
 - combined CS timeline: `https://zhongyangchuwu.github.io/nju-info-hub/bundles/cs.{json,atom,rss}`
+- curated-set catalog after deployment: `https://zhongyangchuwu.github.io/nju-info-hub/catalog/sets.json`
+- pilot selector after deployment: `https://zhongyangchuwu.github.io/nju-info-hub/catalog/`
 
-The catalog lists only the sources included in the current publication, with their original NJU home pages and absolute JSON/Atom/RSS URLs. It is not yet the complete audited NJU source map from Issue #21 and does not invent channel/authority metadata that is not persisted. OPML keeps the selected sources as separate subscriptions, while a bundle merges the same source set into one timeline; bundle entries retain their original item URL and per-entry source identity. These are still pilot interfaces: future source-selection UI or clients can consume the catalog and produce source sets without changing collection.
+The published-source catalog lists only the sources included in the current publication, with their original NJU home pages and absolute JSON/Atom/RSS URLs. It is not the complete audited NJU source map from Issue #21 and does not invent channel/authority metadata that is not persisted. The pilot selector reads only static `sources.json` and `sets.json`. It defaults to all published sources when `sources` is absent; `?sources=id1,id2` selects known IDs only, in catalog order. Select all and Clear update the URL without reloading. Arbitrary selections download client-generated OPML (one independent RSS subscription per source) or copy per-source feed URLs; they do **not** acquire a stable combined-feed URL. Only the named `cs` set has a server-published OPML and combined JSON/Atom/RSS timeline, linked through `sets.json`. The page has no account, read state, notification settings, or collector/backend role; this is an engineering pilot, not a polished product.
 
-Static export accepts an optional `--base-url` for canonical URLs. `--set-id` and `--set-title` publish one combined set from the selected source IDs. The original invocation without flags still works.
+Static export accepts an optional `--base-url` for canonical URLs. `--set-id` and `--set-title` publish one named combined set from the selected source IDs and its versioned `catalog/sets.json` entry; its OPML defaults to `subscriptions/<setId>.opml` unless `--opml` supplies a different safe path. Base URL alone publishes `sources.json` without a set. The original invocation without flags still works.
 
 To collect and export the same feeds locally, run from the repository root (package scripts use their own working directories):
 

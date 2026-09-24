@@ -4,7 +4,7 @@ import type { InfoHubDatabaseReader, PersistedSourceSummary } from "@nju-info/db
 import { buildAtomBundle, buildJsonBundle, buildRssBundle, type BundlePart } from "./bundle.js";
 import { buildJsonFeed } from "./feed.js";
 import { buildOpml } from "./opml.js";
-import { buildSourceCatalog, bundleSelfUrl, resolveSourceSet } from "./source-set.js";
+import { buildSetCatalog, buildSourceCatalog, bundleSelfUrl, resolveSourceSet, subscriptionSelfUrl } from "./source-set.js";
 import { feedSelfUrl, publicBaseUrl } from "./syndication.js";
 import { buildAtomFeed, buildRssFeed } from "./xml-feeds.js";
 
@@ -30,8 +30,9 @@ async function safeOpmlPath(outputDirectory: string, path: string): Promise<stri
   }
   const target = resolve(outputDirectory, path);
   const fromRoot = relative(resolve(outputDirectory), target);
-  if (fromRoot.startsWith(".." + sep) || fromRoot === ".." || fromRoot === "feeds" || fromRoot.startsWith("feeds" + sep)) {
-    throw new Error("unsafe OPML path: expected a relative path outside feeds");
+  const exporterDirectories = ["feeds", "catalog", "bundles"];
+  if (exporterDirectories.some((directory) => fromRoot === directory || fromRoot.startsWith(directory + sep))) {
+    throw new Error("unsafe OPML path: expected a relative path outside exporter-owned directories");
   }
   let current = resolve(outputDirectory);
   for (const segment of path.split("/")) {
@@ -43,6 +44,17 @@ async function safeOpmlPath(outputDirectory: string, path: string): Promise<stri
     }
   }
   return target;
+}
+
+async function validateCatalogDirectory(outputDirectory: string): Promise<void> {
+  try {
+    const stats = await lstat(join(outputDirectory, "catalog"));
+    if (stats.isSymbolicLink() || !stats.isDirectory()) {
+      throw new Error("unsafe catalog path: expected a directory, not a symbolic link or file");
+    }
+  } catch (failure) {
+    if ((failure as NodeJS.ErrnoException).code !== "ENOENT") throw failure;
+  }
 }
 
 /** Replace exporter-owned per-source feeds and optionally publish a catalog, OPML, and one combined source set. */
@@ -73,12 +85,16 @@ export async function exportFeeds(
   if (options.opmlPath !== undefined && !base) throw new Error("OPML export requires a public base URL");
   if (options.sourceSet !== undefined && !base) throw new Error("source set export requires a public base URL");
 
-  const opmlTarget = options.opmlPath === undefined ? undefined : await safeOpmlPath(outputDirectory, options.opmlPath);
   const sourceSet = options.sourceSet === undefined ? undefined : resolveSourceSet({
     id: options.sourceSet.id,
     title: options.sourceSet.title,
     sourceIds: selectedSources.map((source) => source.id),
   }, selectedSources);
+  const opmlPath = options.opmlPath ?? (sourceSet ? `subscriptions/${sourceSet.id}.opml` : undefined);
+  const opmlTarget = opmlPath === undefined ? undefined : await safeOpmlPath(outputDirectory, opmlPath);
+  const sourceCatalog = base ? buildSourceCatalog(selectedSources, base) : undefined;
+  const setCatalog = sourceSet && base && opmlPath ? buildSetCatalog(sourceSet, base, opmlPath) : undefined;
+  await validateCatalogDirectory(outputDirectory);
   const opml = opmlTarget && base ? buildOpml(sourceSet?.sources ?? selectedSources, base) : undefined;
   const generatedAt = new Date().toISOString();
 
@@ -100,14 +116,14 @@ export async function exportFeeds(
     await writeFile(join(feedsDirectory, source.id + ".rss"), buildRssFeed(source, notices, { generatedAt }), "utf8");
   }
 
-  if (base) {
-    const catalogDirectory = join(outputDirectory, "catalog");
+  const catalogDirectory = join(outputDirectory, "catalog");
+  await rm(catalogDirectory, { recursive: true, force: true });
+  if (base && sourceCatalog) {
     await mkdir(catalogDirectory, { recursive: true });
-    await writeFile(
-      join(catalogDirectory, "sources.json"),
-      JSON.stringify(buildSourceCatalog(selectedSources, base), null, 2) + "\n",
-      "utf8",
-    );
+    await writeFile(join(catalogDirectory, "sources.json"), JSON.stringify(sourceCatalog, null, 2) + "\n", "utf8");
+    if (setCatalog) {
+      await writeFile(join(catalogDirectory, "sets.json"), JSON.stringify(setCatalog, null, 2) + "\n", "utf8");
+    }
   }
 
   if (sourceSet && base) {
@@ -147,4 +163,5 @@ export async function exportFeeds(
     await mkdir(dirname(opmlTarget), { recursive: true });
     await writeFile(opmlTarget, opml, "utf8");
   }
+
 }
