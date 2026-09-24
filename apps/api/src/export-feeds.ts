@@ -4,8 +4,8 @@ import type { InfoHubDatabaseReader, PersistedSourceSummary } from "@nju-info/db
 import { buildAtomBundle, buildJsonBundle, buildRssBundle, type BundlePart } from "./bundle.js";
 import { buildJsonFeed } from "./feed.js";
 import { buildOpml } from "./opml.js";
-import { buildSourceCatalog, bundleSelfUrl, publicBaseUrl, resolveSourceSet } from "./source-set.js";
-import { feedSelfUrl } from "./syndication.js";
+import { buildSourceCatalog, bundleSelfUrl, resolveSourceSet } from "./source-set.js";
+import { feedSelfUrl, publicBaseUrl } from "./syndication.js";
 import { buildAtomFeed, buildRssFeed } from "./xml-feeds.js";
 
 export type FeedExportReader = Pick<InfoHubDatabaseReader, "listSources" | "listRecentNotices">;
