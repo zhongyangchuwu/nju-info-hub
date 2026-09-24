@@ -4,7 +4,7 @@ import type { InfoHubDatabaseReader, PersistedSourceSummary } from "@nju-info/db
 import { buildAtomBundle, buildJsonBundle, buildRssBundle, type BundlePart } from "./bundle.js";
 import { buildJsonFeed } from "./feed.js";
 import { buildOpml } from "./opml.js";
-import { buildSetCatalog, buildSourceCatalog, bundleSelfUrl, resolveSourceSet, subscriptionSelfUrl } from "./source-set.js";
+import { buildSetCatalog, buildSourceCatalog, bundleSelfUrl, resolveSourceSet, subscriptionSelfUrl, type SourceSetDefinition } from "./source-set.js";
 import { feedSelfUrl, publicBaseUrl } from "./syndication.js";
 import { buildAtomFeed, buildRssFeed } from "./xml-feeds.js";
 
@@ -21,7 +21,7 @@ function validateSourceId(id: string): void {
 export interface FeedExportOptions {
   publicBaseUrl?: string;
   opmlPath?: string;
-  sourceSet?: { id: string; title: string };
+  sourceSet?: SourceSetDefinition;
 }
 
 async function safeOpmlPath(outputDirectory: string, path: string): Promise<string> {
@@ -85,11 +85,7 @@ export async function exportFeeds(
   if (options.opmlPath !== undefined && !base) throw new Error("OPML export requires a public base URL");
   if (options.sourceSet !== undefined && !base) throw new Error("source set export requires a public base URL");
 
-  const sourceSet = options.sourceSet === undefined ? undefined : resolveSourceSet({
-    id: options.sourceSet.id,
-    title: options.sourceSet.title,
-    sourceIds: selectedSources.map((source) => source.id),
-  }, selectedSources);
+  const sourceSet = options.sourceSet === undefined ? undefined : resolveSourceSet(options.sourceSet, selectedSources);
   const opmlPath = options.opmlPath ?? (sourceSet ? `subscriptions/${sourceSet.id}.opml` : undefined);
   const opmlTarget = opmlPath === undefined ? undefined : await safeOpmlPath(outputDirectory, opmlPath);
   const sourceCatalog = base ? buildSourceCatalog(selectedSources, base) : undefined;

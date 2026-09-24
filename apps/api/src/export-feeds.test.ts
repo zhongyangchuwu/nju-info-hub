@@ -318,4 +318,86 @@ describe("static JSON Feed exporter", () => {
       rmSync(directory, { recursive: true, force: true });
     }
   });
+
+  it("separates five published sources from an explicit three-source CLI set", () => {
+    const directory = temporaryDirectory();
+    const databasePath = join(directory, "five-sources.sqlite");
+    const outputDirectory = join(directory, "published");
+    const internalSource: Source = { ...GRADUATE_SOURCE, id: "nju-cs-internal-notices", name: "Internal notices" };
+    const otherOne: Source = { ...GRADUATE_SOURCE, id: "nju-library-news", name: "Library news", organization: { id: "nju-library", name: "Library" } };
+    const otherTwo: Source = { ...GRADUATE_SOURCE, id: "nju-science-news", name: "Science news", organization: { id: "nju-science", name: "Science" } };
+    const sources = [otherOne, GRADUATE_SOURCE, otherTwo, internalSource, SEMINAR_SOURCE];
+    const database = new InfoHubDatabase(databasePath);
+    for (const source of sources) {
+      database.upsertSource(source);
+      ingestNotice(database, source, `${source.id}-item`);
+    }
+    database.close();
+
+    const invoke = (...args: string[]) => spawnSync("pnpm", ["--filter", "@nju-info/api", "export-feeds", "--",
+      databasePath, outputDirectory, ...args], { cwd: join(process.cwd(), "../.."), encoding: "utf8" });
+    const publishedIds = sources.map((source) => source.id).sort();
+    const setFlags = ["--set-id", "cs", "--set-title", "Computer Science", "--set-source", SEMINAR_SOURCE.id,
+      "--set-source", internalSource.id, "--set-source", GRADUATE_SOURCE.id];
+    try {
+      const result = invoke(...publishedIds, "--base-url", "https://example.org/", "--opml", "subscriptions/cs.opml", ...setFlags);
+      expect(result.status, result.stderr).toBe(0);
+
+      const sourceCatalog = JSON.parse(readFileSync(join(outputDirectory, "catalog/sources.json"), "utf8"));
+      expect(sourceCatalog.sources.map((source: { id: string }) => source.id)).toEqual(publishedIds);
+      const setCatalog = JSON.parse(readFileSync(join(outputDirectory, "catalog/sets.json"), "utf8"));
+      expect(setCatalog.sets[0].source_ids).toEqual([GRADUATE_SOURCE.id, internalSource.id, SEMINAR_SOURCE.id]);
+      expect(readdirSync(join(outputDirectory, "feeds")).sort()).toEqual(
+        publishedIds.flatMap((id) => [`${id}.atom`, `${id}.json`, `${id}.rss`]).sort());
+
+      const opml = readFileSync(join(outputDirectory, "subscriptions/cs.opml"), "utf8");
+      expect(opml.match(/<outline /g)).toHaveLength(3);
+      expect(opml).toContain("nju-cs-graduate.rss");
+      expect(opml).toContain("nju-cs-internal-notices.rss");
+      expect(opml).toContain("nju-cs-seminars.rss");
+      expect(opml).not.toContain("nju-library-news.rss");
+      expect(opml).not.toContain("nju-science-news.rss");
+
+      const bundle = JSON.parse(readFileSync(join(outputDirectory, "bundles/cs.json"), "utf8"));
+      expect(bundle._nju.source_set.source_ids).toEqual([GRADUATE_SOURCE.id, internalSource.id, SEMINAR_SOURCE.id]);
+      expect(bundle.items.map((item: { _nju: { source_id: string } }) => item._nju.source_id).sort())
+        .toEqual([GRADUATE_SOURCE.id, internalSource.id, SEMINAR_SOURCE.id].sort());
+
+      const markerPath = join(outputDirectory, "feeds/previous.json");
+      writeFileSync(markerPath, "previous");
+      const invalidSets: { args: string[]; error: string }[] = [
+        {
+          args: ["--set-id", "cs", "--set-title", "Computer Science", "--set-source", GRADUATE_SOURCE.id,
+            "--set-source", GRADUATE_SOURCE.id],
+          error: "duplicate source ID in source set",
+        },
+        {
+          args: ["--set-id", "cs", "--set-title", "Computer Science", "--set-source", "nju-cs-unpublished"],
+          error: "source set contains unpublished source ID",
+        },
+      ];
+      for (const invalidSet of invalidSets) {
+        const invalid = invoke(...publishedIds, "--base-url", "https://example.org/", ...invalidSet.args);
+        expect(invalid.status).not.toBe(0);
+        expect(invalid.stderr).toContain(invalidSet.error);
+        expect(readFileSync(markerPath, "utf8")).toBe("previous");
+      }
+
+      for (const incomplete of [
+        ["--set-id", "cs"],
+        ["--set-title", "Computer Science"],
+        ["--set-source", GRADUATE_SOURCE.id],
+        ["--set-id", "cs", "--set-title", "Computer Science"],
+        ["--set-id", "cs", "--set-source", GRADUATE_SOURCE.id],
+        ["--set-title", "Computer Science", "--set-source", GRADUATE_SOURCE.id],
+      ]) {
+        const invalid = invoke(...publishedIds, ...incomplete);
+        expect(invalid.status).not.toBe(0);
+        expect(invalid.stderr).toContain("at least one --set-source");
+        expect(readFileSync(markerPath, "utf8")).toBe("previous");
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
 });
