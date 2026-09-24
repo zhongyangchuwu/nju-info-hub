@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { RawDocument, WebPlusSourceConfig } from "@nju-info/core";
 import { webPlusSourceConfigSchema } from "@nju-info/core";
 import {
+  RestrictedDetailError,
   discoverWebPlusItems,
   discoverWebPlusPage,
   orderDiscoveredItemsByPublicationRecency,
@@ -284,6 +285,79 @@ describe("WebPlus adapter", () => {
         "https://cs.nju.edu.cn/_upload/article/files/a/notice.pdf",
         "https://cs.nju.edu.cn/_upload/article/files/a/form.xlsx",
       ]),
+    );
+  });
+
+  it("rejects campus IP warning pages before configured content extraction", () => {
+    const config: WebPlusSourceConfig = {
+      ...source("nju-campus-restricted", "Campus source", "https://notice.nju.edu.cn/list.htm"),
+      adapter: { type: "webplus", selectors: { content: ".wp_articlecontent" } },
+    };
+    const detail = raw(
+      config.id,
+      "https://notice.nju.edu.cn/a/page.htm",
+      fixture("campus-restricted.html"),
+    );
+
+    try {
+      parseWebPlusNotice(detail, config);
+      throw new Error("expected campus restriction to be rejected");
+    } catch (error) {
+      expect(error).toBeInstanceOf(RestrictedDetailError);
+      expect((error as RestrictedDetailError).restrictionClass).toBe("campus-network");
+    }
+  });
+
+  it("classifies only deterministic NJU unified identity redirects", () => {
+    const config = source("nju-test-notices", "Test", "https://example.edu/list.htm");
+    const discovered = {
+      sourceId: config.id,
+      url: "https://example.edu/a/page.htm",
+      acquisitionKind: "webplus-detail" as const,
+      title: "Known notice",
+      publishedAtRaw: "2026-09-21",
+    };
+    const originalDiscovery = { ...discovered };
+    const redirected = raw(
+      config.id,
+      "https://authserver.nju.edu.cn/authserver/login?service=https%3A%2F%2Fexample.edu",
+      "<html><title>统一身份认证</title></html>",
+    );
+
+    try {
+      parseWebPlusNotice(redirected, config, discovered);
+      throw new Error("expected unified identity redirect to be rejected");
+    } catch (error) {
+      expect(error).toBeInstanceOf(RestrictedDetailError);
+      expect((error as RestrictedDetailError).restrictionClass).toBe("authentication");
+    }
+    expect(discovered).toEqual(originalDiscovery);
+
+    const unrelatedRedirect = raw(
+      config.id,
+      "https://login.example.net/authserver/login",
+      '<h1 class="arti_title">Known notice</h1><div class="wp_articlecontent">Body</div>',
+    );
+    expect(parseWebPlusNotice(unrelatedRedirect, config, discovered).title).toBe(
+      "Known notice",
+    );
+  });
+
+  it("keeps malformed missing-content pages as ordinary errors", () => {
+    const config = source("nju-test-notices", "Test", "https://example.edu/list.htm");
+    let error: unknown;
+    try {
+      parseWebPlusNotice(
+        raw(config.id, "https://example.edu/a/page.htm", '<h1>Notice</h1>'),
+        config,
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toBeInstanceOf(RestrictedDetailError);
+    expect((error as Error).message).toBe(
+      "missing notice content for nju-test-notices: https://example.edu/a/page.htm",
     );
   });
 

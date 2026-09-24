@@ -3,6 +3,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { InfoHubDatabase, type DatabaseStats } from "@nju-info/db";
 import {
+  RestrictedDetailError,
   discoverWebPlusItems,
   discoverWebPlusPage,
   fetchRawDocument,
@@ -12,11 +13,12 @@ import {
 } from "@nju-info/collector";
 import type {
   DiscoveredItem,
+  ParsedNotice,
   RawDocument,
   SourceConfig,
   WebPlusSourceConfig,
 } from "@nju-info/core";
-import { fetchWebPlusDetail } from "./detail-acquisition.js";
+import { UnsupportedDetailAcquisitionError, fetchWebPlusDetail } from "./detail-acquisition.js";
 
 function sourceDirectory(): string {
   return fileURLToPath(new URL("../../../sources/nju/", import.meta.url));
@@ -62,6 +64,7 @@ interface DiscoverPagesOptions {
   maxPages: number;
   recentLimit?: number;
   onPage?: (rawDocument: RawDocument) => void;
+  onCandidate?: (item: DiscoveredItem) => Promise<boolean>;
 }
 
 async function discoverPages(
@@ -70,12 +73,28 @@ async function discoverPages(
 ): Promise<{
   pagesVisited: number;
   items: DiscoveredItem[];
+  candidatesConsidered: number;
 }> {
   const items = new Map<string, DiscoveredItem>();
   const seenPages = new Set<string>();
   let pageUrl: string | undefined = source.url;
   let pagesVisited = 0;
   let reachedRecentLimit = false;
+  const attempted = new Set<string>();
+  let usableCount = 0;
+
+  const processCandidates = async (): Promise<boolean> => {
+    if (!options.onCandidate) return false;
+    for (const item of orderDiscoveredItemsByPublicationRecency([
+      ...items.values(),
+    ])) {
+      if (attempted.has(item.url)) continue;
+      attempted.add(item.url);
+      if (await options.onCandidate(item)) usableCount += 1;
+      if (usableCount === options.recentLimit) return true;
+    }
+    return false;
+  };
 
   while (
     pageUrl &&
@@ -91,22 +110,75 @@ async function discoverPages(
     pageUrl = page.nextPageUrl;
 
     if (options.recentLimit !== undefined && items.size >= options.recentLimit) {
-      if (reachedRecentLimit) break;
-      reachedRecentLimit = true;
+      if (reachedRecentLimit) {
+        if (!options.onCandidate || (await processCandidates())) break;
+      } else {
+        reachedRecentLimit = true;
+      }
     }
+  }
+  if (
+    options.onCandidate &&
+    options.recentLimit !== undefined &&
+    usableCount < options.recentLimit
+  ) {
+    await processCandidates();
   }
 
   const sourceOrderedItems = [...items.values()];
   return {
     pagesVisited,
+    candidatesConsidered: attempted.size,
     items:
       options.recentLimit === undefined
         ? sourceOrderedItems
         : orderDiscoveredItemsByPublicationRecency(sourceOrderedItems).slice(
             0,
-            options.recentLimit,
+            options.onCandidate ? undefined : options.recentLimit,
           ),
   };
+}
+
+async function collectNotices(
+  source: WebPlusSourceConfig,
+  limit: number,
+  onPage?: (raw: RawDocument) => void,
+  onNotice?: (raw: RawDocument, notice: ParsedNotice) => void,
+): Promise<{
+  pagesVisited: number;
+  itemsDiscovered: number;
+  notices: ParsedNotice[];
+}> {
+  const notices: ParsedNotice[] = [];
+  const { pagesVisited, candidatesConsidered } = await discoverPages(source, {
+    maxPages: 100,
+    recentLimit: limit,
+    ...(onPage ? { onPage } : {}),
+    onCandidate: async (item) => {
+      try {
+        const detailRaw = await fetchWebPlusDetail(item);
+        const notice = parseWebPlusNotice(detailRaw, source, item);
+        onNotice?.(detailRaw, notice);
+        notices.push(notice);
+        return true;
+      } catch (error) {
+        if (error instanceof RestrictedDetailError) {
+          console.error(
+            `skipping restricted detail ${source.id} ${item.url}: ${error.restrictionClass}`,
+          );
+          return false;
+        }
+        if (error instanceof UnsupportedDetailAcquisitionError) {
+          console.error(
+            `skipping unsupported detail ${error.sourceId} ${error.url}: ${error.acquisitionKind}`,
+          );
+          return false;
+        }
+        throw error;
+      }
+    },
+  });
+  return { pagesVisited, itemsDiscovered: candidatesConsidered, notices };
 }
 
 async function ingestSource(
@@ -118,29 +190,25 @@ async function ingestSource(
   const database = new InfoHubDatabase(resolvedDatabasePath);
 
   try {
-    const { pagesVisited, items } = await discoverPages(source, {
-      maxPages: 100,
-      recentLimit: itemLimit,
-      onPage: (rawDocument) =>
-        database.persistRawDocument(source, rawDocument),
-    });
     let insertedRevisions = 0;
     let unchangedRevisions = 0;
-
-    for (const item of items) {
-      const detailRaw = await fetchWebPlusDetail(item);
-      const notice = parseWebPlusNotice(detailRaw, source, item);
-      const result = database.ingestNotice(source, detailRaw, notice);
-      if (result.insertedRevision) insertedRevisions += 1;
-      else unchangedRevisions += 1;
-    }
+    const { pagesVisited, itemsDiscovered, notices } = await collectNotices(
+      source,
+      itemLimit,
+      (rawDocument) => database.persistRawDocument(source, rawDocument),
+      (detailRaw, notice) => {
+        const result = database.ingestNotice(source, detailRaw, notice);
+        if (result.insertedRevision) insertedRevisions += 1;
+        else unchangedRevisions += 1;
+      },
+    );
 
     return {
       sourceId: source.id,
       databasePath: resolvedDatabasePath,
       pagesVisited,
-      itemsDiscovered: items.length,
-      noticesIngested: items.length,
+      itemsDiscovered,
+      noticesIngested: notices.length,
       insertedRevisions,
       unchangedRevisions,
       stats: database.stats(),
@@ -216,15 +284,7 @@ async function main(): Promise<void> {
   }
 
   const limit = positiveInteger(thirdArg, 1);
-  const { items } = await discoverPages(source, {
-    maxPages: 100,
-    recentLimit: limit,
-  });
-  const notices = [];
-  for (const item of items) {
-    const detailRaw = await fetchWebPlusDetail(item);
-    notices.push(parseWebPlusNotice(detailRaw, source, item));
-  }
+  const { notices } = await collectNotices(source, limit);
   console.log(JSON.stringify(notices, null, 2));
 }
 

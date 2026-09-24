@@ -18,7 +18,7 @@ The public ingestion foundation and two read-only delivery adapters are in place
 - a local stdio MCP adapter exposes three read-only tools over the same persisted queries;
 - Node.js 26 is the default repository runtime and Node.js 24 remains the compatibility floor.
 
-Student Affairs discovery preserves official-list WebPlus and public WeChat links with an in-memory acquisition class. Fetch/ingest currently stops with an explicit unsupported-acquisition error at the first WeChat item; those items are not published or persisted as notices. See [#46](https://github.com/zhongyangchuwu/nju-info-hub/issues/46) and [#39](https://github.com/zhongyangchuwu/nju-info-hub/issues/39).
+Student Affairs discovery preserves official-list WebPlus and public WeChat links with an in-memory acquisition class. Limited fetch/ingest skips unsupported public-WeChat candidates before detail acquisition and continues with older usable WebPlus items; WeChat items are not published or persisted as notices. See [#46](https://github.com/zhongyangchuwu/nju-info-hub/issues/46) and [#39](https://github.com/zhongyangchuwu/nju-info-hub/issues/39).
 
 Use GitHub Issues for the current work queue; Issue #18 tracks the local MCP adapter.
 
@@ -198,6 +198,8 @@ The GitHub Actions SQLite cache includes the database and SQLite sidecars, but i
 The MCP command requires an existing current-schema SQLite database. It exposes only `list_sources`, `list_organizations`, and `list_recent_notices` over stdio; the first two take `{}`, and the third accepts optional `sourceId`, `organizationId`, and `limit` (1–100). Results include matching JSON text and structured content. Configure an MCP host to launch the command as a subprocess; stdout is reserved for protocol messages and startup diagnostics go to stderr. Closing the connection releases the read-only database reader.
 
 WebPlus discovery preserves list-page source/DOM order. Limited `fetch` and `ingest` commands instead rank parseable publication dates newest-first, with stable source-order fallback for equal, missing, or unparseable dates. They inspect one page beyond the point where enough candidates were found; `discover-pages` keeps full source order and pinned items.
+
+Limited `fetch` and `ingest` skip unsupported public-WeChat/external candidates without requesting their details, and skip recognized campus-IP warning pages and NJU unified-identity redirects after a normal public detail request. Each diagnostic reports source ID, item URL, and class on stderr. They continue through later candidates for the requested number of usable public notices, within the existing 100-page discovery cap; unrelated parse/fetch errors still fail. `discover` and `discover-pages` show public list metadata and acquisition classification without fetching details. Ingest summaries count candidates considered (including skips) as `itemsDiscovered` and usable persisted notices as `noticesIngested`.
 
 ## Initial sources
 

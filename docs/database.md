@@ -80,7 +80,7 @@ pnpm worker -- ingest <source-id> <database-path> [notice-limit]
 pnpm worker -- ingest nju-cs-graduate /tmp/nju-info.sqlite 10
 ```
 
-The command persists list-page raw documents, fetches and parses up to the requested number of detail pages, persists each notice transactionally, and prints row counts plus inserted/unchanged revision counts.
+The command persists list-page raw documents, considers detail candidates in publication-recency order, and persists each usable public notice transactionally. Unsupported `public-wechat` and `external-public` acquisitions are reported and skipped before any detail request. Recognized campus-IP restrictions and NJU unified-identity redirects are reported and skipped after the ordinary public WebPlus request, without persisting a detail raw body, source item, or revision. Later candidates are tried until the requested usable count or the bounded 100-page discovery cap is reached; ordinary parsing/fetch failures abort. In the ingest summary, `itemsDiscovered` counts unique candidates actually considered (including skipped ones), not every item visible on fetched list pages; `noticesIngested` counts usable notices persisted, while inserted/unchanged revisions account for their persistence outcomes.
 
 ## Deferred
 
