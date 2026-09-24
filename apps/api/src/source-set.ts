@@ -64,6 +64,32 @@ export function buildSourceCatalog(sources: readonly PersistedSourceSummary[], b
   };
 }
 
+export function subscriptionSelfUrl(base: URL, opmlPath: string): string {
+  const segments = opmlPath.split("/");
+  if (!opmlPath || segments.some((part) => !/^[a-z0-9][a-z0-9._-]*$/i.test(part) || part === "." || part === "..") ||
+    ["feeds", "catalog", "bundles"].includes(segments[0]!.toLowerCase())) {
+    throw new Error("unsafe OPML path: expected a relative path outside exporter-owned directories");
+  }
+  return new URL(opmlPath, base).href;
+}
+
+export function buildSetCatalog(set: ResolvedSourceSet, base: URL, opmlPath: string) {
+  return {
+    version: 1,
+    sets: [{
+      id: set.id,
+      title: set.title,
+      source_ids: set.sourceIds,
+      subscriptions: { opml: subscriptionSelfUrl(base, opmlPath) },
+      bundles: {
+        json: bundleSelfUrl(base, set.id, "json"),
+        atom: bundleSelfUrl(base, set.id, "atom"),
+        rss: bundleSelfUrl(base, set.id, "rss"),
+      },
+    }],
+  };
+}
+
 export function bundleSelfUrl(base: URL, setId: string, format: FeedFormat): string {
   if (!safeSetId.test(setId)) throw new Error("unsafe source set ID: " + JSON.stringify(setId));
   return new URL("bundles/" + encodeURIComponent(setId) + "." + format, base).href;

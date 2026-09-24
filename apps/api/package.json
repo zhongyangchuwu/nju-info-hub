@@ -7,7 +7,7 @@
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
     "export-feeds": "tsx src/export-feeds-cli.ts",
-    "test": "vitest run src",
+    "test": "vitest run src static/catalog",
     "dev": "tsx src/cli.ts"
   },
   "dependencies": {
