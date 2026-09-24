@@ -46,7 +46,7 @@ jobs:
           pnpm worker -- ingest nju-cs-internal-notices "$NJU_INFO_DB" 10
           pnpm worker -- ingest nju-cs-seminars "$NJU_INFO_DB" 10
       - name: Export static feeds and CS subscriptions
-        run: pnpm --filter @nju-info/api export-feeds -- "$NJU_INFO_DB" "$NJU_INFO_PAGES_DIR" nju-cs-graduate nju-cs-internal-notices nju-cs-seminars --base-url "$NJU_INFO_PUBLIC_BASE_URL" --opml subscriptions/cs.opml --set-id cs --set-title "计算机学院公开信息"
+        run: pnpm --filter @nju-info/api export-feeds -- "$NJU_INFO_DB" "$NJU_INFO_PAGES_DIR" nju-cs-graduate nju-cs-internal-notices nju-cs-seminars --base-url "$NJU_INFO_PUBLIC_BASE_URL" --opml subscriptions/cs.opml --set-id cs --set-title "计算机学院公开信息" --set-source nju-cs-graduate --set-source nju-cs-internal-notices --set-source nju-cs-seminars
       - name: Stage static catalog selector
         run: cp apps/api/static/catalog/index.html apps/api/static/catalog/app.js apps/api/static/catalog/catalog-helpers.js apps/api/static/catalog/styles.css "$NJU_INFO_PAGES_DIR/catalog/"
       - name: Save SQLite database cache
