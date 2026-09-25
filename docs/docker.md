@@ -22,9 +22,19 @@ One image exposes a stable `nju-info` container entrypoint:
 - `validate`: validate the selected instance configuration;
 - `collect`: collect configured public sources into local SQLite;
 - `export`: generate static syndication output;
-- `worker`: access lower-level public collector commands.
+- `worker`: access lower-level public collector commands;
+- `mcp`: run the existing read-only stdio MCP server against the same persistent database.
 
 The container entrypoint hides the repository's pnpm/workspace layout from users.
+
+For stdio MCP clients, run the same image interactively:
+
+```bash
+docker run --rm -i -v nju-info-data:/data \
+  ghcr.io/zhongyangchuwu/nju-info-hub:<version> mcp
+```
+
+The MCP command is read-only and uses the same SQLite state as the API.
 
 SQLite remains on the active host/container volume. The API opens an existing current-schema database read-only and does not create or migrate state. The data volume itself remains writable because SQLite may require WAL/SHM side files even for a read-only application connection.
 
