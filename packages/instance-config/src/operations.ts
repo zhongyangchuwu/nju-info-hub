@@ -1,35 +1,23 @@
-import { spawn } from "node:child_process";
+import { InfoHubDatabaseReader } from "@nju-info/db";
+import { loadSourceDirectory } from "@nju-info/collector";
+import { ingestSource } from "@nju-info/worker/collection";
+import { exportFeeds } from "@nju-info/api/export-feeds";
 import type { InstanceConfig } from "./config.js";
-
-export type CommandRunner = (args: string[]) => Promise<void>;
-
-export function createPnpmRunner(cwd: string): CommandRunner {
-  return (args) => new Promise<void>((resolve, reject) => {
-    const child = spawn("pnpm", args, {
-      cwd,
-      stdio: "inherit",
-      shell: false,
-    });
-    child.once("error", reject);
-    child.once("exit", (code, signal) => {
-      if (code === 0) resolve();
-      else reject(new Error(
-        signal ? `pnpm command terminated by ${signal}` : `pnpm command exited with code ${code ?? "unknown"}`,
-      ));
-    });
-  });
-}
 
 export async function collectInstance(
   config: InstanceConfig,
   database: string,
-  run: CommandRunner,
+  sourceDirectory: string,
 ): Promise<void> {
-  for (const source of config.publication.sources) {
-    await run([
-      "--filter", "@nju-info/worker", "exec", "tsx", "src/cli.ts", "--",
-      "ingest", source.id, database, String(source.limit),
-    ]);
+  const registered = new Map(
+    (await loadSourceDirectory(sourceDirectory)).map((source) => [source.id, source]),
+  );
+
+  for (const selected of config.publication.sources) {
+    const source = registered.get(selected.id);
+    if (!source) throw new Error(`unknown published source id: ${selected.id}`);
+    const summary = await ingestSource(source, database, selected.limit);
+    console.log(JSON.stringify(summary, null, 2));
   }
 }
 
@@ -37,18 +25,23 @@ export async function exportInstance(
   config: InstanceConfig,
   database: string,
   outputDir: string,
-  run: CommandRunner,
 ): Promise<void> {
-  const args = [
-    "--filter", "@nju-info/api", "exec", "tsx", "src/export-feeds-cli.ts", "--",
-    database,
-    outputDir,
-    ...config.publication.sources.map((source) => source.id),
-    "--base-url", config.publication.publicBaseUrl,
-  ];
-  for (const set of config.publication.sets) {
-    args.push("--opml", set.opml, "--set-id", set.id, "--set-title", set.title);
-    for (const sourceId of set.sources) args.push("--set-source", sourceId);
+  const sourceIds = config.publication.sources.map((source) => source.id);
+  const set = config.publication.sets[0];
+  const reader = new InfoHubDatabaseReader(database);
+  try {
+    await exportFeeds(reader, outputDir, sourceIds, {
+      publicBaseUrl: config.publication.publicBaseUrl,
+      ...(set === undefined ? {} : {
+        opmlPath: set.opml,
+        sourceSet: {
+          id: set.id,
+          title: set.title,
+          sourceIds: set.sources,
+        },
+      }),
+    });
+  } finally {
+    reader.close();
   }
-  await run(args);
 }

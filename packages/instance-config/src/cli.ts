@@ -3,12 +3,10 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import process from "node:process";
 import { loadInstanceConfig } from "./config.js";
-import { collectInstance, createPnpmRunner, exportInstance } from "./operations.js";
+import { collectInstance, exportInstance } from "./operations.js";
 import { createCollectionScheduler } from "./scheduler.js";
 
 const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
-const run = createPnpmRunner(repoRoot);
-
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -43,14 +41,18 @@ async function main(): Promise<void> {
   if (command === "collect") {
     const [database] = rest;
     if (!database) throw new Error("collect requires <database>");
-    await collectInstance(config, database, run);
+    await collectInstance(config, path.resolve(repoRoot, database), sourceDir);
     return;
   }
 
   if (command === "export") {
     const [database, outputDir] = rest;
     if (!database || !outputDir) throw new Error("export requires <database> <output-dir>");
-    await exportInstance(config, database, outputDir, run);
+    await exportInstance(
+      config,
+      path.resolve(repoRoot, database),
+      path.resolve(repoRoot, outputDir),
+    );
     return;
   }
 
@@ -62,7 +64,7 @@ async function main(): Promise<void> {
     const scheduler = createCollectionScheduler({
       schedule: config.collection.schedule,
       timeZone: config.collection.timeZone,
-      collect: () => collectInstance(config, database, run),
+      collect: () => collectInstance(config, path.resolve(repoRoot, database), sourceDir),
       onError: (error, trigger) => {
         console.error(`[scheduler] ${trigger} collection failed: ${message(error)}`);
       },
