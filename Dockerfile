@@ -9,7 +9,9 @@ LABEL org.opencontainers.image.title="NJU Info Hub" \
       org.opencontainers.image.version="$VERSION" \
       org.opencontainers.image.revision="$REVISION"
 
-RUN npm install --global pnpm@12.5.1 --fetch-retries=2 --fetch-timeout=30000 \
+RUN npm install --global @pnpm/exe.linux-x64@12.5.1 --fetch-retries=1 --fetch-timeout=15000 \
+    && ln -s /usr/local/lib/node_modules/@pnpm/exe.linux-x64/pnpm /usr/local/bin/pnpm \
+    && pnpm --version \
     && npm cache clean --force
 
 WORKDIR /app
