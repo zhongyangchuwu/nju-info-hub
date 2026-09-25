@@ -148,9 +148,10 @@ verify_api() {
 
 verify_database() {
   docker run --rm -v "$volume:/data" \
-    --entrypoint /app/apps/nju-info/node_modules/.bin/tsx \
+    --entrypoint node \
     "$image" \
-    -e 'import { InfoHubDatabaseReader } from "/app/packages/db/src/index.ts"; const db=new InfoHubDatabaseReader("/data/feeds.sqlite"); const sources=db.listSources(); if(!sources.some(source=>source.id==="smoke-source")) throw new Error("smoke source missing"); db.close();'
+    --input-type=module \
+    -e 'import { DatabaseSync } from "node:sqlite"; const db=new DatabaseSync("/data/feeds.sqlite",{readOnly:true}); const source=db.prepare("SELECT id FROM sources WHERE id = ?").get("smoke-source"); db.close(); if(!source) throw new Error("smoke source missing");'
 }
 
 verify_export() {

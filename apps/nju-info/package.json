@@ -4,7 +4,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run src",
     "dev": "tsx src/cli.ts"
@@ -19,9 +18,13 @@
     "@nju-info/mcp": "workspace:*",
     "@nju-info/worker": "workspace:*",
     "croner": "10.0.1",
-    "tsx": "4.23.15"
+    "cheerio": "1.2.0",
+    "domhandler": "5.0.3",
+    "yaml": "2.9.1",
+    "zod": "4.6.5"
   },
   "devDependencies": {
-    "@modelcontextprotocol/client": "2.0.0"
+    "@modelcontextprotocol/client": "2.0.0",
+    "tsx": "4.23.15"
   }
 }

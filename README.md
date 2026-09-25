@@ -119,6 +119,10 @@ pnpm nju-info -- mcp /tmp/nju-info.sqlite
 
 Source-level fetch and ingest commands access public NJU websites. Unit tests use local fixtures instead.
 
+### Release artifacts
+
+`pnpm build` creates the actual product artifact under `dist/release`: one compiled JavaScript CLI bundle, embedded default source/instance resources, and a minimal package manifest containing only third-party runtime dependencies. `pnpm test:release` packs that directory, installs the tarball into a fresh temporary prefix, and runs the packaged CLI; both Node 24 and Node 26 CI execute this smoke. `pnpm pack:release` produces an installable `.tgz` under `dist/`. The artifact is currently marked `private` so registry publication remains disabled until package naming/version policy is decided. The Docker image is built from the same compiled artifact rather than from workspace TypeScript source.
+
 The API requires an existing current-schema SQLite database; it does not create or migrate one. It binds only to localhost by default. Stop it with SIGINT or SIGTERM; active requests finish before the reader closes. Live WAL reads require the database and SQLite sidecar files to be accessible (see [`docs/database.md`](docs/database.md)).
 
 The `/v1` success responses are JSON with a `data` field. For example:

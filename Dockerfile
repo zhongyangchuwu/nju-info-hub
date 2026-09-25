@@ -1,14 +1,6 @@
-FROM node:26.10.0-bookworm-slim AS runtime
+FROM node:26.10.0-bookworm-slim AS build
 
-ARG VERSION=dev
-ARG REVISION=unknown
 ARG TARGETARCH
-
-LABEL org.opencontainers.image.title="NJU Info Hub" \
-      org.opencontainers.image.description="Public, read-only information aggregation for Nanjing University" \
-      org.opencontainers.image.source="https://github.com/zhongyangchuwu/nju-info-hub" \
-      org.opencontainers.image.version="$VERSION" \
-      org.opencontainers.image.revision="$REVISION"
 
 RUN arch="${TARGETARCH:-$(dpkg --print-architecture)}" \
     && case "$arch" in \
@@ -21,7 +13,7 @@ RUN arch="${TARGETARCH:-$(dpkg --print-architecture)}" \
     && pnpm --version \
     && npm cache clean --force
 
-WORKDIR /app
+WORKDIR /src
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json apps/api/package.json
@@ -33,24 +25,38 @@ COPY packages/db/package.json packages/db/package.json
 COPY packages/collector/package.json packages/collector/package.json
 COPY packages/instance-config/package.json packages/instance-config/package.json
 
-RUN pnpm install --prod --frozen-lockfile
+RUN pnpm install --frozen-lockfile
 
-COPY apps/api/src apps/api/src
-COPY apps/worker/src apps/worker/src
-COPY apps/mcp/src apps/mcp/src
-COPY apps/nju-info/src apps/nju-info/src
-COPY packages/core/src packages/core/src
-COPY packages/db/src packages/db/src
-COPY packages/collector/src packages/collector/src
-COPY packages/instance-config/src packages/instance-config/src
-COPY sources sources
-COPY instances instances
-COPY scripts/state-snapshot.mjs /app/scripts/state-snapshot.mjs
-COPY scripts/container-entrypoint.sh /usr/local/bin/nju-info
+COPY . .
 
-RUN chmod 755 /usr/local/bin/nju-info \
-    && rm -f /app/pnpm-workspace.yaml /app/pnpm-lock.yaml /app/node_modules/.pnpm-workspace-state-v1.json /usr/local/bin/pnpm \
-    && rm -rf /usr/local/lib/node_modules/@pnpm \
+RUN pnpm build \
+    && pnpm --filter @nju-info/nju-info deploy --prod /src/dist/runtime \
+    && rm -rf /src/dist/runtime/src /src/dist/runtime/dist /src/dist/runtime/resources /src/dist/runtime/node_modules/@nju-info \
+    && find /src/dist/runtime/node_modules/.pnpm -mindepth 1 -maxdepth 1 -type d -name '@nju-info+*' -exec rm -rf {} + \
+    && rm -f /src/dist/runtime/tsconfig.json /src/dist/runtime/pnpm-lock.yaml /src/dist/runtime/pnpm-workspace.yaml \
+    && rm -f /src/dist/runtime/node_modules/.modules.yaml /src/dist/runtime/node_modules/.pnpm-workspace-state-v1.json /src/dist/runtime/node_modules/.pnpm/lock.yaml \
+    && cp -a /src/dist/release/dist /src/dist/runtime/dist \
+    && cp -a /src/dist/release/resources /src/dist/runtime/resources \
+    && cp /src/dist/release/package.json /src/dist/runtime/package.json \
+    && cp /src/dist/release/README.md /src/dist/runtime/README.md
+
+FROM node:26.10.0-bookworm-slim AS runtime
+
+ARG VERSION=dev
+ARG REVISION=unknown
+
+LABEL org.opencontainers.image.title="NJU Info Hub" \
+      org.opencontainers.image.description="Public, read-only information aggregation for Nanjing University" \
+      org.opencontainers.image.source="https://github.com/zhongyangchuwu/nju-info-hub" \
+      org.opencontainers.image.version="$VERSION" \
+      org.opencontainers.image.revision="$REVISION"
+
+WORKDIR /app
+
+COPY --from=build --chown=node:node /src/dist/runtime/ /app/
+
+RUN ln -s /app/dist/cli.js /usr/local/bin/nju-info \
+    && chmod 755 /app/dist/cli.js \
     && mkdir -p /data \
     && chown node:node /data
 

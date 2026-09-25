@@ -12,7 +12,7 @@ ghcr.io/zhongyangchuwu/nju-info-hub
 
 The container workflow publishes immutable revision tags in the form `sha-<short-sha>`. A Git tag such as `v1.2.3` also publishes the matching version tag. The workflow deliberately does not publish an implicit `latest` tag.
 
-The image uses Node 26 and the repository-pinned `tsx` runtime. The build uses pinned pnpm, which is removed from the final runtime image. It runs as the unprivileged `node` user. The Dockerfile supports Linux amd64 and arm64; GHCR publishing produces both architectures under the same tag.
+The image uses Node 26 and runs the compiled release artifact. pnpm, TypeScript, esbuild, `tsx`, workspace source packages, and workspace metadata exist only in the builder stage and are absent from the final runtime image. It runs as the unprivileged `node` user. The Dockerfile supports Linux amd64 and arm64; GHCR publishing produces both architectures under the same tag.
 
 ## Runtime model
 

@@ -1,3 +1,4 @@
+import { existsSync, realpathSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -10,11 +11,14 @@ import { createCollectionScheduler } from "./scheduler.js";
 import { serveMcp } from "./mcp-runtime.js";
 import { runSourceCommand } from "./source-command.js";
 
-const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
-const defaultConfig = path.join(repoRoot, "instances/official.json");
-const defaultSourceDir = path.join(repoRoot, "sources/nju");
+const packageRoot = fileURLToPath(new URL("../", import.meta.url));
+const repositoryRoot = path.resolve(packageRoot, "../..");
+const embeddedResourceRoot = path.join(packageRoot, "resources");
+const resourceRoot = existsSync(embeddedResourceRoot) ? embeddedResourceRoot : repositoryRoot;
+const defaultConfig = path.join(resourceRoot, "instances/official.json");
+const defaultSourceDir = path.join(resourceRoot, "sources/nju");
 const invocationRoot = path.resolve(process.env.INIT_CWD ?? process.cwd());
-const snapshotModule = pathToFileURL(path.join(repoRoot, "scripts/state-snapshot.mjs")).href;
+const snapshotModule = pathToFileURL(path.join(resourceRoot, "scripts/state-snapshot.mjs")).href;
 
 interface SnapshotModule {
   packSnapshot(databasePath: string, archivePath: string): Promise<unknown>;
@@ -267,7 +271,7 @@ export async function main(argv: string[]): Promise<void> {
 }
 
 const invokedDirectly = process.argv[1] !== undefined &&
-  import.meta.url === pathToFileURL(process.argv[1]).href;
+  realpathSync(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (invokedDirectly) {
   main(process.argv.slice(2)).catch((error) => {
