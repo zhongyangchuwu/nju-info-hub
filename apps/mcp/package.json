@@ -12,7 +12,8 @@
   "dependencies": {
     "@modelcontextprotocol/server": "2.0.0",
     "@nju-info/db": "workspace:*",
-    "zod": "4.6.5"
+    "zod": "4.6.5",
+    "tsx": "4.23.15"
   },
   "devDependencies": {
     "@modelcontextprotocol/client": "2.0.0"
