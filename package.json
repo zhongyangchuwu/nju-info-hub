@@ -15,7 +15,8 @@
     "api": "pnpm --filter @nju-info/api dev",
     "mcp": "pnpm --filter @nju-info/mcp dev",
     "test:state": "node --test scripts/state-snapshot.test.mjs scripts/state-rclone.test.mjs",
-    "state:snapshot": "node scripts/state-snapshot.mjs"
+    "state:snapshot": "node scripts/state-snapshot.mjs",
+    "instance": "pnpm --filter @nju-info/instance-config instance"
   },
   "devDependencies": {
     "@types/node": "24.13.6",

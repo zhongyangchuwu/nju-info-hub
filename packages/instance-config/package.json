@@ -1,0 +1,19 @@
+{
+  "name": "@nju-info/instance-config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run src",
+    "instance": "tsx src/cli.ts"
+  },
+  "dependencies": {
+    "@nju-info/collector": "workspace:*",
+    "zod": "4.6.5"
+  }
+}
