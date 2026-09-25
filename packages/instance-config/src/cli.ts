@@ -16,7 +16,9 @@ function run(args: string[]): void {
 }
 
 async function main(): Promise<void> {
-  const [command, configPathArg, sourceDirArg, ...rest] = process.argv.slice(2);
+  const argv = process.argv.slice(2);
+  if (argv[0] === "--") argv.shift();
+  const [command, configPathArg, sourceDirArg, ...rest] = argv;
   if (!command || !configPathArg || !sourceDirArg) {
     throw new Error("usage: instance <validate|collect|export> <config.json> <source-dir> [args...]");
   }
