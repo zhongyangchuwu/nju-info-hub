@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { promises as fs } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -57,6 +57,27 @@ test("packs, verifies, and restores a self-contained SQLite snapshot", async () 
 
     await restoreSnapshot(archive, restored);
     assert.equal(readValue(restored), "current");
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+});
+
+
+test("CLI accepts the package-manager argument separator", async () => {
+  const directory = await fs.mkdtemp(join(tmpdir(), "nju-info-state-test-"));
+  try {
+    const source = join(directory, "source.sqlite");
+    const archive = join(directory, "state.tar.gz");
+    createDatabase(source, "cli");
+    await packSnapshot(source, archive);
+
+    const result = spawnSync(
+      process.execPath,
+      [new URL("./state-snapshot.mjs", import.meta.url).pathname, "--", "verify", archive],
+      { encoding: "utf8" },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /"format":"nju-info-state-snapshot"/);
   } finally {
     await fs.rm(directory, { recursive: true, force: true });
   }
