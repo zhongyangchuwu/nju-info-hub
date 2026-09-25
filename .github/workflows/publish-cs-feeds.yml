@@ -1,6 +1,18 @@
 name: CS feed pilot
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/publish-cs-feeds.yml'
+      - 'apps/**'
+      - 'packages/**'
+      - 'sources/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'mise.toml'
   workflow_dispatch:
   schedule:
     - cron: '17 */2 * * *'
