@@ -7,6 +7,7 @@ import { promises as fs } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
 import { backup, DatabaseSync } from "node:sqlite";
 
 const SNAPSHOT_FORMAT = "nju-info-state-snapshot";
@@ -227,7 +228,8 @@ function usage() {
 }
 
 async function main(argv) {
-  const [command, first, second, ...extra] = argv;
+  const normalizedArgv = argv[0] === "--" ? argv.slice(1) : argv;
+  const [command, first, second, ...extra] = normalizedArgv;
   if (extra.length > 0) throw new Error(usage());
 
   if (command === "pack" && first && second) {
@@ -250,7 +252,7 @@ async function main(argv) {
 
 const invokedDirectly =
   process.argv[1] !== undefined &&
-  import.meta.url === new URL(`file://${process.argv[1]}`).href;
+  import.meta.url === pathToFileURL(process.argv[1]).href;
 
 if (invokedDirectly) {
   main(process.argv.slice(2)).catch((error) => {
