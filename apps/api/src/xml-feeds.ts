@@ -1,11 +1,11 @@
-import type { NoticeQueryResult, PersistedSourceSummary } from "@nju-info/db";
+import type { PersistedSourceSummary, SourceEntryQueryResult } from "@nju-info/db";
 import { syndicationFeed, xmlEscape, type SyndicationContext, type SyndicationEntry } from "./syndication.js";
 
 const xmlDeclaration = '<?xml version="1.0" encoding="UTF-8"?>';
 
-/** Atom 1.0: updated is the hub's observed current revision, not an upstream modification time. */
-export function buildAtomFeed(source: PersistedSourceSummary, notices: NoticeQueryResult[], context: SyndicationContext = {}): string {
-  const feed = syndicationFeed(source, notices, context.generatedAt);
+/** Atom 1.0: updated is the hub's latest observed source-item time, not an upstream modification time. */
+export function buildAtomFeed(source: PersistedSourceSummary, sourceEntries: SourceEntryQueryResult[], context: SyndicationContext = {}): string {
+  const feed = syndicationFeed(source, sourceEntries, context.generatedAt);
   const lines = [
     xmlDeclaration,
     '<feed xmlns="http://www.w3.org/2005/Atom">',
@@ -42,8 +42,8 @@ function rssDescription(entry: SyndicationEntry): string {
 }
 
 /** RSS 2.0: link every attachment in description; enclosure requires unavailable byte length. */
-export function buildRssFeed(source: PersistedSourceSummary, notices: NoticeQueryResult[], context: SyndicationContext = {}): string {
-  const feed = syndicationFeed(source, notices, context.generatedAt);
+export function buildRssFeed(source: PersistedSourceSummary, sourceEntries: SourceEntryQueryResult[], context: SyndicationContext = {}): string {
+  const feed = syndicationFeed(source, sourceEntries, context.generatedAt);
   const lines = [
     xmlDeclaration,
     '<rss version="2.0">',

@@ -218,11 +218,12 @@ describe("read-only API", () => {
     }
   });
 
-  it("uses only reader summaries and current notices for feed responses", async () => {
+  it("uses source entries for feeds and leaves REST notices on the current-revision reader", async () => {
     const listRecentNotices = vi.fn(() => []);
+    const listRecentSourceEntries = vi.fn(() => []);
     const listSources = vi.fn(() => [{ id: source.id, name: source.name,
       organization: source.organization, url: source.url, enabled: true }]);
-    const server = createApiServer({ listSources, listRecentNotices,
+    const server = createApiServer({ listSources, listRecentNotices, listRecentSourceEntries,
       listOrganizations: vi.fn(() => []) });
     extraServers.push(server);
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -232,12 +233,13 @@ describe("read-only API", () => {
     expect((await response(base, "/feeds/notices-a.json")).body).toMatchObject({
       items: [], _nju: { source_id: "notices-a" },
     });
-    expect(listRecentNotices).toHaveBeenCalledExactlyOnceWith({ sourceId: "notices-a", limit: 100 });
+    expect(listRecentSourceEntries).toHaveBeenCalledExactlyOnceWith({ sourceId: "notices-a", limit: 100 });
+    expect(listRecentNotices).not.toHaveBeenCalled();
     expect(await response(base, "/feeds/unknown.json")).toMatchObject({
       status: 404, contentType: "application/json; charset=utf-8",
       body: { error: { code: "not_found", message: "Not found" } },
     });
-    expect(listRecentNotices).toHaveBeenCalledTimes(1);
+    expect(listRecentSourceEntries).toHaveBeenCalledTimes(1);
     expect(listSources).toHaveBeenCalledTimes(2);
     for (const route of ["/feeds/notices-a.json?limit=1", "/feeds/notices-a.json?limit=1&limit=2"]) {
       expect(await response(base, route)).toMatchObject({ status: 400,
@@ -254,7 +256,7 @@ describe("read-only API", () => {
       }
     }
     expect(listSources).toHaveBeenCalledTimes(2);
-    expect(listRecentNotices).toHaveBeenCalledTimes(1);
+    expect(listRecentSourceEntries).toHaveBeenCalledTimes(1);
   });
 
   it("rejects malformed, repeated, unknown, and misrouted query parameters", async () => {

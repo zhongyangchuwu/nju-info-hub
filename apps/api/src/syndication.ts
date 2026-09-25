@@ -1,5 +1,6 @@
-import type { NoticeQueryResult, PersistedSourceSummary } from "@nju-info/db";
+import type { PersistedSourceSummary, SourceEntryQueryResult } from "@nju-info/db";
 
+const linkOnlyContentText = "Full text is unavailable from the public collector; open the original item.";
 const mimeTypes: Record<string, string> = {
   pdf: "application/pdf",
   doc: "application/msword",
@@ -39,13 +40,16 @@ export interface SyndicationEntry {
   publishedOn: string | null;
   publishedAt?: string;
   updatedAt: string;
+  contentStatus: SourceEntryQueryResult["contentStatus"];
+  acquisitionKind?: NonNullable<SourceEntryQueryResult["acquisitionKind"]>;
+  observationRevisionNumber?: number;
   bodyHtml: string;
   bodyText: string;
   attachments: { url: string; title: string; mimeType: string }[];
   sourceId: string;
   sourceName: string;
-  organization: NoticeQueryResult["organization"];
-  revisionNumber: number;
+  organization: SourceEntryQueryResult["organization"];
+  revisionNumber?: number;
   contentSha256: string;
   fetchedAt: string;
 }
@@ -54,7 +58,7 @@ export interface SyndicationFeed {
   source: PersistedSourceSummary;
   title: string;
   entries: SyndicationEntry[];
-  /** Latest observed current revision; empty feeds use the supplied generation time. */
+  /** Latest source observation; empty feeds use the supplied generation time. */
   updatedAt: string;
 }
 
@@ -63,29 +67,39 @@ function rfc3339(value: string): string {
   if (!Number.isFinite(time.getTime())) throw new Error(`invalid feed timestamp: ${value}`);
   return time.toISOString();
 }
-/** Project persisted current revisions once, preserving database order and day precision. */
-export function syndicationFeed(source: PersistedSourceSummary, notices: NoticeQueryResult[], generatedAt?: string): SyndicationFeed {
-  const entries = notices.map((notice): SyndicationEntry => ({
-    id: `${encodeURIComponent(notice.sourceId)}:${encodeURIComponent(notice.sourceItemId)}`,
-    url: notice.url,
-    title: notice.title,
-    publishedOn: notice.publishedOn,
-    ...(notice.publishedOn === null ? {} : { publishedAt: `${notice.publishedOn}T00:00:00+08:00` }),
-    updatedAt: rfc3339(notice.provenance.fetchedAt),
-    fetchedAt: notice.provenance.fetchedAt,
-    bodyHtml: notice.bodyHtml,
-    bodyText: notice.bodyText,
-    attachments: notice.attachments.map((attachment) => ({
-      url: attachment.url,
-      title: attachment.title,
-      mimeType: mimeType(attachment.url, attachment.title, attachment.mediaType),
-    })),
-    sourceId: notice.sourceId,
-    sourceName: notice.sourceName,
-    organization: notice.organization,
-    revisionNumber: notice.revisionNumber,
-    contentSha256: notice.provenance.contentSha256,
-  }));
+/** Project persisted source observations once, preserving database order and day precision. */
+export function syndicationFeed(source: PersistedSourceSummary, sourceEntries: SourceEntryQueryResult[], generatedAt?: string): SyndicationFeed {
+  const entries = sourceEntries.map((sourceEntry): SyndicationEntry => {
+    const linkOnly = sourceEntry.contentStatus === "link-only";
+    return {
+      id: `${encodeURIComponent(sourceEntry.sourceId)}:${encodeURIComponent(sourceEntry.sourceItemId)}`,
+      url: sourceEntry.url,
+      title: sourceEntry.title,
+      publishedOn: sourceEntry.publishedOn,
+      ...(sourceEntry.publishedOn === null ? {} : { publishedAt: `${sourceEntry.publishedOn}T00:00:00+08:00` }),
+      updatedAt: rfc3339(sourceEntry.provenance.fetchedAt),
+      fetchedAt: sourceEntry.provenance.fetchedAt,
+      contentStatus: sourceEntry.contentStatus,
+      ...(sourceEntry.acquisitionKind === null ? {} : { acquisitionKind: sourceEntry.acquisitionKind }),
+      ...(sourceEntry.observationRevisionNumber === null ? {} : {
+        observationRevisionNumber: sourceEntry.observationRevisionNumber,
+      }),
+      ...(sourceEntry.contentStatus === "full" && sourceEntry.noticeRevisionNumber !== null ? {
+        revisionNumber: sourceEntry.noticeRevisionNumber,
+      } : {}),
+      bodyHtml: linkOnly ? "" : sourceEntry.bodyHtml,
+      bodyText: linkOnly ? linkOnlyContentText : sourceEntry.bodyText,
+      attachments: linkOnly ? [] : sourceEntry.attachments.map((attachment) => ({
+        url: attachment.url,
+        title: attachment.title,
+        mimeType: mimeType(attachment.url, attachment.title, attachment.mediaType),
+      })),
+      sourceId: sourceEntry.sourceId,
+      sourceName: sourceEntry.sourceName,
+      organization: sourceEntry.organization,
+      contentSha256: sourceEntry.provenance.contentSha256,
+    };
+  });
   const updatedAt = entries.reduce((latest, entry) => entry.updatedAt > latest ? entry.updatedAt : latest, "");
   return { source, title: feedTitle(source), entries, updatedAt: updatedAt || rfc3339(generatedAt || new Date().toISOString()) };
 }

@@ -1,7 +1,6 @@
-import { createHash } from "node:crypto";
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
-import { normalizePublicationDate } from "@nju-info/core";
+import { normalizePublicationDate, sourceItemIdFromUrl } from "@nju-info/core";
 import type {
   Attachment,
   DiscoveredItem,
@@ -169,6 +168,7 @@ export function discoverWebPlusPage(
       );
       items.set(url, {
         sourceId: source.id,
+        sourceItemId: sourceItemIdFromUrl(url),
         url,
         acquisitionKind: acquisitionKind(absolute),
         title,
@@ -348,10 +348,7 @@ export function parseWebPlusNotice(
   const bodyHtml = content.html() ?? "";
   const bodyText = normalizeText(content.text());
   const url = discovered?.url ?? raw.url;
-  const sourceItemId = createHash("sha256")
-    .update(url)
-    .digest("hex")
-    .slice(0, 24);
+  const sourceItemId = discovered?.sourceItemId ?? sourceItemIdFromUrl(url);
 
   return {
     sourceId: source.id,

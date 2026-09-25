@@ -57,7 +57,8 @@ async function runSource(sourceId: string, command: string, ...args: string[]) {
   // CLI work begins on module evaluation; static import would run before argv/fetch are set.
   await import("./cli.js");
   await vi.waitFor(() =>
-    expect(command === "fetch" && args[0] === "1" ? stderr : stdout).toHaveBeenCalled(),
+    expect(stdout.mock.calls.length + (process.exitCode === 1 ? stderr.mock.calls.length : 0))
+      .toBeGreaterThan(0),
   );
   return {
     output: stdout.mock.calls.map(([value]) => String(value)).join("\n"),
@@ -111,6 +112,58 @@ describe("worker restricted details", () => {
     ]);
   });
 
+  it("observes only the two candidates attempted after recency lookahead", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "nju-lookahead-worker-"));
+    const path = join(directory, "notices.sqlite");
+    try {
+      const secondListUrl = `${baseUrl}/2539/list2.htm`;
+      const requested = mockPages({
+        [sourceUrl]: {
+          body: list([
+            { name: "older", date: "2026-09-20" },
+            { name: "newer", date: "2026-09-24" },
+          ], "/2539/list2.htm"),
+        },
+        [secondListUrl]: {
+          body: list([
+            { name: "lookahead-newest", date: "2026-09-25" },
+            { name: "lookahead-extra", date: "2026-09-23" },
+          ]),
+        },
+        [detail("newer")]: { body: publicDetail("newer") },
+        [detail("lookahead-newest")]: { body: publicDetail("lookahead-newest") },
+      });
+
+      const result = await run("ingest", path, "2");
+      expect(JSON.parse(result.output)).toMatchObject({
+        pagesVisited: 2,
+        itemsDiscovered: 2,
+        noticesIngested: 2,
+        stats: { sourceItems: 2, sourceItemObservations: 2, noticeRevisions: 2 },
+      });
+      expect(requested).toEqual([
+        sourceUrl, secondListUrl, detail("lookahead-newest"), detail("newer"),
+      ]);
+      const database = new DatabaseSync(path);
+      try {
+        expect(database.prepare(`
+          SELECT source_items.url, raw_documents.final_url AS list_url
+          FROM source_item_observations
+          JOIN source_items ON source_items.id = source_item_observations.source_item_row_id
+          JOIN raw_documents ON raw_documents.id = source_item_observations.raw_document_id
+          ORDER BY source_items.url
+        `).all()).toEqual([
+          { url: detail("lookahead-newest"), list_url: secondListUrl },
+          { url: detail("newer"), list_url: sourceUrl },
+        ]);
+      } finally {
+        database.close();
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("continues beyond the initial one-page window for multiple restrictions and persists only public details", async () => {
     const directory = mkdtempSync(join(tmpdir(), "nju-restricted-worker-"));
     const path = join(directory, "notices.sqlite");
@@ -155,10 +208,28 @@ describe("worker restricted details", () => {
       expect(requested).toContain(`${baseUrl}/2539/list3.htm`);
       const database = new DatabaseSync(path);
       try {
-        const urls = database.prepare("SELECT url FROM source_items ORDER BY url").all();
-        expect(urls).toEqual([
+        expect(database.prepare("SELECT url FROM source_items ORDER BY url").all()).toEqual([
+          { url: detail("auth-blocked") },
+          { url: detail("ip-blocked-two") },
+          { url: detail("ip-blocked") },
           { url: detail("public-first") },
           { url: detail("public-second") },
+        ]);
+        expect(database.prepare("SELECT count(*) AS count FROM source_item_observations").get()).toEqual({ count: 5 });
+        expect(
+          database.prepare(`
+            SELECT source_items.url, raw_documents.final_url AS list_url
+            FROM source_item_observations
+            JOIN source_items ON source_items.id = source_item_observations.source_item_row_id
+            JOIN raw_documents ON raw_documents.id = source_item_observations.raw_document_id
+            ORDER BY source_items.url
+          `).all(),
+        ).toEqual([
+          { url: detail("auth-blocked"), list_url: sourceUrl },
+          { url: detail("ip-blocked-two"), list_url: `${baseUrl}/2539/list2.htm` },
+          { url: detail("ip-blocked"), list_url: sourceUrl },
+          { url: detail("public-first"), list_url: `${baseUrl}/2539/list3.htm` },
+          { url: detail("public-second"), list_url: `${baseUrl}/2539/list3.htm` },
         ]);
         expect(database.prepare("SELECT count(*) AS count FROM notice_revisions").get()).toEqual({ count: 2 });
         expect(
@@ -232,9 +303,18 @@ describe("worker restricted details", () => {
       const database = new DatabaseSync(path);
       try {
         expect(database.prepare("SELECT url FROM source_items ORDER BY url").all()).toEqual([
+          { url: wechatUrl },
           { url: first },
           { url: second },
         ]);
+        expect(database.prepare("SELECT count(*) AS count FROM source_item_observations").get()).toEqual({ count: 3 });
+        expect(
+          database.prepare(`
+            SELECT DISTINCT raw_documents.final_url
+            FROM source_item_observations
+            JOIN raw_documents ON raw_documents.id = source_item_observations.raw_document_id
+          `).all(),
+        ).toEqual([{ final_url: listUrl }]);
       } finally {
         database.close();
       }
@@ -243,6 +323,35 @@ describe("worker restricted details", () => {
     }
   });
 
+  it("persists the candidate observation before malformed detail parsing aborts ingest", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "nju-malformed-worker-"));
+    const path = join(directory, "notices.sqlite");
+    try {
+      mockPages({
+        [sourceUrl]: { body: list([{ name: "broken", date: "2026-09-24" }]) },
+        [detail("broken")]: { body: "<h1>Broken article</h1>" },
+      });
+      const result = await run("ingest", path, "1");
+      expect(result.errors).toContain(`missing notice content for nju-student-exchange: ${detail("broken")}`);
+      expect(process.exitCode).toBe(1);
+      const database = new DatabaseSync(path);
+      try {
+        expect(database.prepare("SELECT count(*) AS count FROM source_item_observations").get()).toEqual({ count: 1 });
+        expect(
+          database.prepare(`
+            SELECT raw_documents.final_url
+            FROM source_item_observations
+            JOIN raw_documents ON raw_documents.id = source_item_observations.raw_document_id
+          `).get(),
+        ).toEqual({ final_url: sourceUrl });
+        expect(database.prepare("SELECT count(*) AS count FROM notice_revisions").get()).toEqual({ count: 0 });
+      } finally {
+        database.close();
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
   it("keeps mixed acquisition kinds and list order without fetching details", async () => {
     const listUrl = "https://xgb.nju.edu.cn/gsgg/list.htm";
     const wechatUrl = "https://mp.weixin.qq.com/s/public-article";

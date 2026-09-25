@@ -1,6 +1,6 @@
 import { lstat, mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import type { InfoHubDatabaseReader, PersistedSourceSummary } from "@nju-info/db";
+import type { InfoHubDatabaseReader, PersistedSourceSummary, SourceEntryQueryResult } from "@nju-info/db";
 import { buildAtomBundle, buildJsonBundle, buildRssBundle, type BundlePart } from "./bundle.js";
 import { buildJsonFeed } from "./feed.js";
 import { buildOpml } from "./opml.js";
@@ -8,7 +8,7 @@ import { buildSetCatalog, buildSourceCatalog, bundleSelfUrl, resolveSourceSet, s
 import { feedSelfUrl, publicBaseUrl } from "./syndication.js";
 import { buildAtomFeed, buildRssFeed } from "./xml-feeds.js";
 
-export type FeedExportReader = Pick<InfoHubDatabaseReader, "listSources" | "listRecentNotices">;
+export type FeedExportReader = Pick<InfoHubDatabaseReader, "listSources" | "listRecentSourceEntries">;
 
 const safeSourceId = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -94,22 +94,22 @@ export async function exportFeeds(
   const opml = opmlTarget && base ? buildOpml(sourceSet?.sources ?? selectedSources, base) : undefined;
   const generatedAt = new Date().toISOString();
 
-  const noticesBySource = new Map<string, ReturnType<FeedExportReader["listRecentNotices"]>>();
+  const sourceEntriesBySource = new Map<string, SourceEntryQueryResult[]>();
   for (const source of selectedSources) {
-    noticesBySource.set(source.id, reader.listRecentNotices({ sourceId: source.id, limit: 100 }));
+    sourceEntriesBySource.set(source.id, reader.listRecentSourceEntries({ sourceId: source.id, limit: 100 }));
   }
 
   const feedsDirectory = join(outputDirectory, "feeds");
   await rm(feedsDirectory, { recursive: true, force: true });
   await mkdir(feedsDirectory, { recursive: true });
   for (const source of selectedSources) {
-    const notices = noticesBySource.get(source.id) ?? [];
+    const sourceEntries = sourceEntriesBySource.get(source.id) ?? [];
     const jsonContext = { ...(base ? { selfUrl: feedSelfUrl(base, source.id, "json") } : {}), generatedAt };
     const atomContext = { ...(base ? { selfUrl: feedSelfUrl(base, source.id, "atom") } : {}), generatedAt };
-    const feed = buildJsonFeed(source, notices, jsonContext);
+    const feed = buildJsonFeed(source, sourceEntries, jsonContext);
     await writeFile(join(feedsDirectory, source.id + ".json"), JSON.stringify(feed, null, 2) + "\n", "utf8");
-    await writeFile(join(feedsDirectory, source.id + ".atom"), buildAtomFeed(source, notices, atomContext), "utf8");
-    await writeFile(join(feedsDirectory, source.id + ".rss"), buildRssFeed(source, notices, { generatedAt }), "utf8");
+    await writeFile(join(feedsDirectory, source.id + ".atom"), buildAtomFeed(source, sourceEntries, atomContext), "utf8");
+    await writeFile(join(feedsDirectory, source.id + ".rss"), buildRssFeed(source, sourceEntries, { generatedAt }), "utf8");
   }
 
   const catalogDirectory = join(outputDirectory, "catalog");
@@ -125,7 +125,7 @@ export async function exportFeeds(
   if (sourceSet && base) {
     const parts: BundlePart[] = sourceSet.sources.map((source) => ({
       source,
-      notices: noticesBySource.get(source.id) ?? [],
+      entries: sourceEntriesBySource.get(source.id) ?? [],
     }));
     const bundlesDirectory = join(outputDirectory, "bundles");
     await mkdir(bundlesDirectory, { recursive: true });

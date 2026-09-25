@@ -16,6 +16,7 @@ export type AcquisitionKind =
 
 export interface DiscoveredItem {
   sourceId: string;
+  sourceItemId: string;
   url: string;
   acquisitionKind: AcquisitionKind;
   title: string;

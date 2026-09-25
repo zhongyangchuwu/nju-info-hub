@@ -1,7 +1,14 @@
 import { createHash } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { normalizePublicationDate } from "@nju-info/core";
-import type { Attachment, ParsedNotice, RawDocument, SourceConfig } from "@nju-info/core";
+import type {
+  AcquisitionKind,
+  Attachment,
+  DiscoveredItem,
+  ParsedNotice,
+  RawDocument,
+  SourceConfig,
+} from "@nju-info/core";
 import { DATABASE_SCHEMA_VERSION, migrateDatabase } from "./schema.js";
 
 export interface PersistedRawDocument {
@@ -18,10 +25,20 @@ export interface NoticeIngestResult {
   insertedRevision: boolean;
 }
 
+export interface SourceItemObservationResult {
+  rawDocumentId: number;
+  sourceItemRowId: number;
+  observationRevisionId: number;
+  revisionNumber: number;
+  insertedRawDocument: boolean;
+  insertedRevision: boolean;
+}
+
 export interface DatabaseStats {
   sources: number;
   rawDocuments: number;
   sourceItems: number;
+  sourceItemObservations: number;
   noticeRevisions: number;
   attachments: number;
 }
@@ -56,6 +73,25 @@ export interface NoticeQueryResult {
   title: string;
   publishedAtRaw: string | null;
   publishedOn: string | null;
+  bodyText: string;
+  bodyHtml: string;
+  attachments: Attachment[];
+  provenance: { fetchedAt: string; contentSha256: string };
+}
+
+export interface SourceEntryQueryResult {
+  sourceId: string;
+  sourceItemId: string;
+  sourceName: string;
+  organization: { id: string; name: string };
+  url: string;
+  title: string;
+  publishedAtRaw: string | null;
+  publishedOn: string | null;
+  contentStatus: "full" | "link-only";
+  acquisitionKind: AcquisitionKind | null;
+  observationRevisionNumber: number | null;
+  noticeRevisionNumber: number | null;
   bodyText: string;
   bodyHtml: string;
   attachments: Attachment[];
@@ -101,6 +137,31 @@ interface RevisionRow {
   revision_number: number;
 }
 
+interface ObservationRevisionRow {
+  id: number;
+  revision_number: number;
+}
+
+interface SourceEntryQueryRow {
+  revision_id: number | null;
+  source_id: string;
+  source_item_id: string;
+  source_name: string;
+  organization_id: string;
+  organization_name: string;
+  url: string;
+  title: string;
+  published_at_raw: string | null;
+  published_on: string | null;
+  acquisition_kind: AcquisitionKind | null;
+  observation_revision_number: number | null;
+  notice_revision_number: number | null;
+  body_text: string | null;
+  body_html: string | null;
+  fetched_at: string;
+  raw_sha256: string;
+}
+
 function numberField(
   row: Record<string, unknown> | undefined,
   field: string,
@@ -127,6 +188,16 @@ function noticeContentSha256(notice: ParsedNotice): string {
   });
   return createHash("sha256").update(payload).digest("hex");
 }
+
+function observationContentSha256(item: DiscoveredItem): string {
+  const payload = JSON.stringify({
+    title: item.title,
+    publishedAtRaw: item.publishedAtRaw ?? null,
+    acquisitionKind: item.acquisitionKind,
+  });
+  return createHash("sha256").update(payload).digest("hex");
+}
+
 
 export class InfoHubDatabase implements Disposable {
   readonly #database: DatabaseSync;
@@ -166,6 +237,89 @@ export class InfoHubDatabase implements Disposable {
     });
   }
 
+  observeSourceItem(
+    source: SourceConfig,
+    listRawDocument: RawDocument,
+    item: DiscoveredItem,
+  ): SourceItemObservationResult {
+    this.#validateObservation(source, listRawDocument, item);
+
+    return this.#transaction(() => {
+      this.#writeSource(source);
+      const persistedRaw = this.#writeRawDocument(listRawDocument);
+      const sourceItemRowId = this.#writeSourceItem(
+        item.sourceId,
+        item.sourceItemId,
+        item.url,
+        listRawDocument.fetchedAt,
+      );
+      const contentSha256 = observationContentSha256(item);
+      const existingRevision = this.#database
+        .prepare(
+          `SELECT id, revision_number
+             FROM source_item_observations
+            WHERE source_item_row_id = ? AND content_sha256 = ?`,
+        )
+        .get(sourceItemRowId, contentSha256) as ObservationRevisionRow | undefined;
+
+      if (existingRevision) {
+        return {
+          rawDocumentId: persistedRaw.id,
+          sourceItemRowId,
+          observationRevisionId: existingRevision.id,
+          revisionNumber: existingRevision.revision_number,
+          insertedRawDocument: persistedRaw.inserted,
+          insertedRevision: false,
+        };
+      }
+
+      const revisionNumber = numberField(
+        this.#database
+          .prepare(
+            `SELECT COALESCE(MAX(revision_number), 0) + 1 AS revision_number
+               FROM source_item_observations
+              WHERE source_item_row_id = ?`,
+          )
+          .get(sourceItemRowId),
+        "revision_number",
+      );
+      const observationInsert = this.#database
+        .prepare(
+          `INSERT INTO source_item_observations (
+             source_item_row_id,
+             revision_number,
+             raw_document_id,
+             content_sha256,
+             title,
+             published_at_raw,
+             published_on,
+             acquisition_kind,
+             created_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          sourceItemRowId,
+          revisionNumber,
+          persistedRaw.id,
+          contentSha256,
+          item.title,
+          item.publishedAtRaw ?? null,
+          normalizePublicationDate(item.publishedAtRaw),
+          item.acquisitionKind,
+          listRawDocument.fetchedAt,
+        );
+
+      return {
+        rawDocumentId: persistedRaw.id,
+        sourceItemRowId,
+        observationRevisionId: Number(observationInsert.lastInsertRowid),
+        revisionNumber,
+        insertedRawDocument: persistedRaw.inserted,
+        insertedRevision: true,
+      };
+    });
+  }
+
   ingestNotice(
     source: SourceConfig,
     rawDocument: RawDocument,
@@ -176,7 +330,12 @@ export class InfoHubDatabase implements Disposable {
     return this.#transaction(() => {
       this.#writeSource(source);
       const persistedRaw = this.#writeRawDocument(rawDocument);
-      const sourceItemRowId = this.#writeSourceItem(notice);
+      const sourceItemRowId = this.#writeSourceItem(
+        notice.sourceId,
+        notice.sourceItemId,
+        notice.url,
+        notice.provenance.fetchedAt,
+      );
       const contentSha256 = noticeContentSha256(notice);
       const existingRevision = this.#database
         .prepare(
@@ -273,6 +432,10 @@ export class InfoHubDatabase implements Disposable {
     return this.#queries.listRecentNotices(options);
   }
 
+  listRecentSourceEntries(options: RecentNoticeOptions = {}): SourceEntryQueryResult[] {
+    return this.#queries.listRecentSourceEntries(options);
+  }
+
   stats(): DatabaseStats {
     return this.#queries.stats();
   }
@@ -282,6 +445,45 @@ export class InfoHubDatabase implements Disposable {
       throw new Error(
         `source mismatch: config ${source.id}, raw document ${rawDocument.sourceId}`,
       );
+    }
+  }
+
+  #validateObservation(
+    source: SourceConfig,
+    rawDocument: RawDocument,
+    item: DiscoveredItem,
+  ): void {
+    this.#validateSource(source, rawDocument);
+    if (typeof rawDocument.url !== "string" || rawDocument.url.trim() === "") {
+      throw new Error("list raw document URL must not be empty");
+    }
+    if (typeof rawDocument.fetchedAt !== "string" || rawDocument.fetchedAt.trim() === "") {
+      throw new Error("list raw document fetchedAt must not be empty");
+    }
+    if (item.sourceId !== source.id) {
+      throw new Error(
+        `source mismatch: config ${source.id}, source item ${item.sourceId}`,
+      );
+    }
+    if (typeof item.sourceItemId !== "string" || item.sourceItemId.trim() === "") {
+      throw new Error("source item identity must not be empty");
+    }
+    if (typeof item.url !== "string" || item.url.trim() === "") {
+      throw new Error("source item URL must not be empty");
+    }
+    if (typeof rawDocument.sha256 !== "string" || !/^[\da-f]{64}$/.test(rawDocument.sha256)) {
+      throw new Error("list raw document hash must be a SHA-256 hex digest");
+    }
+    if (item.publishedAtRaw !== undefined && typeof item.publishedAtRaw !== "string") {
+      throw new Error("source item publishedAtRaw must be a string when provided");
+    }
+    if (typeof item.title !== "string") {
+      throw new Error("source item title must be a string");
+    }
+    if (item.acquisitionKind !== "webplus-detail"
+      && item.acquisitionKind !== "public-wechat"
+      && item.acquisitionKind !== "external-public") {
+      throw new Error(`unsupported source item acquisition kind: ${item.acquisitionKind}`);
     }
   }
 
@@ -389,7 +591,12 @@ export class InfoHubDatabase implements Disposable {
     return { id: numberField(row, "id"), inserted: false };
   }
 
-  #writeSourceItem(notice: ParsedNotice): number {
+  #writeSourceItem(
+    sourceId: string,
+    sourceItemId: string,
+    url: string,
+    firstSeenAt: string,
+  ): number {
     this.#database
       .prepare(
         `INSERT INTO source_items (
@@ -399,12 +606,7 @@ export class InfoHubDatabase implements Disposable {
            url = excluded.url
          WHERE source_items.url <> excluded.url`,
       )
-      .run(
-        notice.sourceId,
-        notice.sourceItemId,
-        notice.url,
-        notice.provenance.fetchedAt,
-      );
+      .run(sourceId, sourceItemId, url, firstSeenAt);
 
     const row = this.#database
       .prepare(
@@ -412,7 +614,7 @@ export class InfoHubDatabase implements Disposable {
            FROM source_items
           WHERE source_id = ? AND source_item_id = ?`,
       )
-      .get(notice.sourceId, notice.sourceItemId);
+      .get(sourceId, sourceItemId);
     return numberField(row, "id");
   }
 
@@ -459,6 +661,10 @@ export class InfoHubDatabaseReader implements Disposable {
 
   listRecentNotices(options: RecentNoticeOptions = {}): NoticeQueryResult[] {
     return this.#queries.listRecentNotices(options);
+  }
+
+  listRecentSourceEntries(options: RecentNoticeOptions = {}): SourceEntryQueryResult[] {
+    return this.#queries.listRecentSourceEntries(options);
   }
 
   listSources(): PersistedSourceSummary[] {
@@ -601,6 +807,124 @@ class DatabaseQueries {
     }));
   }
 
+  listRecentSourceEntries(options: RecentNoticeOptions = {}): SourceEntryQueryResult[] {
+    const limit = options.limit ?? 50;
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+      throw new Error("recent source entry limit must be an integer from 1 to 100");
+    }
+
+    const filters: string[] = [];
+    const parameters: string[] = [];
+    if (options.sourceId !== undefined) {
+      filters.push("s.id = ?");
+      parameters.push(options.sourceId);
+    }
+    if (options.organizationId !== undefined) {
+      filters.push("s.organization_id = ?");
+      parameters.push(options.organizationId);
+    }
+    const rows = this.#database
+      .prepare(
+        `WITH latest_observations AS (
+           SELECT o.id, o.source_item_row_id, o.revision_number,
+                  o.title, o.published_at_raw, o.published_on,
+                  o.acquisition_kind, d.fetched_at, d.sha256 AS raw_sha256
+             FROM source_item_observations o
+             JOIN raw_documents d ON d.id = o.raw_document_id
+            WHERE NOT EXISTS (
+              SELECT 1 FROM source_item_observations newer
+               WHERE newer.source_item_row_id = o.source_item_row_id
+                 AND newer.revision_number > o.revision_number
+            )
+         ), latest_notices AS (
+           SELECT r.id, r.source_item_row_id, r.revision_number,
+                  r.title, r.published_at_raw, r.published_on,
+                  r.body_text, r.body_html, d.fetched_at, d.sha256 AS raw_sha256
+             FROM notice_revisions r
+             JOIN raw_documents d ON d.id = r.raw_document_id
+            WHERE NOT EXISTS (
+              SELECT 1 FROM notice_revisions newer
+               WHERE newer.source_item_row_id = r.source_item_row_id
+                 AND newer.revision_number > r.revision_number
+            )
+         )
+         SELECT n.id AS revision_id, s.id AS source_id,
+                si.source_item_id, s.name AS source_name,
+                s.organization_id, s.organization_name, si.url,
+                CASE WHEN n.id IS NOT NULL THEN n.title ELSE o.title END AS title,
+                CASE WHEN n.id IS NOT NULL THEN n.published_at_raw
+                     ELSE o.published_at_raw END AS published_at_raw,
+                CASE WHEN n.id IS NOT NULL THEN n.published_on
+                     ELSE o.published_on END AS published_on,
+                o.acquisition_kind,
+                o.revision_number AS observation_revision_number,
+                n.revision_number AS notice_revision_number,
+                n.body_text, n.body_html,
+                CASE WHEN n.id IS NOT NULL THEN n.fetched_at ELSE o.fetched_at END AS fetched_at,
+                CASE WHEN n.id IS NOT NULL THEN n.raw_sha256 ELSE o.raw_sha256 END AS raw_sha256
+           FROM source_items si
+           JOIN sources s ON s.id = si.source_id
+           LEFT JOIN latest_observations o ON o.source_item_row_id = si.id
+           LEFT JOIN latest_notices n ON n.source_item_row_id = si.id
+          WHERE (o.id IS NOT NULL OR n.id IS NOT NULL)
+            ${filters.length ? `AND ${filters.join(" AND ")}` : ""}
+          ORDER BY CASE WHEN n.id IS NOT NULL THEN n.published_on ELSE o.published_on END IS NULL,
+                   CASE WHEN n.id IS NOT NULL THEN n.published_on ELSE o.published_on END DESC,
+                   s.id, si.source_item_id
+          LIMIT ?`,
+      )
+      .all(...parameters, limit) as unknown as SourceEntryQueryRow[];
+    if (rows.length === 0) return [];
+
+    const noticeRevisionIds = rows.flatMap((row) =>
+      row.revision_id === null ? [] : [row.revision_id],
+    );
+    const attachments = new Map<number, Attachment[]>();
+    if (noticeRevisionIds.length > 0) {
+      const attachmentRows = this.#database
+        .prepare(
+          `SELECT notice_revision_id, url, title, media_type
+             FROM attachments
+            WHERE notice_revision_id IN (${noticeRevisionIds.map(() => "?").join(", ")})
+            ORDER BY notice_revision_id, position`,
+        )
+        .all(...noticeRevisionIds) as unknown as AttachmentRow[];
+      for (const row of attachmentRows) {
+        const ordered = attachments.get(row.notice_revision_id) ?? [];
+        ordered.push({
+          url: row.url,
+          title: row.title,
+          ...(row.media_type === null ? {} : { mediaType: row.media_type }),
+        });
+        attachments.set(row.notice_revision_id, ordered);
+      }
+    }
+
+    return rows.map((row) => ({
+      sourceId: row.source_id,
+      sourceItemId: row.source_item_id,
+      sourceName: row.source_name,
+      organization: { id: row.organization_id, name: row.organization_name },
+      url: row.url,
+      title: row.title,
+      publishedAtRaw: row.published_at_raw,
+      publishedOn: row.published_on,
+      contentStatus: row.revision_id === null ? "link-only" : "full",
+      acquisitionKind: row.acquisition_kind,
+      observationRevisionNumber: row.observation_revision_number,
+      noticeRevisionNumber: row.notice_revision_number,
+      bodyText: row.body_text ?? "",
+      bodyHtml: row.body_html ?? "",
+      attachments: row.revision_id === null
+        ? []
+        : attachments.get(row.revision_id) ?? [],
+      provenance: {
+        fetchedAt: row.fetched_at,
+        contentSha256: row.raw_sha256,
+      },
+    }));
+  }
+
   stats(): DatabaseStats {
     const count = (table: string): number =>
       numberField(
@@ -612,6 +936,7 @@ class DatabaseQueries {
       sources: count("sources"),
       rawDocuments: count("raw_documents"),
       sourceItems: count("source_items"),
+      sourceItemObservations: count("source_item_observations"),
       noticeRevisions: count("notice_revisions"),
       attachments: count("attachments"),
     };

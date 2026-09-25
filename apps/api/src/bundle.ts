@@ -1,4 +1,4 @@
-import type { NoticeQueryResult, PersistedSourceSummary } from "@nju-info/db";
+import type { PersistedSourceSummary, SourceEntryQueryResult } from "@nju-info/db";
 import { feedTitle, syndicationFeed, xmlEscape, type SyndicationContext, type SyndicationEntry } from "./syndication.js";
 import type { ResolvedSourceSet } from "./source-set.js";
 
@@ -6,7 +6,7 @@ const xmlDeclaration = '<?xml version="1.0" encoding="UTF-8"?>';
 
 export interface BundlePart {
   source: PersistedSourceSummary;
-  notices: NoticeQueryResult[];
+  entries: SourceEntryQueryResult[];
 }
 
 interface BundleEntry extends SyndicationEntry {
@@ -31,8 +31,8 @@ function orderEntries(entries: BundleEntry[]): BundleEntry[] {
 }
 
 function bundleEntries(parts: readonly BundlePart[]): BundleEntry[] {
-  const entries = parts.flatMap(({ source, notices }) =>
-    syndicationFeed(source, notices).entries.map((entry) => ({
+  const entries = parts.flatMap(({ source, entries }) =>
+    syndicationFeed(source, entries).entries.map((entry) => ({
       ...entry,
       sourceUrl: source.url,
       sourceTitle: feedTitle(source),
@@ -71,7 +71,12 @@ function jsonItem(entry: BundleEntry) {
         published_on: entry.publishedOn,
         date_precision: "day",
       }),
-      revision_number: entry.revisionNumber,
+      content_status: entry.contentStatus,
+      ...(entry.acquisitionKind == null ? {} : { acquisition_kind: entry.acquisitionKind }),
+      ...(entry.observationRevisionNumber === undefined ? {} : {
+        observation_revision_number: entry.observationRevisionNumber,
+      }),
+      ...(entry.revisionNumber === undefined ? {} : { revision_number: entry.revisionNumber }),
       fetched_at: entry.fetchedAt,
       content_sha256: entry.contentSha256,
     },
