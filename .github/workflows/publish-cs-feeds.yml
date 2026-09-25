@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/publish-cs-feeds.yml'
       - 'apps/**'
+      - 'instances/**'
       - 'packages/**'
       - 'sources/**'
       - 'scripts/**'
@@ -31,7 +32,6 @@ jobs:
       NJU_INFO_CACHE_DIR: ${{ github.workspace }}/.cache/nju-info
       NJU_INFO_DB: ${{ github.workspace }}/.cache/nju-info/feeds.sqlite
       NJU_INFO_PAGES_DIR: ${{ github.workspace }}/_site
-      NJU_INFO_PUBLIC_BASE_URL: https://zhongyangchuwu.github.io/nju-info-hub/
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -43,6 +43,8 @@ jobs:
           node-version: 26
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Validate official instance config
+        run: pnpm instance -- validate instances/official.json sources/nju
       - name: Prepare cache and Pages output
         run: mkdir -p "$NJU_INFO_CACHE_DIR" "$NJU_INFO_PAGES_DIR"
       - name: Configure durable WebDAV state
@@ -129,19 +131,10 @@ jobs:
           key: nju-info-feeds-v2-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
             nju-info-feeds-v2-${{ runner.os }}-
-      - name: Collect the nine published feeds
-        run: |
-          pnpm worker -- ingest nju-cs-graduate "$NJU_INFO_DB" 10
-          pnpm worker -- ingest nju-cs-internal-notices "$NJU_INFO_DB" 10
-          pnpm worker -- ingest nju-cs-seminars "$NJU_INFO_DB" 10
-          pnpm worker -- ingest nju-itsc-notices "$NJU_INFO_DB" 10
-          pnpm worker -- ingest nju-library-news-notices "$NJU_INFO_DB" 10
-          pnpm worker -- ingest nju-graduate-school-notices "$NJU_INFO_DB" 10
-          pnpm worker -- ingest nju-undergraduate-notices "$NJU_INFO_DB" 5
-          pnpm worker -- ingest nju-youth-league-announcements "$NJU_INFO_DB" 5
-          pnpm worker -- ingest nju-student-affairs-notices "$NJU_INFO_DB" 10
-      - name: Export static feeds and CS subscriptions
-        run: pnpm --filter @nju-info/api export-feeds -- "$NJU_INFO_DB" "$NJU_INFO_PAGES_DIR" nju-cs-graduate nju-cs-internal-notices nju-cs-seminars nju-itsc-notices nju-library-news-notices nju-graduate-school-notices nju-undergraduate-notices nju-youth-league-announcements nju-student-affairs-notices --base-url "$NJU_INFO_PUBLIC_BASE_URL" --opml subscriptions/cs.opml --set-id cs --set-title "计算机学院公开信息" --set-source nju-cs-graduate --set-source nju-cs-internal-notices --set-source nju-cs-seminars
+      - name: Collect configured published feeds
+        run: pnpm instance -- collect instances/official.json sources/nju "$NJU_INFO_DB"
+      - name: Export configured static feeds and subscriptions
+        run: pnpm instance -- export instances/official.json sources/nju "$NJU_INFO_DB" "$NJU_INFO_PAGES_DIR"
       - name: Stage static catalog selector
         run: cp apps/api/static/catalog/index.html apps/api/static/catalog/app.js apps/api/static/catalog/catalog-helpers.js apps/api/static/catalog/styles.css "$NJU_INFO_PAGES_DIR/catalog/"
       - name: Save SQLite database cache
