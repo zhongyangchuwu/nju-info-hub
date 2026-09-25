@@ -44,6 +44,11 @@ describe("instance config", () => {
     expect(config.storage.mode).toBe("optional-webdav");
   });
 
+  it("rejects an unsupported storage mode", async () => {
+    const file = await withConfig((value) => { value.storage.mode = "inline-sqlite-over-webdav"; });
+    await expect(loadInstanceConfig(file, sourceDir)).rejects.toThrow();
+  });
+
   it("rejects unknown published sources", async () => {
     const file = await withConfig((value) => value.publication.sources.push({ id: "missing-source", limit: 1 }));
     await expect(loadInstanceConfig(file, sourceDir)).rejects.toThrow("unknown published source id: missing-source");
