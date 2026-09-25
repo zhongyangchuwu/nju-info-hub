@@ -44,7 +44,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Validate official instance config
-        run: pnpm instance -- validate instances/official.json sources/nju
+        run: pnpm nju-info -- validate instances/official.json sources/nju
       - name: Prepare cache and Pages output
         run: mkdir -p "$NJU_INFO_CACHE_DIR" "$NJU_INFO_PAGES_DIR"
       - name: Configure durable WebDAV state
@@ -132,9 +132,9 @@ jobs:
           restore-keys: |
             nju-info-feeds-v2-${{ runner.os }}-
       - name: Collect configured published feeds
-        run: pnpm instance -- collect instances/official.json sources/nju "$NJU_INFO_DB"
+        run: pnpm nju-info -- collect instances/official.json sources/nju "$NJU_INFO_DB"
       - name: Export configured static feeds and subscriptions
-        run: pnpm instance -- export instances/official.json sources/nju "$NJU_INFO_DB" "$NJU_INFO_PAGES_DIR"
+        run: pnpm nju-info -- export instances/official.json sources/nju "$NJU_INFO_DB" "$NJU_INFO_PAGES_DIR"
       - name: Stage static catalog selector
         run: cp apps/api/static/catalog/index.html apps/api/static/catalog/app.js apps/api/static/catalog/catalog-helpers.js apps/api/static/catalog/styles.css "$NJU_INFO_PAGES_DIR/catalog/"
       - name: Save SQLite database cache

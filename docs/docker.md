@@ -12,7 +12,7 @@ ghcr.io/zhongyangchuwu/nju-info-hub
 
 The container workflow publishes immutable revision tags in the form `sha-<short-sha>`. A Git tag such as `v1.2.3` also publishes the matching version tag. The workflow deliberately does not publish an implicit `latest` tag.
 
-The image uses Node 26 and the repository-pinned pnpm/tsx versions. It runs as the unprivileged `node` user. The Dockerfile supports Linux amd64 and arm64; GHCR publishing produces both architectures under the same tag.
+The image uses Node 26 and the repository-pinned `tsx` runtime. The build uses pinned pnpm, which is removed from the final runtime image. It runs as the unprivileged `node` user. The Dockerfile supports Linux amd64 and arm64; GHCR publishing produces both architectures under the same tag.
 
 ## Runtime model
 
@@ -23,7 +23,7 @@ One image exposes a stable `nju-info` entrypoint:
 - `collect`: run one configured public collection;
 - `schedule`: run one collection at startup, then collect on the configured cron/timezone;
 - `export`: generate static syndication output;
-- `worker`: access lower-level public collector commands;
+- `source`: access lower-level public source discovery/fetch/ingest commands;
 - `mcp`: run the existing read-only stdio MCP server against the same persistent database.
 
 All commands use the same image and local SQLite volume. The scheduler owns recurring collection; API and MCP remain read-only consumers.

@@ -27,6 +27,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/worker/package.json apps/worker/package.json
 COPY apps/mcp/package.json apps/mcp/package.json
+COPY apps/nju-info/package.json apps/nju-info/package.json
 COPY packages/core/package.json packages/core/package.json
 COPY packages/db/package.json packages/db/package.json
 COPY packages/collector/package.json packages/collector/package.json
@@ -37,6 +38,7 @@ RUN pnpm install --prod --frozen-lockfile
 COPY apps/api/src apps/api/src
 COPY apps/worker/src apps/worker/src
 COPY apps/mcp/src apps/mcp/src
+COPY apps/nju-info/src apps/nju-info/src
 COPY packages/core/src packages/core/src
 COPY packages/db/src packages/db/src
 COPY packages/collector/src packages/collector/src
@@ -53,6 +55,8 @@ RUN chmod 755 /usr/local/bin/nju-info \
     && chown node:node /data
 
 USER node
+
+ENV NJU_INFO_HOST=0.0.0.0
 
 EXPOSE 3000
 VOLUME ["/data"]

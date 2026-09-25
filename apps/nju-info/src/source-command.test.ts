@@ -3,7 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { runSourceCommand } from "./source-command.js";
 
 const sourceUrl = "https://stuex.nju.edu.cn/2539/list.htm";
 const baseUrl = "https://stuex.nju.edu.cn";
@@ -12,8 +14,8 @@ const restriction = readFileSync(
   new URL("../../../packages/collector/fixtures/webplus/campus-restricted.html", import.meta.url),
   "utf8",
 );
-const originalArgv = process.argv;
 const originalExitCode = process.exitCode;
+const sourceDirectory = fileURLToPath(new URL("../../../sources/nju/", import.meta.url));
 
 function list(
   items: { name: string; date: string }[],
@@ -52,14 +54,12 @@ function mockPages(pages: Record<string, { body: string; finalUrl?: string }>) {
 async function runSource(sourceId: string, command: string, ...args: string[]) {
   const stdout = vi.spyOn(console, "log").mockImplementation(() => {});
   const stderr = vi.spyOn(console, "error").mockImplementation(() => {});
-  process.argv = ["node", "cli.ts", command, sourceId, ...args];
-  vi.resetModules();
-  // CLI work begins on module evaluation; static import would run before argv/fetch are set.
-  await import("./cli.js");
-  await vi.waitFor(() =>
-    expect(stdout.mock.calls.length + (process.exitCode === 1 ? stderr.mock.calls.length : 0))
-      .toBeGreaterThan(0),
-  );
+  try {
+    await runSourceCommand([command, sourceId, ...args], sourceDirectory);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  }
   return {
     output: stdout.mock.calls.map(([value]) => String(value)).join("\n"),
     errors: stderr.mock.calls.map(([value]) => String(value)).join("\n"),
@@ -71,7 +71,6 @@ function run(command: string, ...args: string[]) {
 }
 
 afterEach(() => {
-  process.argv = originalArgv;
   process.exitCode = originalExitCode;
   vi.restoreAllMocks();
   vi.unstubAllGlobals();

@@ -1,4 +1,3 @@
-import { spawnSync } from "node:child_process";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -28,15 +27,6 @@ async function withConfig(mutator: (value: any) => void): Promise<string> {
 }
 
 describe("instance config", () => {
-  it("accepts the pnpm argument separator on the root CLI", () => {
-    const result = spawnSync(
-      "pnpm",
-      ["instance", "--", "validate", "instances/official.json", "sources/nju"],
-      { cwd: repoRoot, encoding: "utf8" },
-    );
-    expect(result.status, result.stderr || result.stdout).toBe(0);
-  });
-
   it("loads the official config without changing publication behavior", async () => {
     const config = await loadInstanceConfig(officialPath, sourceDir);
     expect(config.schemaVersion).toBe(2);

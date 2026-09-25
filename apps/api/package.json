@@ -4,17 +4,16 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./export-feeds": "./src/export-feeds.ts"
+    "./config": "./src/config.ts",
+    "./export-feeds": "./src/export-feeds.ts",
+    "./server": "./src/server.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
-    "export-feeds": "tsx src/export-feeds-cli.ts",
-    "test": "vitest run src static/catalog",
-    "dev": "tsx src/cli.ts"
+    "test": "vitest run src static/catalog"
   },
   "dependencies": {
-    "@nju-info/db": "workspace:*",
-    "tsx": "4.23.15"
+    "@nju-info/db": "workspace:*"
   }
 }

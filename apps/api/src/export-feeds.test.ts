@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -346,34 +345,7 @@ describe("static JSON Feed exporter", () => {
     }
   });
 
-  it("accepts legacy positional CLI and explicit base URL/OPML flags", () => {
-    const directory = temporaryDirectory();
-    const database = createPersistedDatabase(directory);
-    const outputDirectory = join(directory, "published");
-    const invoke = (...args: string[]) => spawnSync("pnpm", ["--filter", "@nju-info/api", "export-feeds", "--",
-      database, outputDirectory, ...args], { cwd: join(process.cwd(), "../.."), encoding: "utf8" });
-    try {
-      const legacy = invoke(GRADUATE_SOURCE.id);
-      expect(legacy.status, legacy.stderr).toBe(0);
-      expect(JSON.parse(readFileSync(join(outputDirectory, "feeds/nju-cs-graduate.json"), "utf8")))
-        .not.toHaveProperty("feed_url");
-      expect(existsSync(join(outputDirectory, "subscriptions/cs.opml"))).toBe(false);
-      const flagged = invoke(GRADUATE_SOURCE.id, "--base-url", "https://example.org/pilot/", "--opml", "subscriptions/cs.opml");
-      expect(flagged.status, flagged.stderr).toBe(0);
-      expect(readFileSync(join(outputDirectory, "subscriptions/cs.opml"), "utf8"))
-        .toContain("https://example.org/pilot/feeds/nju-cs-graduate.rss");
-      for (const args of [["--opml", "subscriptions/cs.opml"], ["--base-url"], ["--bogus", "x"],
-        ["--base-url", "https://example.org", "--base-url", "https://example.org"]]) {
-        expect(invoke(...args).status).not.toBe(0);
-        expect(readFileSync(join(outputDirectory, "subscriptions/cs.opml"), "utf8"))
-          .toContain("https://example.org/pilot/feeds/nju-cs-graduate.rss");
-      }
-    } finally {
-      rmSync(directory, { recursive: true, force: true });
-    }
-  });
-
-  it("separates five published sources from an explicit three-source CLI set", () => {
+  it("separates five published sources from an explicit three-source set", async () => {
     const directory = temporaryDirectory();
     const databasePath = join(directory, "five-sources.sqlite");
     const outputDirectory = join(directory, "published");
@@ -388,14 +360,18 @@ describe("static JSON Feed exporter", () => {
     }
     database.close();
 
-    const invoke = (...args: string[]) => spawnSync("pnpm", ["--filter", "@nju-info/api", "export-feeds", "--",
-      databasePath, outputDirectory, ...args], { cwd: join(process.cwd(), "../.."), encoding: "utf8" });
+    const reader = new InfoHubDatabaseReader(databasePath);
     const publishedIds = sources.map((source) => source.id).sort();
-    const setFlags = ["--set-id", "cs", "--set-title", "Computer Science", "--set-source", SEMINAR_SOURCE.id,
-      "--set-source", internalSource.id, "--set-source", GRADUATE_SOURCE.id];
     try {
-      const result = invoke(...publishedIds, "--base-url", "https://example.org/", "--opml", "subscriptions/cs.opml", ...setFlags);
-      expect(result.status, result.stderr).toBe(0);
+      await exportFeeds(reader, outputDirectory, publishedIds, {
+        publicBaseUrl: "https://example.org/",
+        opmlPath: "subscriptions/cs.opml",
+        sourceSet: {
+          id: "cs",
+          title: "Computer Science",
+          sourceIds: [SEMINAR_SOURCE.id, internalSource.id, GRADUATE_SOURCE.id],
+        },
+      });
 
       const sourceCatalog = JSON.parse(readFileSync(join(outputDirectory, "catalog/sources.json"), "utf8"));
       expect(sourceCatalog.sources.map((source: { id: string }) => source.id)).toEqual(publishedIds);
@@ -419,38 +395,18 @@ describe("static JSON Feed exporter", () => {
 
       const markerPath = join(outputDirectory, "feeds/previous.json");
       writeFileSync(markerPath, "previous");
-      const invalidSets: { args: string[]; error: string }[] = [
-        {
-          args: ["--set-id", "cs", "--set-title", "Computer Science", "--set-source", GRADUATE_SOURCE.id,
-            "--set-source", GRADUATE_SOURCE.id],
-          error: "duplicate source ID in source set",
-        },
-        {
-          args: ["--set-id", "cs", "--set-title", "Computer Science", "--set-source", "nju-cs-unpublished"],
-          error: "source set contains unpublished source ID",
-        },
-      ];
-      for (const invalidSet of invalidSets) {
-        const invalid = invoke(...publishedIds, "--base-url", "https://example.org/", ...invalidSet.args);
-        expect(invalid.status).not.toBe(0);
-        expect(invalid.stderr).toContain(invalidSet.error);
-        expect(readFileSync(markerPath, "utf8")).toBe("previous");
-      }
-
-      for (const incomplete of [
-        ["--set-id", "cs"],
-        ["--set-title", "Computer Science"],
-        ["--set-source", GRADUATE_SOURCE.id],
-        ["--set-id", "cs", "--set-title", "Computer Science"],
-        ["--set-id", "cs", "--set-source", GRADUATE_SOURCE.id],
-        ["--set-title", "Computer Science", "--set-source", GRADUATE_SOURCE.id],
+      for (const invalidSet of [
+        { sourceIds: [GRADUATE_SOURCE.id, GRADUATE_SOURCE.id], error: "duplicate source ID in source set" },
+        { sourceIds: ["nju-cs-unpublished"], error: "source set contains unpublished source ID" },
       ]) {
-        const invalid = invoke(...publishedIds, ...incomplete);
-        expect(invalid.status).not.toBe(0);
-        expect(invalid.stderr).toContain("at least one --set-source");
+        await expect(exportFeeds(reader, outputDirectory, publishedIds, {
+          publicBaseUrl: "https://example.org/",
+          sourceSet: { id: "cs", title: "Computer Science", sourceIds: invalidSet.sourceIds },
+        })).rejects.toThrow(invalidSet.error);
         expect(readFileSync(markerPath, "utf8")).toBe("previous");
       }
     } finally {
+      reader.close();
       rmSync(directory, { recursive: true, force: true });
     }
   });

@@ -148,7 +148,7 @@ verify_api() {
 
 verify_database() {
   docker run --rm -v "$volume:/data" \
-    --entrypoint /app/apps/worker/node_modules/.bin/tsx \
+    --entrypoint /app/apps/nju-info/node_modules/.bin/tsx \
     "$image" \
     -e 'import { InfoHubDatabaseReader } from "/app/packages/db/src/index.ts"; const db=new InfoHubDatabaseReader("/data/feeds.sqlite"); const sources=db.listSources(); if(!sources.some(source=>source.id==="smoke-source")) throw new Error("smoke source missing"); db.close();'
 }

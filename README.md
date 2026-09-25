@@ -61,8 +61,9 @@ The source adapter boundary is intentionally independent of MCP. Future WeChat/Q
 
 ```text
 apps/
-  worker/        development CLI for discovery, parsing, and ingestion
-  api/           read-only HTTP adapter over persisted queries
+  nju-info/      product CLI and runtime orchestration
+  worker/        collection and ingestion application logic
+  api/           read-only HTTP and syndication output adapters
   mcp/           read-only local stdio MCP adapter over persisted queries
 packages/
   core/          shared schemas and canonical types
@@ -98,28 +99,25 @@ mise --env node24 run verify
 
 # with mise shell integration active, project commands are available directly
 # list configured sources
-pnpm worker -- sources
+pnpm nju-info -- source sources
 
 # discover notices from a live WebPlus list page
-pnpm worker -- discover nju-cs-graduate
+pnpm nju-info -- source discover nju-cs-graduate
 
 # fetch and parse the most recent dated detail page
-pnpm worker -- fetch nju-cs-graduate 1
+pnpm nju-info -- source fetch nju-cs-graduate 1
 
-# ingest the most recent dated notices and raw documents into SQLite
-pnpm worker -- ingest nju-cs-graduate /tmp/nju-info.sqlite 10
+# ingest one source into SQLite for source-level debugging
+pnpm nju-info -- source ingest nju-cs-graduate /tmp/nju-info.sqlite 10
 
-# serve an existing current-schema database on 127.0.0.1:3000
-pnpm api -- /tmp/nju-info.sqlite
+# serve an existing current-schema database
+pnpm nju-info -- serve /tmp/nju-info.sqlite --host 127.0.0.1 --port 3001
 
-# choose an explicit host and port if local defaults do not fit
-pnpm api -- /tmp/nju-info.sqlite --host 127.0.0.1 --port 3001
-
-# serve an existing current-schema database to a local MCP host over stdio
-pnpm mcp -- /tmp/nju-info.sqlite
+# serve the same database to a local MCP host over stdio
+pnpm nju-info -- mcp /tmp/nju-info.sqlite
 ```
 
-Worker fetch and ingest commands access public NJU websites. Unit tests use local fixtures instead.
+Source-level fetch and ingest commands access public NJU websites. Unit tests use local fixtures instead.
 
 The API requires an existing current-schema SQLite database; it does not create or migrate one. It binds only to localhost by default. Stop it with SIGINT or SIGTERM; active requests finish before the reader closes. Live WAL reads require the database and SQLite sidecar files to be accessible (see [`docs/database.md`](docs/database.md)).
 
@@ -171,23 +169,15 @@ Public per-source URL patterns (for the nine IDs above):
 
 The published-source catalog lists only the sources included in the current publication, with their original NJU home pages and absolute JSON/Atom/RSS URLs. It is not the complete audited NJU source map from Issue #21 and does not invent channel/authority metadata that is not persisted. The pilot selector reads only static `sources.json` and `sets.json`. It defaults to all published sources when `sources` is absent; `?sources=id1,id2` selects known IDs only, in catalog order. Select all and Clear update the URL without reloading. Arbitrary selections download client-generated OPML (one independent RSS subscription per source) or copy per-source feed URLs; they do **not** acquire a stable combined-feed URL. Only the named `cs` set has a server-published OPML and combined JSON/Atom/RSS timeline, linked through `sets.json`. The page has no account, read state, notification settings, or collector/backend role; this is an engineering pilot, not a polished product.
 
-Static export accepts an optional `--base-url` for canonical URLs. Positional source IDs form the publication allow-list: `catalog/sources.json` and the per-source feeds contain every selected source. A named curated set is separate: `--set-id`, `--set-title`, and one or more repeatable `--set-source <source-id>` flags are required together. The explicit set members must be in the publication allow-list; its OPML and combined feeds contain only those members, and its versioned `catalog/sets.json` entry records them. With a set, OPML uses set membership; without a set, OPML uses the published selection. The original invocation without flags still works.
+Static publication is driven by the reviewed instance configuration rather than a second set of export CLI flags. The instance selects the published source allow-list, optional curated set, OPML path, and public base URL; the exporter consumes that contract directly.
 
 To collect and export the same feeds locally, run from the repository root (package scripts use their own working directories):
 
 ```bash
 ROOT="$PWD"
 mkdir -p "$ROOT/.cache/nju-info" "$ROOT/_site"
-pnpm worker -- ingest nju-cs-graduate "$ROOT/.cache/nju-info/feeds.sqlite" 10
-pnpm worker -- ingest nju-cs-internal-notices "$ROOT/.cache/nju-info/feeds.sqlite" 10
-pnpm worker -- ingest nju-cs-seminars "$ROOT/.cache/nju-info/feeds.sqlite" 10
-pnpm worker -- ingest nju-itsc-notices "$ROOT/.cache/nju-info/feeds.sqlite" 10
-pnpm worker -- ingest nju-library-news-notices "$ROOT/.cache/nju-info/feeds.sqlite" 10
-pnpm worker -- ingest nju-graduate-school-notices "$ROOT/.cache/nju-info/feeds.sqlite" 10
-pnpm worker -- ingest nju-undergraduate-notices "$ROOT/.cache/nju-info/feeds.sqlite" 5
-pnpm worker -- ingest nju-youth-league-announcements "$ROOT/.cache/nju-info/feeds.sqlite" 5
-pnpm worker -- ingest nju-student-affairs-notices "$ROOT/.cache/nju-info/feeds.sqlite" 10
-pnpm --filter @nju-info/api export-feeds -- "$ROOT/.cache/nju-info/feeds.sqlite" "$ROOT/_site" nju-cs-graduate nju-cs-internal-notices nju-cs-seminars nju-itsc-notices nju-library-news-notices nju-graduate-school-notices nju-undergraduate-notices nju-youth-league-announcements nju-student-affairs-notices --base-url https://zhongyangchuwu.github.io/nju-info-hub/ --opml subscriptions/cs.opml --set-id cs --set-title "计算机学院公开信息" --set-source nju-cs-graduate --set-source nju-cs-internal-notices --set-source nju-cs-seminars
+pnpm nju-info -- collect instances/official.json sources/nju "$ROOT/.cache/nju-info/feeds.sqlite"
+pnpm nju-info -- export instances/official.json sources/nju "$ROOT/.cache/nju-info/feeds.sqlite" "$ROOT/_site"
 ```
 The GitHub Actions SQLite cache remains a best-effort warm-start layer and may be evicted. The Pages workflow can optionally restore and persist a verified durable state snapshot through a WebDAV-backed rclone remote; runtime SQLite still stays on the local runner filesystem. Snapshot format, restore/fallback behavior, WebDAV secrets, and generic self-host rclone usage are documented in [`docs/state-storage.md`](docs/state-storage.md).
 

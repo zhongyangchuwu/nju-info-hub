@@ -1,11 +1,8 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
-import { spawnSync } from "node:child_process";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
-import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { InfoHubDatabase, InfoHubDatabaseReader } from "@nju-info/db";
 import { afterEach, expect, it, vi } from "vitest";
 import { createMcpServer } from "./server.js";
@@ -166,52 +163,4 @@ it("rejects invalid inputs before invoking the reader and sanitizes query-time f
   await client.close();
   clients.splice(clients.indexOf(client), 1);
   expect(reader.close).toHaveBeenCalledTimes(1);
-});
-
-it("launches actual stdio server with official client and reaps the child on close", async () => {
-  const { path, writer } = database();
-  writer.upsertSource(source);
-  const transport = new StdioClientTransport({
-    command: process.execPath, args: ["--import", "tsx", "apps/mcp/src/cli.ts", path],
-    cwd: join(import.meta.dirname, "../../.."), stderr: "pipe",
-  });
-  let diagnostics = "";
-  transport.stderr?.on("data", (chunk: Buffer) => { diagnostics += chunk.toString(); });
-  const client = new Client({ name: "stdio-test", version: "1.0.0" });
-  clients.push(client);
-  await client.connect(transport);
-  expect(transport.pid).not.toBeNull();
-  expect(await result(client, "list_sources")).toEqual({ sources: [
-    { id: "source-a", name: "First source", organization: source.organization,
-      url: source.url },
-  ] });
-  expect(await result(client, "list_recent_notices")).toEqual({ notices: [] });
-  expect(diagnostics).toBe("");
-  await client.close();
-  clients.splice(clients.indexOf(client), 1);
-  expect(transport.pid).toBeNull();
-});
-
-it("fails missing and obsolete database startup without creating or migrating them", () => {
-  const { path, writer } = database();
-  const cli = join(import.meta.dirname, "cli.ts");
-  const invoke = (db: string) => spawnSync(process.execPath, ["--import", "tsx", cli, db], {
-    cwd: join(import.meta.dirname, "../../.."), encoding: "utf8", timeout: 10_000,
-  });
-  const missing = `${path}-missing`;
-  const absent = invoke(missing);
-  expect(absent.status).not.toBe(0);
-  expect(absent.stdout).toBe("");
-  expect(existsSync(missing)).toBe(false);
-  writer.close();
-  writers.splice(writers.indexOf(writer), 1);
-  const sqlite = new DatabaseSync(path);
-  sqlite.exec("PRAGMA user_version = 1");
-  sqlite.close();
-  const before = readFileSync(path);
-  const obsolete = invoke(path);
-  expect(obsolete.status).not.toBe(0);
-  expect(obsolete.stderr).toContain("unsupported database schema version 1");
-  expect(obsolete.stdout).toBe("");
-  expect(readFileSync(path)).toEqual(before);
 });
