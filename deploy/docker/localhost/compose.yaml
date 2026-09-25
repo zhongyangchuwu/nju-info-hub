@@ -10,17 +10,9 @@ services:
   collect:
     image: ${NJU_INFO_IMAGE:?Set NJU_INFO_IMAGE to an immutable GHCR tag or local image}
     profiles: ["collect"]
-    command:
-      - pnpm
-      - instance
-      - --
-      - collect
-      - /config/instance.json
-      - sources/nju
-      - /data/feeds.sqlite
+    command: ["collect"]
     volumes:
       - nju-info-data:/data
-      - ../../../instances/official.json:/config/instance.json:ro
 
 volumes:
   nju-info-data:
