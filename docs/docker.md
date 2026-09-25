@@ -12,7 +12,7 @@ ghcr.io/zhongyangchuwu/nju-info-hub
 
 The container workflow publishes immutable revision tags in the form `sha-<short-sha>`. A Git tag such as `v1.2.3` also publishes the matching version tag. The workflow deliberately does not publish an implicit `latest` tag.
 
-The image uses Node 26 and the repository-pinned pnpm/tsx versions. It runs as the unprivileged `node` user.
+The image uses Node 26 and the repository-pinned pnpm/tsx versions. It runs as the unprivileged `node` user. The Dockerfile supports Linux amd64 and arm64; GHCR publishing produces both architectures under the same tag.
 
 ## Runtime model
 
@@ -89,9 +89,14 @@ The named volume `nju-info-data` remains. Removing the volume is a destructive s
 
 ## Configuration
 
-The localhost profile uses the official public instance configuration bundled in the image by default. The image contains the source registry and validates the selected instance configuration before collection.
+The localhost profile mounts an instance configuration explicitly. From this repository it defaults to `instances/official.json`. Override it without changing the Compose file:
 
-A custom configuration can later be mounted and selected with `NJU_INFO_CONFIG`; the deployment contract is the image + instance configuration + persistent data volume, not a source-code checkout.
+```bash
+NJU_INFO_CONFIG_FILE=/absolute/path/to/instance.json \
+  docker compose -f deploy/docker/localhost/compose.yaml run --rm collect
+```
+
+Inside the container the file is always exposed as `/config/instance.json`. The deployment contract is the image + instance configuration + persistent data volume, not a source-code fork.
 
 A later deployment-template milestone will make user-owned config/version pins the product onboarding path. This profile intentionally does not introduce that template yet.
 
