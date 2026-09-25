@@ -40,7 +40,7 @@ wait_healthy() {
 }
 
 start_api() {
-  docker run -d --name "$container" -v "$volume:/data:ro" "$image" >/dev/null
+  docker run -d --name "$container" -v "$volume:/data" "$image" >/dev/null
   wait_healthy
   docker rm -f "$container" >/dev/null
 }
