@@ -23,7 +23,7 @@ case "$command_name" in
     destination_path="$2"
     mkdir -p "$(dirname "$destination_path")"
     cp "$source_path" "$destination_path"
-    if [[ "${FAKE_RCLONE_CORRUPT_DOWNLOAD:-0}" == "1" && "$source_path" == *.tmp-* ]]; then
+    if [[ "\${FAKE_RCLONE_CORRUPT_DOWNLOAD:-0}" == "1" && "$source_path" == *.tmp-* ]]; then
       printf 'corrupt' >> "$destination_path"
     fi
     ;;
