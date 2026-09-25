@@ -16,12 +16,15 @@ The image uses Node 26 and the repository-pinned pnpm/tsx versions. It runs as t
 
 ## Runtime model
 
-One image exposes existing repository commands:
+One image exposes a stable `nju-info` container entrypoint:
 
-- default command: read-only HTTP API on port 3000;
-- `pnpm instance -- validate ...`: validate deployment configuration;
-- `pnpm instance -- collect ...`: collect configured public sources into local SQLite;
-- `pnpm worker -- ...`: lower-level public collector commands.
+- `serve` (default): read-only HTTP API on port 3000;
+- `validate`: validate the selected instance configuration;
+- `collect`: collect configured public sources into local SQLite;
+- `export`: generate static syndication output;
+- `worker`: access lower-level public collector commands.
+
+The container entrypoint hides the repository's pnpm/workspace layout from users.
 
 SQLite remains on the active host/container volume. The API opens an existing current-schema database read-only and does not create or migrate state.
 
@@ -76,7 +79,9 @@ The named volume `nju-info-data` remains. Removing the volume is a destructive s
 
 ## Configuration
 
-The localhost profile mounts the repository's `instances/official.json` into the one-shot collector as `/config/instance.json`. The image contains the source registry and validates the mounted instance configuration before collection.
+The localhost profile uses the official public instance configuration bundled in the image by default. The image contains the source registry and validates the selected instance configuration before collection.
+
+A custom configuration can later be mounted and selected with `NJU_INFO_CONFIG`; the deployment contract is the image + instance configuration + persistent data volume, not a source-code checkout.
 
 A later deployment-template milestone will make user-owned config/version pins the product onboarding path. This profile intentionally does not introduce that template yet.
 
