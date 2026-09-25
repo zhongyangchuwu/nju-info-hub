@@ -10,6 +10,7 @@ scheduler="nju-info-scheduler-${suffix}"
 api="nju-info-api-${suffix}"
 tmpdir="$(mktemp -d)"
 backup_dir="$tmpdir/backup"
+export_dir="$tmpdir/export"
 
 cleanup() {
   docker rm -f "$api" "$scheduler" "$fixture" >/dev/null 2>&1 || true
@@ -19,9 +20,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
-mkdir -p "$tmpdir/sources" "$tmpdir/site" "$backup_dir"
+mkdir -p "$tmpdir/sources" "$tmpdir/site" "$backup_dir" "$export_dir"
 chmod 755 "$tmpdir" "$tmpdir/sources" "$tmpdir/site"
-chmod 777 "$backup_dir"
+chmod 777 "$backup_dir" "$export_dir"
 
 cat > "$tmpdir/sources/smoke-source.yaml" <<'YAML'
 schemaVersion: 1
@@ -78,6 +79,12 @@ fi
 docker run --rm \
   -e NJU_INFO_IMAGE_REF=ghcr.io/zhongyangchuwu/nju-info-hub:sha-1234567 \
   "$image" validate >/dev/null
+
+docker run --rm --entrypoint sh "$image" -c '
+  ! command -v pnpm >/dev/null 2>&1
+  test ! -e /app/pnpm-workspace.yaml
+  test ! -e /app/node_modules/.pnpm-workspace-state-v1.json
+'
 
 docker network create "$network" >/dev/null
 docker volume create "$volume" >/dev/null
@@ -146,11 +153,27 @@ verify_database() {
     -e 'import { InfoHubDatabaseReader } from "/app/packages/db/src/index.ts"; const db=new InfoHubDatabaseReader("/data/feeds.sqlite"); const sources=db.listSources(); if(!sources.some(source=>source.id==="smoke-source")) throw new Error("smoke source missing"); db.close();'
 }
 
+verify_export() {
+  rm -rf "$export_dir"/*
+  docker run --rm \
+    -v "$volume:/data" \
+    -v "$tmpdir:/config:ro" \
+    -v "$export_dir:/output" \
+    -e NJU_INFO_CONFIG=/config/instance.json \
+    -e NJU_INFO_SOURCE_DIR=/config/sources \
+    "$image" export >/dev/null
+  test -s "$export_dir/feeds/smoke-source.json"
+  test -s "$export_dir/feeds/smoke-source.atom"
+  test -s "$export_dir/feeds/smoke-source.rss"
+  test -s "$export_dir/catalog/sources.json"
+}
+
 start_scheduler
 start_api
 wait_healthy
 verify_api
 verify_database
+verify_export
 
 docker run --rm \
   -v "$volume:/data" \

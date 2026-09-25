@@ -47,7 +47,8 @@ COPY scripts/state-snapshot.mjs /app/scripts/state-snapshot.mjs
 COPY scripts/container-entrypoint.sh /usr/local/bin/nju-info
 
 RUN chmod 755 /usr/local/bin/nju-info \
-    && chmod 644 /app/pnpm-workspace.yaml /app/node_modules/.pnpm-workspace-state-v1.json \
+    && rm -f /app/pnpm-workspace.yaml /app/pnpm-lock.yaml /app/node_modules/.pnpm-workspace-state-v1.json /usr/local/bin/pnpm \
+    && rm -rf /usr/local/lib/node_modules/@pnpm \
     && mkdir -p /data \
     && chown node:node /data
 
