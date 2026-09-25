@@ -29,6 +29,7 @@ RUN pnpm install --prod --frozen-lockfile
 
 COPY apps/api/src apps/api/src
 COPY apps/worker/src apps/worker/src
+COPY apps/mcp/src apps/mcp/src
 COPY packages/core/src packages/core/src
 COPY packages/db/src packages/db/src
 COPY packages/collector/src packages/collector/src
