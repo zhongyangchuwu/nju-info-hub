@@ -162,9 +162,9 @@ Full entries preserve original HTML/text and every ordered attachment with infer
 
 ## Static published feeds and curated CS set
 
-The `CS feed pilot` workflow runs every two hours or by manual dispatch. It collects the latest 10 items from six explicit sources into one SQLite database: `nju-cs-graduate`, `nju-cs-internal-notices`, `nju-cs-seminars`, `nju-itsc-notices`, `nju-library-news-notices`, and `nju-graduate-school-notices`. All six are included in the published catalog, selector, and per-source JSON/Atom/RSS feeds. The curated `cs` set remains exactly the three CS sources; only those members appear in its OPML and combined `bundles/cs.{json,atom,rss}` timeline. After export, the workflow stages static selector assets in `catalog/`. Readers never trigger collection. Pages is configured at https://zhongyangchuwu.github.io/nju-info-hub/; the six-source deployment was verified in [workflow run #11](https://github.com/zhongyangchuwu/nju-info-hub/actions/runs/36039458159).
+The `CS feed pilot` workflow runs every two hours or by manual dispatch. The current workflow collects nine explicit sources into one SQLite database. The existing six sources keep their current 10-full-item targets, while `nju-undergraduate-notices` and `nju-youth-league-announcements` target 5 full notices and `nju-student-affairs-notices` targets 10. All nine are exported to the published catalog, selector, and per-source JSON/Atom/RSS feeds. Official-list rows whose detail acquisition is unavailable remain visible as explicit link-only feed entries. The curated `cs` set remains exactly the three CS sources; only those members appear in its OPML and combined `bundles/cs.{json,atom,rss}` timeline. After export, the workflow stages static selector assets in `catalog/`. Readers never trigger collection. Pages is configured at https://zhongyangchuwu.github.io/nju-info-hub/; this nine-source workflow requires post-merge public acceptance before the three newly admitted sources are considered live.
 
-Public per-source URL patterns (for the six IDs above):
+Public per-source URL patterns (for the nine IDs above):
 
 - `https://zhongyangchuwu.github.io/nju-info-hub/feeds/<sourceId>.json`
 - `https://zhongyangchuwu.github.io/nju-info-hub/feeds/<sourceId>.atom`
@@ -190,7 +190,10 @@ pnpm worker -- ingest nju-cs-seminars "$ROOT/.cache/nju-info/feeds.sqlite" 10
 pnpm worker -- ingest nju-itsc-notices "$ROOT/.cache/nju-info/feeds.sqlite" 10
 pnpm worker -- ingest nju-library-news-notices "$ROOT/.cache/nju-info/feeds.sqlite" 10
 pnpm worker -- ingest nju-graduate-school-notices "$ROOT/.cache/nju-info/feeds.sqlite" 10
-pnpm --filter @nju-info/api export-feeds -- "$ROOT/.cache/nju-info/feeds.sqlite" "$ROOT/_site" nju-cs-graduate nju-cs-internal-notices nju-cs-seminars nju-itsc-notices nju-library-news-notices nju-graduate-school-notices --base-url https://zhongyangchuwu.github.io/nju-info-hub/ --opml subscriptions/cs.opml --set-id cs --set-title "计算机学院公开信息" --set-source nju-cs-graduate --set-source nju-cs-internal-notices --set-source nju-cs-seminars
+pnpm worker -- ingest nju-undergraduate-notices "$ROOT/.cache/nju-info/feeds.sqlite" 5
+pnpm worker -- ingest nju-youth-league-announcements "$ROOT/.cache/nju-info/feeds.sqlite" 5
+pnpm worker -- ingest nju-student-affairs-notices "$ROOT/.cache/nju-info/feeds.sqlite" 10
+pnpm --filter @nju-info/api export-feeds -- "$ROOT/.cache/nju-info/feeds.sqlite" "$ROOT/_site" nju-cs-graduate nju-cs-internal-notices nju-cs-seminars nju-itsc-notices nju-library-news-notices nju-graduate-school-notices nju-undergraduate-notices nju-youth-league-announcements nju-student-affairs-notices --base-url https://zhongyangchuwu.github.io/nju-info-hub/ --opml subscriptions/cs.opml --set-id cs --set-title "计算机学院公开信息" --set-source nju-cs-graduate --set-source nju-cs-internal-notices --set-source nju-cs-seminars
 ```
 The GitHub Actions SQLite cache includes the database and SQLite sidecars, but is best-effort and may be evicted. It is not durable storage: collection must be able to rebuild the database from public sources after a cache miss, and older local cache history is not guaranteed to survive.
 
@@ -202,7 +205,7 @@ Limited `fetch` and `ingest` skip unsupported public-WeChat/external candidates 
 
 ## Initial sources
 
-The public-source registry and fixtures cover several NJU WebPlus/Sudy sites, including the Undergraduate School announcements source `nju-undergraduate-notices`. That source is registered but excluded from Pages publication until Issue #39's access-restricted-item handling and limited-ingest live smoke are accepted. Youth League and Student Exchange are likewise not in the six-source publication allow-list.
+The public-source registry and fixtures cover several NJU WebPlus/Sudy sites. The current Pages workflow admits Undergraduate School announcements, Youth League announcements, and Student Affairs alongside the original six published sources. Their restricted/authenticated/public-WeChat official-list rows remain visible as link-only entries when full detail cannot be acquired. Student Exchange remains deferred for now: the latest admission smoke needed 99 candidate checks across 8 pages to obtain 5 full notices, with 94 campus-network-restricted rows, which is too expensive for the current scheduled refill algorithm.
 
 More sources should preferably be added by contributing YAML under `sources/nju/` rather than adding a new crawler.
 
