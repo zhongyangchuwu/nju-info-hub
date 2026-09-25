@@ -118,13 +118,21 @@ function publishedDateNearAnchor(
   );
 }
 
-function acquisitionKind(url: URL): DiscoveredItem["acquisitionKind"] {
+function acquisitionKind(
+  url: URL,
+  sourceUrl: string,
+  explicitlyScoped: boolean,
+): DiscoveredItem["acquisitionKind"] {
   if (looksLikeArticleUrl(url)) return "webplus-detail";
   if (
     url.hostname === "mp.weixin.qq.com" &&
     (url.pathname === "/s" || url.pathname.startsWith("/s/"))
   ) {
     return "public-wechat";
+  }
+  if (explicitlyScoped) {
+    const source = resolveHttpUrl(sourceUrl, sourceUrl);
+    if (source && url.origin === source.origin) return "webplus-detail";
   }
   return "external-public";
 }
@@ -170,7 +178,11 @@ export function discoverWebPlusPage(
         sourceId: source.id,
         sourceItemId: sourceItemIdFromUrl(url),
         url,
-        acquisitionKind: acquisitionKind(absolute),
+        acquisitionKind: acquisitionKind(
+          absolute,
+          source.url,
+          Boolean(explicitListLink || listItemSelector),
+        ),
         title,
         ...(publishedAtRaw ? { publishedAtRaw } : {}),
       });

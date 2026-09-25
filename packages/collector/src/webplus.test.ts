@@ -257,6 +257,7 @@ describe("WebPlus adapter", () => {
     const items = discoverWebPlusItems(
       raw(config.id, config.url, `
         <ul class="news_list">
+          <li class="news"><a href="/info/1065/4350.htm">Same-origin custom detail</a></li>
           <li class="news"><a href="https://outside.example/news">External public</a></li>
           <li class="news"><a href="https://mp.weixin.qq.com.evil.example/s/article">Impostor</a></li>
           <li class="news"><a href="https://mp.weixin.qq.com/s">WeChat short path</a></li>
@@ -265,6 +266,7 @@ describe("WebPlus adapter", () => {
     );
 
     expect(items.map(({ acquisitionKind }) => acquisitionKind)).toEqual([
+      "webplus-detail",
       "external-public",
       "external-public",
       "public-wechat",
