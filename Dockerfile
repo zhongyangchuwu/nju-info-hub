@@ -9,7 +9,7 @@ LABEL org.opencontainers.image.title="NJU Info Hub" \
       org.opencontainers.image.version="$VERSION" \
       org.opencontainers.image.revision="$REVISION"
 
-RUN npm install --global pnpm@12.5.1 tsx@4.23.15 \
+RUN npm install --global pnpm@12.5.1 --fetch-retries=2 --fetch-timeout=30000 \
     && npm cache clean --force
 
 WORKDIR /app
