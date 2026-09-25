@@ -9,9 +9,15 @@ export interface RawDocument {
   lastModified?: string;
 }
 
+export type AcquisitionKind =
+  | "webplus-detail"
+  | "public-wechat"
+  | "external-public";
+
 export interface DiscoveredItem {
   sourceId: string;
   url: string;
+  acquisitionKind: AcquisitionKind;
   title: string;
   publishedAtRaw?: string;
 }
