@@ -1,4 +1,5 @@
-import { spawnSync } from "node:child_process";\nimport { mkdtemp, writeFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
