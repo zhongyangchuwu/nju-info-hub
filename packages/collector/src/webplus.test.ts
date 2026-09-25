@@ -32,9 +32,6 @@ function source(
     organization: { id: `${id}-org`, name: organization },
     url,
     adapter: { type: "webplus" },
-    audience: ["graduate"],
-    categories: ["notice"],
-    enabled: true,
   };
 }
 

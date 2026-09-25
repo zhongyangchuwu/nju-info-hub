@@ -45,16 +45,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Validate official instance config
         run: pnpm instance -- validate instances/official.json sources/nju
-      - name: Read instance storage mode
-        id: instance_config
-        shell: bash
-        run: |
-          storage_mode="$(node -e 'const fs=require("node:fs"); process.stdout.write(JSON.parse(fs.readFileSync("instances/official.json","utf8")).storage.mode)')"
-          echo "storage_mode=$storage_mode" >> "$GITHUB_OUTPUT"
       - name: Prepare cache and Pages output
         run: mkdir -p "$NJU_INFO_CACHE_DIR" "$NJU_INFO_PAGES_DIR"
       - name: Configure durable WebDAV state
-        if: steps.instance_config.outputs.storage_mode == 'optional-webdav'
         id: durable_state
         env:
           WEBDAV_URL: ${{ secrets.NJU_INFO_STATE_WEBDAV_URL }}

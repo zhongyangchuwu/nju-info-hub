@@ -9,12 +9,3 @@ adapter:
   type: webplus
   selectors:
     listItem: .news_list li.news
-audience:
-  - undergraduate
-  - graduate
-categories:
-  - scholarship
-  - student-affairs
-crawl:
-  intervalMinutes: 30
-enabled: true

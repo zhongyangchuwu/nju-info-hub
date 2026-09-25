@@ -33,7 +33,6 @@ organization:
 url: http://fixture:8080/list.htm
 adapter:
   type: webplus
-enabled: true
 YAML
 
 cat > "$tmpdir/instance.json" <<'JSON'
@@ -48,8 +47,7 @@ cat > "$tmpdir/instance.json" <<'JSON'
   "collection": {
     "schedule": "0 0 1 1 *",
     "timeZone": "UTC"
-  },
-  "storage": { "mode": "cache-only" }
+  }
 }
 JSON
 

@@ -8,7 +8,6 @@ const graduate: PersistedSourceSummary = {
   name: "Graduate notices",
   organization: { id: "nju-cs", name: "School of Computer Science" },
   url: "https://cs.nju.edu.cn/1703/list.htm",
-  enabled: true,
 };
 
 const seminars: PersistedSourceSummary = {
@@ -16,7 +15,6 @@ const seminars: PersistedSourceSummary = {
   name: "Seminars",
   organization: graduate.organization,
   url: "https://cs.nju.edu.cn/1706/list.htm",
-  enabled: true,
 };
 
 function notice(

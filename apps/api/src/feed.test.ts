@@ -7,7 +7,6 @@ const source: PersistedSourceSummary = {
   name: "Graduate notices",
   organization: { id: "nju-cs", name: "School of Computer Science" },
   url: "https://cs.nju.edu.cn/graduate/list.htm",
-  enabled: true,
 };
 
 const notice: SourceEntryQueryResult = {

@@ -7,12 +7,3 @@ organization:
 url: https://tuanwei.nju.edu.cn/ggtz/list.htm
 adapter:
   type: webplus
-audience:
-  - undergraduate
-  - graduate
-categories:
-  - notice
-  - student-affairs
-crawl:
-  intervalMinutes: 30
-enabled: true

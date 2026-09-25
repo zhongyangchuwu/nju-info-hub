@@ -30,11 +30,7 @@ GitHub is the source of truth for implementation status:
 - [Issues](https://github.com/zhongyangchuwu/nju-info-hub/issues) — active/planned work;
 - [Pull requests](https://github.com/zhongyangchuwu/nju-info-hub/pulls) — implementation and review history.
 
-Planned source families include:
-
-- public NJU websites and existing RSSHub routes where useful;
-- public WeChat-account articles through replaceable adapters;
-- optional local sidecars for private QQ/WeChat groups in a later phase.
+Current collection targets public NJU WebPlus/Sudy sites. Future public acquisition providers, including public WeChat article sources, should be added only when they have a concrete consumer and tested adapter boundary. Optional local sidecars for private QQ/WeChat groups remain a later phase.
 
 The public core will not log into NJU SSO, personal QQ accounts, or personal WeChat accounts.
 
@@ -46,8 +42,6 @@ source registry (YAML)
         v
 source adapters
   - webplus
-  - rsshub       [planned]
-  - generic html [planned]
         |
         v
 official list raw + provenance

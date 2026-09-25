@@ -44,12 +44,11 @@ The official public deployment uses `instances/official.json` as the reviewed so
 - published source IDs and per-run collection limits;
 - the single curated source set and its OPML path;
 - publication base URL;
-- runtime-neutral collection cron and IANA timezone;
-- storage mode selection.
+- runtime-neutral collection cron and IANA timezone.
 
-Instance schema v2 places publication URL metadata under `publication` and recurring collection metadata under `collection`; it does not encode a deployment mode. Existing v1 files remain readable through explicit normalization: their former GitHub-oriented schedule becomes UTC collection metadata and their base URL becomes publication metadata.
+Instance schema v2 places publication URL metadata under `publication` and recurring collection metadata under `collection`; it does not encode deployment or storage transport choices. Pre-v2 instance shapes are intentionally unsupported before a stable release rather than carrying a permanent normalization layer.
 
-`@nju-info/instance-config` validates the file against the source registry before collection/export/scheduling. Unknown source IDs, duplicate publication membership, invalid or duplicate set membership, invalid cron/timezone values, and unsupported storage modes fail before collection starts. The current schema intentionally permits at most one curated set because the static exporter accepts one named set per invocation.
+`@nju-info/instance-config` validates the file against the source registry before collection/export/scheduling. Unknown source IDs, duplicate publication membership, invalid or duplicate set membership, and invalid cron/timezone values fail before collection starts. The current schema intentionally permits at most one curated set because the static exporter accepts one named set per invocation.
 
 Secrets are not instance configuration. WebDAV URL/user/password remain runtime secrets, and runtime SQLite/storage transport stays outside the collector/source registry. Runtime choice is deliberately not encoded as an instance mode; Docker/Compose is the canonical product deployment while the existing GitHub Pages workflow remains a reference publisher for the official public instance.
 

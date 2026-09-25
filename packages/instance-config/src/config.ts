@@ -47,21 +47,6 @@ const instanceIdentitySchema = z.object({
   name: z.string().min(1),
 }).strict();
 
-const storageSchema = z.object({
-  mode: z.enum(["cache-only", "optional-webdav"]),
-}).strict();
-
-const instanceConfigV1Schema = z.object({
-  schemaVersion: z.literal(1),
-  instance: instanceIdentitySchema,
-  publication: publicationSelectionSchema,
-  deployment: z.object({
-    publicBaseUrl: z.url(),
-    schedule: z.string().min(1),
-  }).strict(),
-  storage: storageSchema,
-}).strict();
-
 export const instanceConfigSchema = z.object({
   schemaVersion: z.literal(2),
   instance: instanceIdentitySchema,
@@ -69,29 +54,9 @@ export const instanceConfigSchema = z.object({
     publicBaseUrl: z.url(),
   }),
   collection: collectionSchema,
-  storage: storageSchema,
 }).strict();
 
-const instanceConfigFileSchema = z.union([instanceConfigV1Schema, instanceConfigSchema]);
-
 export type InstanceConfig = z.infer<typeof instanceConfigSchema>;
-
-function normalizeConfig(parsed: z.infer<typeof instanceConfigFileSchema>): InstanceConfig {
-  if (parsed.schemaVersion === 2) return parsed;
-  return {
-    schemaVersion: 2,
-    instance: parsed.instance,
-    publication: {
-      ...parsed.publication,
-      publicBaseUrl: parsed.deployment.publicBaseUrl,
-    },
-    collection: {
-      schedule: parsed.deployment.schedule,
-      timeZone: "UTC",
-    },
-    storage: parsed.storage,
-  };
-}
 
 function assertUnique(values: string[], label: string): void {
   const seen = new Set<string>();
@@ -106,11 +71,7 @@ export async function loadInstanceConfig(
   sourceDirectory: string,
 ): Promise<InstanceConfig> {
   const raw = JSON.parse(await readFile(configPath, "utf8"));
-  const parsed = instanceConfigFileSchema.parse(raw);
-  const config = normalizeConfig(parsed);
-
-  // v1 schedule semantics came from GitHub Actions cron and are therefore UTC.
-  collectionSchema.parse(config.collection);
+  const config = instanceConfigSchema.parse(raw);
 
   const registered = new Set((await loadSourceDirectory(sourceDirectory)).map((source) => source.id));
   const publishedIds = config.publication.sources.map((source) => source.id);
