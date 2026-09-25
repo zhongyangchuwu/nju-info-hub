@@ -184,9 +184,6 @@ importers:
       '@nju-info/db':
         specifier: workspace:*
         version: link:../../packages/db
-      tsx:
-        specifier: 4.23.15
-        version: 4.23.15
 
   apps/mcp:
     dependencies:
@@ -196,12 +193,46 @@ importers:
       '@nju-info/db':
         specifier: workspace:*
         version: link:../../packages/db
-      tsx:
-        specifier: 4.23.15
-        version: 4.23.15
       zod:
         specifier: 4.6.5
         version: 4.6.5
+    devDependencies:
+      '@modelcontextprotocol/client':
+        specifier: 2.0.0
+        version: 2.0.0
+
+  apps/nju-info:
+    dependencies:
+      '@modelcontextprotocol/server':
+        specifier: 2.0.0
+        version: 2.0.0
+      '@nju-info/api':
+        specifier: workspace:*
+        version: link:../api
+      '@nju-info/collector':
+        specifier: workspace:*
+        version: link:../../packages/collector
+      '@nju-info/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@nju-info/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@nju-info/instance-config':
+        specifier: workspace:*
+        version: link:../../packages/instance-config
+      '@nju-info/mcp':
+        specifier: workspace:*
+        version: link:../mcp
+      '@nju-info/worker':
+        specifier: workspace:*
+        version: link:../worker
+      croner:
+        specifier: 10.0.1
+        version: 10.0.1
+      tsx:
+        specifier: 4.23.15
+        version: 4.23.15
     devDependencies:
       '@modelcontextprotocol/client':
         specifier: 2.0.0
@@ -218,9 +249,6 @@ importers:
       '@nju-info/db':
         specifier: workspace:*
         version: link:../../packages/db
-      tsx:
-        specifier: 4.23.15
-        version: 4.23.15
 
   packages/collector:
     dependencies:
@@ -251,24 +279,12 @@ importers:
 
   packages/instance-config:
     dependencies:
-      '@nju-info/api':
-        specifier: workspace:*
-        version: link:../../apps/api
       '@nju-info/collector':
         specifier: workspace:*
         version: link:../collector
-      '@nju-info/db':
-        specifier: workspace:*
-        version: link:../db
-      '@nju-info/worker':
-        specifier: workspace:*
-        version: link:../../apps/worker
       croner:
         specifier: 10.0.1
         version: 10.0.1
-      tsx:
-        specifier: 4.23.15
-        version: 4.23.15
       zod:
         specifier: 4.6.5
         version: 4.6.5

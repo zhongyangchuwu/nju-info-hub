@@ -2,7 +2,7 @@
 
 ## Driver decision
 
-The persistence package uses Node.js 24's built-in `node:sqlite` `DatabaseSync` API. The schema and ingestion path need only prepared statements, transactions, foreign keys, and migrations; Drizzle would add an ORM and driver dependency without removing meaningful code at this stage. The synchronous API is acceptable because the current worker is a single-process command-line collector. A concurrent service would need a separate connection and concurrency design.
+The persistence package uses Node.js 24's built-in `node:sqlite` `DatabaseSync` API. The schema and ingestion path need only prepared statements, transactions, foreign keys, and migrations; Drizzle would add an ORM and driver dependency without removing meaningful code at this stage. The synchronous API is acceptable because the current collection runtime is single-process. A concurrent service would need a separate connection and concurrency design.
 
 `InfoHubDatabase` is the writer: it opens with foreign keys enabled, a five-second busy timeout, WAL journaling, and `synchronous = NORMAL`. Schema versioning uses SQLite's `user_version` pragma. Fresh databases use v3; existing v1 databases migrate transactionally through the `published_on` backfill and observation-table addition, while v2 databases add only the observation table. Unknown versions are rejected rather than modified implicitly. Neither migration invents observations for historical full notices.
 
@@ -81,16 +81,16 @@ For read-only delivery, use `new InfoHubDatabaseReader(path)` from `@nju-info/db
 
 `apps/api` opens this reader once at startup and serves the persisted query results without accessing registry YAML or the ingestion API. Its default loopback bind does not change SQLite's live-WAL sidecar requirements above; a reader must be able to access the live database and its sidecars. API startup fails for missing or unsupported-schema files rather than initializing them.
 
-## Worker command
+## Source command
 
 ```bash
-pnpm worker -- ingest <source-id> <database-path> [notice-limit]
+pnpm nju-info -- source ingest <source-id> <database-path> [notice-limit]
 
 # example
-pnpm worker -- ingest nju-cs-graduate /tmp/nju-info.sqlite 10
+pnpm nju-info -- source ingest nju-cs-graduate /tmp/nju-info.sqlite 10
 ```
 
-The command persists list-page raw documents, considers candidates in publication-recency order, and records an observation for each candidate immediately before detail acquisition. Unsupported `public-wechat` and `external-public` acquisitions are reported and skipped before any detail request. Recognized campus-IP restrictions and NJU unified-identity redirects are reported and skipped after the ordinary public WebPlus request, without persisting a detail raw body or notice revision; their source item and list observation remain. Later candidates are tried until the requested usable count or the bounded 100-page discovery cap is reached; ordinary parsing/fetch failures abort after that candidate's observation. In the ingest summary, `itemsDiscovered` counts unique candidates actually considered (including skipped ones), not every item visible on fetched list pages; `noticesIngested` counts usable full notices persisted. The `fetch` command writes no database state.
+The source command persists list-page raw documents, considers candidates in publication-recency order, and records an observation for each candidate immediately before detail acquisition. Unsupported `public-wechat` and `external-public` acquisitions are reported and skipped before any detail request. Recognized campus-IP restrictions and NJU unified-identity redirects are reported and skipped after the ordinary public WebPlus request, without persisting a detail raw body or notice revision; their source item and list observation remain. Later candidates are tried until the requested usable count or the bounded 100-page discovery cap is reached; ordinary parsing/fetch failures abort after that candidate's observation. In the ingest summary, `itemsDiscovered` counts unique candidates actually considered (including skipped ones), not every item visible on fetched list pages; `noticesIngested` counts usable full notices persisted. The `fetch` command writes no database state.
 
 ## Deferred
 
