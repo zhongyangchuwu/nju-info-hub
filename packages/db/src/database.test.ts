@@ -612,6 +612,32 @@ describe("InfoHubDatabase", () => {
     }
   });
 
+  it("records a return to earlier list metadata as a new current observation", () => {
+    const temporary = temporaryDatabase();
+    try {
+      const original = discoveredItem(SOURCE, "reverted-event");
+      const renamed = { ...original, title: "Temporary title" };
+      const firstRaw = listRawDocument(SOURCE, "First", "2026-09-23T10:00:00.000Z");
+      const changedRaw = listRawDocument(SOURCE, "Changed", "2026-09-23T11:00:00.000Z");
+      const revertedRaw = listRawDocument(SOURCE, "Reverted", "2026-09-23T12:00:00.000Z");
+      temporary.database.observeSourceItem(SOURCE, firstRaw, original);
+      temporary.database.observeSourceItem(SOURCE, changedRaw, renamed);
+      const reverted = temporary.database.observeSourceItem(SOURCE, revertedRaw, original);
+      expect(reverted).toMatchObject({ revisionNumber: 3, insertedRevision: true });
+      expect(temporary.database.observeSourceItem(SOURCE, revertedRaw, original))
+        .toMatchObject({ revisionNumber: 3, insertedRevision: false });
+      expect(temporary.database.listRecentSourceEntries()).toEqual([expect.objectContaining({
+        title: original.title,
+        observationRevisionNumber: 3,
+        provenance: { fetchedAt: revertedRaw.fetchedAt, contentSha256: revertedRaw.sha256 },
+      })]);
+      expect(temporary.database.stats().sourceItemObservations).toBe(3);
+    } finally {
+      temporary.database.close();
+      rmSync(temporary.directory, { recursive: true, force: true });
+    }
+  });
+
   it("rejects mismatched raw provenance and invalid list-item identity or date types", () => {
     const temporary = temporaryDatabase();
     try {
@@ -1232,6 +1258,7 @@ describe("InfoHubDatabase", () => {
             .toEqual({ count: 0 });
           expect(inspection.prepare("PRAGMA index_list(source_item_observations)").all())
             .toContainEqual(expect.objectContaining({ name: "source_item_observations_item_idx" }));
+          expect(inspection.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
         } finally {
           inspection.close();
         }

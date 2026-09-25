@@ -57,7 +57,7 @@ describe("combined source-set feeds", () => {
   const graduateLinkOnly: SourceEntryQueryResult = {
     ...notice(graduate, "grad-link/only:2026", "2026-09-24", "2026-09-24T05:00:00Z"),
     contentStatus: "link-only",
-    acquisitionKind: null,
+    acquisitionKind: "public-wechat",
     noticeRevisionNumber: null,
     observationRevisionNumber: 3,
     bodyText: "",
@@ -100,7 +100,7 @@ describe("combined source-set feeds", () => {
     expect(feed.items[0]).not.toHaveProperty("content_html");
     expect(feed.items[0]).not.toHaveProperty("attachments");
     expect(feed.items[0]?._nju).not.toHaveProperty("revision_number");
-    expect(feed.items[0]?._nju).not.toHaveProperty("acquisition_kind");
+    expect(feed.items[0]?._nju).toHaveProperty("acquisition_kind", "public-wechat");
     expect(feed.items[1]).toMatchObject({
       url: seminarNewest.url,
       attachments: [{ url: "https://cs.nju.edu.cn/a.pdf", mime_type: "application/pdf", title: "A.pdf" }],
@@ -123,6 +123,8 @@ describe("combined source-set feeds", () => {
     expect(atom).toContain('<link rel="alternate" href="https://cs.nju.edu.cn/1706/list.htm"/>');
     expect(atom).toContain('<link rel="enclosure" href="https://cs.nju.edu.cn/a.pdf" type="application/pdf" title="A.pdf"/>');
     expect(atom).toContain('<content type="text">Full text is unavailable from the public collector; open the original item.</content>');
+    expect(atom).toContain("<nju:content_status>link-only</nju:content_status>");
+    expect(atom).toContain("<nju:acquisition_kind>public-wechat</nju:acquisition_kind>");
     expect(atom).not.toContain('<content type="html">Full text is unavailable');
     const linkAtomEntry = atom.slice(atom.lastIndexOf("<entry>", atom.indexOf("grad-link%2Fonly%3A2026")),
       atom.indexOf("</entry>", atom.indexOf("grad-link%2Fonly%3A2026")) + "</entry>".length);
@@ -136,5 +138,7 @@ describe("combined source-set feeds", () => {
     expect(rss).toContain('<source url="https://cs.nju.edu.cn/1706/list.htm">School of Computer Science — Seminars</source>');
     expect(rss).not.toContain("<enclosure");
     expect(rss).toContain("Full text is unavailable from the public collector; open the original item.");
+    expect(rss).toContain("<nju:content_status>link-only</nju:content_status>");
+    expect(rss).toContain("<nju:content_sha256>" + "a".repeat(64) + "</nju:content_sha256>");
   });
 });

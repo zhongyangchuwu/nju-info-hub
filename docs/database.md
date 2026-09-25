@@ -41,7 +41,7 @@ Represents one publication identity at one source. Its stable key is `(source_id
 
 ### `source_item_observations`
 
-An append-only snapshot of a candidate actually considered by limited ingestion, linked to the official list `raw_document` that exposed it. It records title, original publication text, nullable normalized day, and acquisition kind (`webplus-detail`, `public-wechat`, or `external-public`), independently of detail success. A deterministic hash over these list fields makes reobservation idempotent; changed fields allocate the next observation revision for the same source item. This is list evidence, not an article body or a detail-acquisition attempt log. Recency lookahead pages may contain many rows that were never considered: those rows do not get observations.
+An append-only snapshot of a candidate actually considered by limited ingestion, linked to the official list `raw_document` that exposed it. It records title, original publication text, nullable normalized day, and acquisition kind (`webplus-detail`, `public-wechat`, or `external-public`), independently of detail success. A deterministic hash over these list fields makes an unchanged **current** observation idempotent; a change, including a return to earlier metadata, allocates the next observation revision for the same source item. This is list evidence, not an article body or a detail-acquisition attempt log. Recency lookahead pages may contain many rows that were never considered: those rows do not get observations.
 
 ### `notice_revisions`
 

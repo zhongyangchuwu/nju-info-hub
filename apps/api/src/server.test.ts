@@ -182,6 +182,96 @@ describe("read-only API", () => {
     });
   });
 
+  it("serves a pre-observation v2 full notice after writer migration", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "nju-info-api-legacy-"));
+    directories.push(directory);
+    const path = join(directory, "legacy.sqlite");
+    const old = new DatabaseSync(path);
+    const fetchedAt = "2026-09-23T10:00:00.000Z";
+    const body = "<p>Legacy full notice</p>";
+    const hash = createHash("sha256").update(body).digest("hex");
+    try {
+      old.exec(readFileSync(new URL("../../../packages/db/fixtures/schema-v1.sql", import.meta.url), "utf8"));
+      old.exec("ALTER TABLE notice_revisions ADD COLUMN published_on TEXT");
+      old.exec("PRAGMA user_version = 2");
+      old.prepare(`INSERT INTO sources
+        (id, name, organization_id, organization_name, homepage_url, adapter_type, config_json, enabled, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`).run(
+        source.id, source.name, source.organization.id, source.organization.name, source.url,
+        "webplus", JSON.stringify(source), fetchedAt, fetchedAt,
+      );
+      old.prepare(`INSERT INTO raw_documents
+        (source_id, final_url, fetched_at, sha256, body)
+        VALUES (?, ?, ?, ?, ?)`).run(source.id, "https://example.edu/legacy/page.htm", fetchedAt, hash, body);
+      old.prepare(`INSERT INTO source_items
+        (source_id, source_item_id, url, first_seen_at) VALUES (?, ?, ?, ?)`).run(
+        source.id, "legacy", "https://example.edu/legacy/page.htm", fetchedAt,
+      );
+      old.prepare(`INSERT INTO notice_revisions
+        (source_item_row_id, revision_number, raw_document_id, content_sha256, title,
+         published_at_raw, published_on, body_text, body_html, created_at)
+        VALUES (1, 1, 1, ?, ?, ?, ?, ?, ?, ?)`).run(
+        hash, "Legacy full title", "2026-09-23", "2026-09-23", "Legacy full notice", body, fetchedAt,
+      );
+    } finally {
+      old.close();
+    }
+    const writer = new InfoHubDatabase(path);
+    writers.push(writer);
+    const base = await serving(path);
+    expect((await response(base, "/v1/notices/recent")).body.data).toEqual([
+      expect.objectContaining({ sourceItemId: "legacy", title: "Legacy full title" }),
+    ]);
+    const json = (await response(base, "/feeds/notices-a.json")).body;
+    expect(json.items).toEqual([expect.objectContaining({
+      id: "notices-a:legacy", content_html: body,
+      _nju: expect.objectContaining({ content_status: "full", revision_number: 1 }),
+    })]);
+    expect(json.items[0]._nju).not.toHaveProperty("observation_revision_number");
+    for (const format of ["atom", "rss"]) {
+      const xml = await (await fetch(`${base}/feeds/notices-a.${format}`)).text();
+      expect(xml).toContain("Legacy full title");
+      expect(xml).toContain("notices-a:legacy");
+    }
+  });
+
+  it("upgrades an observed link to full content without replacing its feed identity", async () => {
+    const { path, writer } = database();
+    const listBody = '<li><a href="https://example.edu/upgrade/page.htm">Official listing</a></li>';
+    const listRaw = {
+      sourceId: source.id, url: source.url, fetchedAt: "2026-09-23T09:00:00.000Z",
+      contentType: "text/html", body: listBody,
+      sha256: createHash("sha256").update(listBody).digest("hex"),
+    };
+    const item = {
+      sourceId: source.id, sourceItemId: "upgrade", url: "https://example.edu/upgrade/page.htm",
+      title: "Official listing", publishedAtRaw: "2026-09-23", acquisitionKind: "webplus-detail" as const,
+    };
+    writer.observeSourceItem(source, listRaw, item);
+    const base = await serving(path);
+    const before = (await response(base, "/feeds/notices-a.json")).body.items[0];
+    expect(before).toMatchObject({ id: "notices-a:upgrade", title: item.title,
+      _nju: { content_status: "link-only", acquisition_kind: "webplus-detail" },
+    });
+    expect(before).not.toHaveProperty("content_html");
+    expect((await response(base, "/v1/notices/recent")).body.data).toEqual([]);
+
+    notice(writer, source, "upgrade", "Acquired full body", "2026-09-23");
+    const after = (await response(base, "/feeds/notices-a.json")).body.items[0];
+    expect(after).toMatchObject({ id: before.id, content_html: "<p>Acquired full body</p>",
+      _nju: { content_status: "full", revision_number: 1 },
+    });
+    writer.observeSourceItem(source, { ...listRaw, fetchedAt: "2026-09-24T09:00:00.000Z",
+      body: "new listing", sha256: createHash("sha256").update("new listing").digest("hex") },
+    { ...item, title: "Changed while detail unavailable" });
+    expect((await response(base, "/feeds/notices-a.json")).body.items[0]).toMatchObject({
+      id: before.id, title: "Acquired full body", content_html: "<p>Acquired full body</p>",
+      _nju: { content_status: "full", observation_revision_number: 2 },
+    });
+    expect((await response(base, "/v1/notices/recent")).body.data)
+      .toEqual([expect.objectContaining({ title: "Acquired full body" })]);
+  });
+
   it("serves Atom and RSS with feed query, method, and unknown-source parity", async () => {
     const { path, writer } = database();
     notice(writer, source, "item-a", "new", "2026-09-23", [

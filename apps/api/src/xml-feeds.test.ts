@@ -72,7 +72,7 @@ const linkOnly: SourceEntryQueryResult = {
   sourceItemId: "news/124:4",
   title: "Link-only notice",
   contentStatus: "link-only",
-  acquisitionKind: null,
+  acquisitionKind: "public-wechat",
   noticeRevisionNumber: null,
   observationRevisionNumber: 3,
   bodyText: "",
@@ -135,6 +135,13 @@ describe("standard XML feeds", () => {
       entry.children.some((child) => child.name === "id" && child.text === "nju-cs-graduate:news%2F124%3A4"))!;
     expect(atomEntry.children.find((child) => child.name === "content")?.text)
       .toBe("Full text is unavailable from the public collector; open the original item.");
+    expect(atomEntry.children.filter((child) => child.name.startsWith("nju:"))
+      .map((child) => [child.name, child.text])).toEqual([
+      ["nju:content_status", "link-only"],
+      ["nju:acquisition_kind", "public-wechat"],
+      ["nju:fetched_at", linkOnly.provenance.fetchedAt],
+      ["nju:content_sha256", linkOnly.provenance.contentSha256],
+    ]);
     const atomEntryXml = atomXml.slice(atomXml.lastIndexOf("<entry>", atomXml.indexOf("news%2F124%3A4")),
       atomXml.indexOf("</entry>", atomXml.indexOf("news%2F124%3A4")) + "</entry>".length);
     expect(atomEntryXml).toContain('<content type="text">Full text is unavailable from the public collector; open the original item.</content>');
@@ -148,6 +155,13 @@ describe("standard XML feeds", () => {
       entry.children.some((child) => child.name === "guid" && child.text === "nju-cs-graduate:news%2F124%3A4"))!;
     expect(item.children.find((child) => child.name === "description")?.text)
       .toBe("Full text is unavailable from the public collector; open the original item.");
+    expect(item.children.filter((child) => child.name.startsWith("nju:"))
+      .map((child) => [child.name, child.text])).toEqual([
+      ["nju:content_status", "link-only"],
+      ["nju:acquisition_kind", "public-wechat"],
+      ["nju:fetched_at", linkOnly.provenance.fetchedAt],
+      ["nju:content_sha256", linkOnly.provenance.contentSha256],
+    ]);
     const rssItemXml = rssXml.slice(rssXml.lastIndexOf("<item>", rssXml.indexOf("news%2F124%3A4")),
       rssXml.indexOf("</item>", rssXml.indexOf("news%2F124%3A4")) + "</item>".length);
     expect(rssItemXml).not.toContain("Attachments:");

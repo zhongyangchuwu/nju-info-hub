@@ -1,5 +1,5 @@
 import type { PersistedSourceSummary, SourceEntryQueryResult } from "@nju-info/db";
-import { feedTitle, syndicationFeed, xmlEscape, type SyndicationContext, type SyndicationEntry } from "./syndication.js";
+import { feedMetadataNamespace, feedTitle, linkOnlyXmlMetadata, syndicationFeed, xmlEscape, type SyndicationContext, type SyndicationEntry } from "./syndication.js";
 import type { ResolvedSourceSet } from "./source-set.js";
 
 const xmlDeclaration = '<?xml version="1.0" encoding="UTF-8"?>';
@@ -114,7 +114,7 @@ export function buildAtomBundle(
   const feedId = context.selfUrl ?? "urn:nju-info-hub:bundle:" + set.id;
   const lines = [
     xmlDeclaration,
-    '<feed xmlns="http://www.w3.org/2005/Atom">',
+    `<feed xmlns="http://www.w3.org/2005/Atom"${entries.some((entry) => entry.contentStatus === "link-only") ? ` xmlns:nju="${feedMetadataNamespace}"` : ""}>`,
     "  <id>" + xmlEscape(feedId) + "</id>",
     "  <title>" + xmlEscape(set.title) + "</title>",
     ...(context.selfUrl ? ['  <link rel="self" type="application/atom+xml" href="' + xmlEscape(context.selfUrl) + '"/>'] : []),
@@ -129,6 +129,7 @@ export function buildAtomBundle(
       ...(entry.bodyHtml
         ? ['    <content type="html">' + xmlEscape(entry.bodyHtml) + "</content>"]
         : ['    <content type="text">' + xmlEscape(entry.bodyText) + "</content>"]),
+      ...linkOnlyXmlMetadata(entry, "    "),
       "    <source>",
       "      <id>" + xmlEscape(entry.sourceUrl) + "</id>",
       "      <title>" + xmlEscape(entry.sourceTitle) + "</title>",
@@ -162,7 +163,7 @@ export function buildRssBundle(
   const channelLink = context.selfUrl ?? "urn:nju-info-hub:bundle:" + set.id;
   const lines = [
     xmlDeclaration,
-    '<rss version="2.0">',
+    `<rss version="2.0"${entries.some((entry) => entry.contentStatus === "link-only") ? ` xmlns:nju="${feedMetadataNamespace}"` : ""}>`,
     "  <channel>",
     "    <title>" + xmlEscape(set.title) + "</title>",
     "    <link>" + xmlEscape(channelLink) + "</link>",
@@ -176,6 +177,7 @@ export function buildRssBundle(
       ...(entry.publishedAt ? ["      <pubDate>" + new Date(entry.publishedAt).toUTCString() + "</pubDate>"] : []),
       '      <source url="' + xmlEscape(entry.sourceUrl) + '">' + xmlEscape(entry.sourceTitle) + "</source>",
       "      <description>" + xmlEscape(rssDescription(entry)) + "</description>",
+      ...linkOnlyXmlMetadata(entry, "      "),
       "    </item>",
     ]),
     "  </channel>",

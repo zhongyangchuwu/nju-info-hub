@@ -1,5 +1,5 @@
 import type { PersistedSourceSummary, SourceEntryQueryResult } from "@nju-info/db";
-import { syndicationFeed, xmlEscape, type SyndicationContext, type SyndicationEntry } from "./syndication.js";
+import { feedMetadataNamespace, linkOnlyXmlMetadata, syndicationFeed, xmlEscape, type SyndicationContext, type SyndicationEntry } from "./syndication.js";
 
 const xmlDeclaration = '<?xml version="1.0" encoding="UTF-8"?>';
 
@@ -8,7 +8,7 @@ export function buildAtomFeed(source: PersistedSourceSummary, sourceEntries: Sou
   const feed = syndicationFeed(source, sourceEntries, context.generatedAt);
   const lines = [
     xmlDeclaration,
-    '<feed xmlns="http://www.w3.org/2005/Atom">',
+    `<feed xmlns="http://www.w3.org/2005/Atom"${feed.entries.some((entry) => entry.contentStatus === "link-only") ? ` xmlns:nju="${feedMetadataNamespace}"` : ""}>`,
     `  <id>${xmlEscape(source.url)}</id>`,
     `  <title>${xmlEscape(feed.title)}</title>`,
     `  <link rel="alternate" href="${xmlEscape(source.url)}"/>`,
@@ -24,6 +24,7 @@ export function buildAtomFeed(source: PersistedSourceSummary, sourceEntries: Sou
       ...(entry.bodyHtml ? [
         `    <content type="html">${xmlEscape(entry.bodyHtml)}</content>`,
       ] : [`    <content type="text">${xmlEscape(entry.bodyText)}</content>`]),
+      ...linkOnlyXmlMetadata(entry, "    "),
       ...entry.attachments.map((attachment) =>
         `    <link rel="enclosure" href="${xmlEscape(attachment.url)}" type="${xmlEscape(attachment.mimeType)}" title="${xmlEscape(attachment.title)}"/>`),
       '  </entry>',
@@ -46,7 +47,7 @@ export function buildRssFeed(source: PersistedSourceSummary, sourceEntries: Sour
   const feed = syndicationFeed(source, sourceEntries, context.generatedAt);
   const lines = [
     xmlDeclaration,
-    '<rss version="2.0">',
+    `<rss version="2.0"${feed.entries.some((entry) => entry.contentStatus === "link-only") ? ` xmlns:nju="${feedMetadataNamespace}"` : ""}>`,
     '  <channel>',
     `    <title>${xmlEscape(feed.title)}</title>`,
     `    <link>${xmlEscape(source.url)}</link>`,
@@ -59,6 +60,7 @@ export function buildRssFeed(source: PersistedSourceSummary, sourceEntries: Sour
       `      <link>${xmlEscape(entry.url)}</link>`,
       ...(entry.publishedAt ? [`      <pubDate>${new Date(entry.publishedAt).toUTCString()}</pubDate>`] : []),
       `      <description>${xmlEscape(rssDescription(entry))}</description>`,
+      ...linkOnlyXmlMetadata(entry, "      "),
       '    </item>',
     ]),
     '  </channel>',

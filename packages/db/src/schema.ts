@@ -86,8 +86,7 @@ CREATE TABLE source_item_observations (
     acquisition_kind IN ('webplus-detail', 'public-wechat', 'external-public')
   ),
   created_at TEXT NOT NULL,
-  UNIQUE (source_item_row_id, revision_number),
-  UNIQUE (source_item_row_id, content_sha256)
+  UNIQUE (source_item_row_id, revision_number)
 ) STRICT;
 
 CREATE INDEX source_item_observations_item_idx

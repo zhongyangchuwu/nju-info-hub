@@ -256,13 +256,14 @@ export class InfoHubDatabase implements Disposable {
       const contentSha256 = observationContentSha256(item);
       const existingRevision = this.#database
         .prepare(
-          `SELECT id, revision_number
+          `SELECT id, revision_number, content_sha256
              FROM source_item_observations
-            WHERE source_item_row_id = ? AND content_sha256 = ?`,
+            WHERE source_item_row_id = ?
+            ORDER BY revision_number DESC LIMIT 1`,
         )
-        .get(sourceItemRowId, contentSha256) as ObservationRevisionRow | undefined;
+        .get(sourceItemRowId) as (ObservationRevisionRow & { content_sha256: string }) | undefined;
 
-      if (existingRevision) {
+      if (existingRevision?.content_sha256 === contentSha256) {
         return {
           rawDocumentId: persistedRaw.id,
           sourceItemRowId,

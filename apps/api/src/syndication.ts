@@ -1,6 +1,18 @@
 import type { PersistedSourceSummary, SourceEntryQueryResult } from "@nju-info/db";
 
 const linkOnlyContentText = "Full text is unavailable from the public collector; open the original item.";
+/** XML extension is emitted only when a feed contains link-only entries. */
+export const feedMetadataNamespace = "https://zhongyangchuwu.github.io/nju-info-hub/ns/feed";
+
+export function linkOnlyXmlMetadata(entry: SyndicationEntry, indent: string): string[] {
+  if (entry.contentStatus !== "link-only") return [];
+  return [
+    `${indent}<nju:content_status>link-only</nju:content_status>`,
+    ...(entry.acquisitionKind ? [`${indent}<nju:acquisition_kind>${xmlEscape(entry.acquisitionKind)}</nju:acquisition_kind>`] : []),
+    `${indent}<nju:fetched_at>${xmlEscape(entry.fetchedAt)}</nju:fetched_at>`,
+    `${indent}<nju:content_sha256>${xmlEscape(entry.contentSha256)}</nju:content_sha256>`,
+  ];
+}
 const mimeTypes: Record<string, string> = {
   pdf: "application/pdf",
   doc: "application/msword",
