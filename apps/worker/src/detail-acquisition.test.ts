@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { fetchRawDocument } from "@nju-info/collector";
-import type { DiscoveredItem, RawDocument } from "@nju-info/core";
+import { sourceItemIdFromUrl, type DiscoveredItem, type RawDocument } from "@nju-info/core";
 import { UnsupportedDetailAcquisitionError, fetchWebPlusDetail } from "./detail-acquisition.js";
 
 vi.mock("@nju-info/collector", () => ({ fetchRawDocument: vi.fn() }));
@@ -9,7 +9,7 @@ const fetchDetail = vi.mocked(fetchRawDocument);
 const sourceId = "nju-student-affairs-notices";
 
 function item(url: string, acquisitionKind: DiscoveredItem["acquisitionKind"]): DiscoveredItem {
-  return { sourceId, url, acquisitionKind, title: "Official list item" };
+  return { sourceId, sourceItemId: sourceItemIdFromUrl(url), url, acquisitionKind, title: "Official list item" };
 }
 
 describe("worker detail acquisition", () => {

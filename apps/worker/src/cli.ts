@@ -64,7 +64,7 @@ interface DiscoverPagesOptions {
   maxPages: number;
   recentLimit?: number;
   onPage?: (rawDocument: RawDocument) => void;
-  onCandidate?: (item: DiscoveredItem) => Promise<boolean>;
+  onCandidate?: (item: DiscoveredItem, listRaw: RawDocument) => Promise<boolean>;
 }
 
 async function discoverPages(
@@ -75,6 +75,7 @@ async function discoverPages(
   items: DiscoveredItem[];
   candidatesConsidered: number;
 }> {
+  const firstListRawByUrl = new Map<string, RawDocument>();
   const items = new Map<string, DiscoveredItem>();
   const seenPages = new Set<string>();
   let pageUrl: string | undefined = source.url;
@@ -90,7 +91,9 @@ async function discoverPages(
     ])) {
       if (attempted.has(item.url)) continue;
       attempted.add(item.url);
-      if (await options.onCandidate(item)) usableCount += 1;
+      const listRaw = firstListRawByUrl.get(item.url);
+      if (!listRaw) throw new Error(`missing list-page provenance for ${item.url}`);
+      if (await options.onCandidate(item, listRaw)) usableCount += 1;
       if (usableCount === options.recentLimit) return true;
     }
     return false;
@@ -105,7 +108,10 @@ async function discoverPages(
     const raw = await fetchRawDocument(source.id, pageUrl);
     options.onPage?.(raw);
     const page = discoverWebPlusPage(raw, source);
-    for (const item of page.items) items.set(item.url, item);
+    for (const item of page.items) {
+      if (!items.has(item.url)) firstListRawByUrl.set(item.url, raw);
+      items.set(item.url, item);
+    }
     pagesVisited += 1;
     pageUrl = page.nextPageUrl;
 
@@ -144,6 +150,7 @@ async function collectNotices(
   limit: number,
   onPage?: (raw: RawDocument) => void,
   onNotice?: (raw: RawDocument, notice: ParsedNotice) => void,
+  onCandidate?: (item: DiscoveredItem, listRaw: RawDocument) => void,
 ): Promise<{
   pagesVisited: number;
   itemsDiscovered: number;
@@ -154,7 +161,8 @@ async function collectNotices(
     maxPages: 100,
     recentLimit: limit,
     ...(onPage ? { onPage } : {}),
-    onCandidate: async (item) => {
+    onCandidate: async (item, listRaw) => {
+      onCandidate?.(item, listRaw);
       try {
         const detailRaw = await fetchWebPlusDetail(item);
         const notice = parseWebPlusNotice(detailRaw, source, item);
@@ -201,6 +209,7 @@ async function ingestSource(
         if (result.insertedRevision) insertedRevisions += 1;
         else unchangedRevisions += 1;
       },
+      (item, listRaw) => database.observeSourceItem(source, listRaw, item),
     );
 
     return {

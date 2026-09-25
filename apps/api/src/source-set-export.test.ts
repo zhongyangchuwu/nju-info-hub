@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
-import type { NoticeQueryResult, PersistedSourceSummary } from "@nju-info/db";
+import { describe, expect, it, vi } from "vitest";
+import type { SourceEntryQueryResult, PersistedSourceSummary } from "@nju-info/db";
 import { exportFeeds, type FeedExportReader } from "./export-feeds.js";
 
 const sources: PersistedSourceSummary[] = [
@@ -43,13 +43,16 @@ const sources: PersistedSourceSummary[] = [
   },
 ];
 
-function currentNotice(source: PersistedSourceSummary, day: string): NoticeQueryResult {
+function currentNotice(source: PersistedSourceSummary, day: string): SourceEntryQueryResult {
   return {
     sourceId: source.id,
     sourceItemId: source.id + "-item",
     sourceName: source.name,
     organization: source.organization,
-    revisionNumber: 1,
+    noticeRevisionNumber: 1,
+    observationRevisionNumber: 1,
+    contentStatus: "full",
+    acquisitionKind: "webplus-detail",
     url: source.url.replace("list.htm", "item/page.htm"),
     title: source.name + " item",
     publishedAtRaw: day,
@@ -63,16 +66,15 @@ function currentNotice(source: PersistedSourceSummary, day: string): NoticeQuery
 
 describe("source catalog and source-set export", () => {
   it("derives catalog, OPML, and combined feeds from exactly the selected published sources", async () => {
-    const notices = new Map<string, NoticeQueryResult[]>();
+    const entriesBySource = new Map<string, SourceEntryQueryResult[]>();
     sources.forEach((source, index) => {
-      notices.set(source.id, [currentNotice(source, `2026-09-${String(23 - index).padStart(2, "0")}`)]);
+      entriesBySource.set(source.id, [currentNotice(source, `2026-09-${String(23 - index).padStart(2, "0")}`)]);
     });
+    const listRecentSourceEntries = vi.fn((options: { sourceId?: string } = {}) =>
+      options.sourceId === undefined ? [] : (entriesBySource.get(options.sourceId) ?? []));
     const reader: FeedExportReader = {
       listSources: () => sources,
-      listRecentNotices: (options = {}) => {
-        const sourceId = options.sourceId;
-        return sourceId === undefined ? [] : (notices.get(sourceId) ?? []);
-      },
+      listRecentSourceEntries,
     };
     const directory = mkdtempSync(join(tmpdir(), "nju-info-source-set-"));
     try {
@@ -88,6 +90,10 @@ describe("source catalog and source-set export", () => {
           sourceIds: [sources[2]!.id, sources[1]!.id, sources[0]!.id],
         },
       });
+      expect(listRecentSourceEntries).toHaveBeenCalledTimes(sources.length);
+      for (const source of sources) {
+        expect(listRecentSourceEntries).toHaveBeenCalledWith({ sourceId: source.id, limit: 100 });
+      }
 
       const catalog = JSON.parse(readFileSync(join(directory, "catalog/sources.json"), "utf8"));
       expect(catalog.sources.map((source: { id: string }) => source.id))
@@ -153,7 +159,7 @@ describe("source catalog and source-set export", () => {
   it("requires a public base URL for source-set export before writing bundle output", async () => {
     const reader: FeedExportReader = {
       listSources: () => sources,
-      listRecentNotices: () => [],
+      listRecentSourceEntries: () => [],
     };
     const directory = mkdtempSync(join(tmpdir(), "nju-info-source-set-"));
     try {
@@ -167,7 +173,7 @@ describe("source catalog and source-set export", () => {
   });
 
   it("publishes a default set OPML path and removes stale set catalog entries", async () => {
-    const reader: FeedExportReader = { listSources: () => sources, listRecentNotices: () => [] };
+    const reader: FeedExportReader = { listSources: () => sources, listRecentSourceEntries: () => [] };
     const directory = mkdtempSync(join(tmpdir(), "nju-info-source-set-"));
     try {
       const options = {
@@ -191,7 +197,7 @@ describe("source catalog and source-set export", () => {
   });
 
   it("rejects invalid source-set membership and IDs before replacing published output", async () => {
-    const reader: FeedExportReader = { listSources: () => sources, listRecentNotices: () => [] };
+    const reader: FeedExportReader = { listSources: () => sources, listRecentSourceEntries: () => [] };
     const invalidCases = [
       [{ id: "cs", title: "CS", sourceIds: ["unpublished-source"] }, "unpublished source ID"],
       [{ id: "cs", title: "CS", sourceIds: [sources[0]!.id, sources[0]!.id] }, "duplicate source ID"],
@@ -229,7 +235,7 @@ describe("source catalog and source-set export", () => {
   });
 
   it("rejects invalid set OPML paths before replacing published output", async () => {
-    const reader: FeedExportReader = { listSources: () => sources, listRecentNotices: () => [] };
+    const reader: FeedExportReader = { listSources: () => sources, listRecentSourceEntries: () => [] };
     const directory = mkdtempSync(join(tmpdir(), "nju-info-source-set-"));
     const previousCatalog = "previous catalog";
     const previousFeed = "previous feed";

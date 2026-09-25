@@ -135,6 +135,7 @@ describe("WebPlus adapter", () => {
     const items = [
       {
         sourceId: "test",
+        sourceItemId: "6ea736f94d6f826876eea7dd",
         url: "https://example.edu/old",
         acquisitionKind: "webplus-detail" as const,
         title: "old",
@@ -142,12 +143,14 @@ describe("WebPlus adapter", () => {
       },
       {
         sourceId: "test",
+        sourceItemId: "b96fa87947fd01be7c6e5983",
         url: "https://example.edu/missing",
         acquisitionKind: "webplus-detail" as const,
         title: "missing",
       },
       {
         sourceId: "test",
+        sourceItemId: "ccbdae6d5063a50e63c4e68a",
         url: "https://example.edu/new",
         acquisitionKind: "webplus-detail" as const,
         title: "new",
@@ -155,6 +158,7 @@ describe("WebPlus adapter", () => {
       },
       {
         sourceId: "test",
+        sourceItemId: "283a17ccc2273243f248d0b4",
         url: "https://example.edu/invalid",
         acquisitionKind: "webplus-detail" as const,
         title: "invalid",
@@ -205,6 +209,7 @@ describe("WebPlus adapter", () => {
     expect(items).toEqual([
       {
         sourceId: config.id,
+        sourceItemId: "3a146e473126e78d445b4a61",
         url: "https://xgb.nju.edu.cn/e2/b3/c62106a844467/page.htm",
         title: "关于开展2026年度南京大学研究生奖学金评选工作的通知",
         publishedAtRaw: "2026-09-20",
@@ -212,6 +217,7 @@ describe("WebPlus adapter", () => {
       },
       {
         sourceId: config.id,
+        sourceItemId: "c7ab0f32a602f827efad2024",
         url: "https://grawww.nju.edu.cn/d8/32/c905a841778/page.htm",
         title: "南京大学2026级研究生新生入学报到日程安排",
         publishedAtRaw: "2026-08-28",
@@ -219,6 +225,7 @@ describe("WebPlus adapter", () => {
       },
       {
         sourceId: config.id,
+        sourceItemId: "80b6b99cbb580b12fb8a1f94",
         url: "https://mp.weixin.qq.com/s/thJbuquZGdmdHDoeIe-fOg",
         title: "@NJUer！“白海豚”来了，这份防台指南请收好",
         publishedAtRaw: "2026-08-08",
@@ -312,6 +319,7 @@ describe("WebPlus adapter", () => {
     const config = source("nju-test-notices", "Test", "https://example.edu/list.htm");
     const discovered = {
       sourceId: config.id,
+      sourceItemId: "f3521068de7e7718c1245bc0",
       url: "https://example.edu/a/page.htm",
       acquisitionKind: "webplus-detail" as const,
       title: "Known notice",

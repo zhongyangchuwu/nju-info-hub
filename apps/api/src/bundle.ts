@@ -1,12 +1,12 @@
-import type { NoticeQueryResult, PersistedSourceSummary } from "@nju-info/db";
-import { feedTitle, syndicationFeed, xmlEscape, type SyndicationContext, type SyndicationEntry } from "./syndication.js";
+import type { PersistedSourceSummary, SourceEntryQueryResult } from "@nju-info/db";
+import { feedMetadataNamespace, feedTitle, linkOnlyXmlMetadata, syndicationFeed, xmlEscape, type SyndicationContext, type SyndicationEntry } from "./syndication.js";
 import type { ResolvedSourceSet } from "./source-set.js";
 
 const xmlDeclaration = '<?xml version="1.0" encoding="UTF-8"?>';
 
 export interface BundlePart {
   source: PersistedSourceSummary;
-  notices: NoticeQueryResult[];
+  entries: SourceEntryQueryResult[];
 }
 
 interface BundleEntry extends SyndicationEntry {
@@ -31,8 +31,8 @@ function orderEntries(entries: BundleEntry[]): BundleEntry[] {
 }
 
 function bundleEntries(parts: readonly BundlePart[]): BundleEntry[] {
-  const entries = parts.flatMap(({ source, notices }) =>
-    syndicationFeed(source, notices).entries.map((entry) => ({
+  const entries = parts.flatMap(({ source, entries }) =>
+    syndicationFeed(source, entries).entries.map((entry) => ({
       ...entry,
       sourceUrl: source.url,
       sourceTitle: feedTitle(source),
@@ -71,7 +71,12 @@ function jsonItem(entry: BundleEntry) {
         published_on: entry.publishedOn,
         date_precision: "day",
       }),
-      revision_number: entry.revisionNumber,
+      content_status: entry.contentStatus,
+      ...(entry.acquisitionKind == null ? {} : { acquisition_kind: entry.acquisitionKind }),
+      ...(entry.observationRevisionNumber === undefined ? {} : {
+        observation_revision_number: entry.observationRevisionNumber,
+      }),
+      ...(entry.revisionNumber === undefined ? {} : { revision_number: entry.revisionNumber }),
       fetched_at: entry.fetchedAt,
       content_sha256: entry.contentSha256,
     },
@@ -109,7 +114,7 @@ export function buildAtomBundle(
   const feedId = context.selfUrl ?? "urn:nju-info-hub:bundle:" + set.id;
   const lines = [
     xmlDeclaration,
-    '<feed xmlns="http://www.w3.org/2005/Atom">',
+    `<feed xmlns="http://www.w3.org/2005/Atom"${entries.some((entry) => entry.contentStatus === "link-only") ? ` xmlns:nju="${feedMetadataNamespace}"` : ""}>`,
     "  <id>" + xmlEscape(feedId) + "</id>",
     "  <title>" + xmlEscape(set.title) + "</title>",
     ...(context.selfUrl ? ['  <link rel="self" type="application/atom+xml" href="' + xmlEscape(context.selfUrl) + '"/>'] : []),
@@ -124,6 +129,7 @@ export function buildAtomBundle(
       ...(entry.bodyHtml
         ? ['    <content type="html">' + xmlEscape(entry.bodyHtml) + "</content>"]
         : ['    <content type="text">' + xmlEscape(entry.bodyText) + "</content>"]),
+      ...linkOnlyXmlMetadata(entry, "    "),
       "    <source>",
       "      <id>" + xmlEscape(entry.sourceUrl) + "</id>",
       "      <title>" + xmlEscape(entry.sourceTitle) + "</title>",
@@ -157,7 +163,7 @@ export function buildRssBundle(
   const channelLink = context.selfUrl ?? "urn:nju-info-hub:bundle:" + set.id;
   const lines = [
     xmlDeclaration,
-    '<rss version="2.0">',
+    `<rss version="2.0"${entries.some((entry) => entry.contentStatus === "link-only") ? ` xmlns:nju="${feedMetadataNamespace}"` : ""}>`,
     "  <channel>",
     "    <title>" + xmlEscape(set.title) + "</title>",
     "    <link>" + xmlEscape(channelLink) + "</link>",
@@ -171,6 +177,7 @@ export function buildRssBundle(
       ...(entry.publishedAt ? ["      <pubDate>" + new Date(entry.publishedAt).toUTCString() + "</pubDate>"] : []),
       '      <source url="' + xmlEscape(entry.sourceUrl) + '">' + xmlEscape(entry.sourceTitle) + "</source>",
       "      <description>" + xmlEscape(rssDescription(entry)) + "</description>",
+      ...linkOnlyXmlMetadata(entry, "      "),
       "    </item>",
     ]),
     "  </channel>",

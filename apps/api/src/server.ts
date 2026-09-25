@@ -12,7 +12,7 @@ const paths: Record<string, true> = {
 };
 
 type Reader = Pick<InfoHubDatabaseReader,
-  "listSources" | "listOrganizations" | "listRecentNotices">;
+  "listSources" | "listOrganizations" | "listRecentNotices" | "listRecentSourceEntries">;
 
 function json(response: ServerResponse, status: number, body: unknown, allow?: string,
   contentType = "application/json; charset=utf-8"): void {
@@ -83,12 +83,12 @@ export function createApiServer(reader: Reader): Server {
           error(response, 404, "not_found", "Not found");
           return;
         }
-        const notices = reader.listRecentNotices({ sourceId: feedSourceId, limit: 100 });
+        const sourceEntries = reader.listRecentSourceEntries({ sourceId: feedSourceId, limit: 100 });
         if (feedMatch?.[2] === "json") {
-          json(response, 200, buildJsonFeed(source, notices), undefined, "application/feed+json; charset=utf-8");
+          json(response, 200, buildJsonFeed(source, sourceEntries), undefined, "application/feed+json; charset=utf-8");
         } else {
           const atom = feedMatch?.[2] === "atom";
-          const document = atom ? buildAtomFeed(source, notices) : buildRssFeed(source, notices);
+          const document = atom ? buildAtomFeed(source, sourceEntries) : buildRssFeed(source, sourceEntries);
           response.writeHead(200, { "Content-Type": atom
             ? "application/atom+xml; charset=utf-8" : "application/rss+xml; charset=utf-8" });
           response.end(document);

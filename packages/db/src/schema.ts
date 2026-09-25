@@ -1,7 +1,7 @@
 import { normalizePublicationDate } from "@nju-info/core";
 import type { DatabaseSync } from "node:sqlite";
 
-export const DATABASE_SCHEMA_VERSION = 2;
+export const DATABASE_SCHEMA_VERSION = 3;
 
 const INITIAL_SCHEMA = `
 CREATE TABLE sources (
@@ -72,12 +72,33 @@ CREATE TABLE attachments (
 ) STRICT;
 `;
 
+const SOURCE_ITEM_OBSERVATIONS_SCHEMA = `
+CREATE TABLE source_item_observations (
+  id INTEGER PRIMARY KEY,
+  source_item_row_id INTEGER NOT NULL REFERENCES source_items(id),
+  revision_number INTEGER NOT NULL CHECK (revision_number > 0),
+  raw_document_id INTEGER NOT NULL REFERENCES raw_documents(id),
+  content_sha256 TEXT NOT NULL CHECK (length(content_sha256) = 64),
+  title TEXT NOT NULL,
+  published_at_raw TEXT,
+  published_on TEXT,
+  acquisition_kind TEXT NOT NULL CHECK (
+    acquisition_kind IN ('webplus-detail', 'public-wechat', 'external-public')
+  ),
+  created_at TEXT NOT NULL,
+  UNIQUE (source_item_row_id, revision_number)
+) STRICT;
+
+CREATE INDEX source_item_observations_item_idx
+  ON source_item_observations (source_item_row_id, revision_number DESC);
+`;
+
 export function migrateDatabase(database: DatabaseSync): void {
   const row = database.prepare("PRAGMA user_version").get();
   const currentVersion = Number(row?.user_version ?? 0);
 
   if (currentVersion === DATABASE_SCHEMA_VERSION) return;
-  if (currentVersion !== 0 && currentVersion !== 1) {
+  if (![0, 1, 2].includes(currentVersion)) {
     throw new Error(
       `unsupported database schema version ${currentVersion}; expected ${DATABASE_SCHEMA_VERSION}`,
     );
@@ -87,7 +108,7 @@ export function migrateDatabase(database: DatabaseSync): void {
   try {
     if (currentVersion === 0) {
       database.exec(INITIAL_SCHEMA);
-    } else {
+    } else if (currentVersion === 1) {
       database.exec("ALTER TABLE notice_revisions ADD COLUMN published_on TEXT");
       const rows = database
         .prepare("SELECT id, published_at_raw FROM notice_revisions")
@@ -100,6 +121,7 @@ export function migrateDatabase(database: DatabaseSync): void {
         if (publishedOn !== null) update.run(publishedOn, row.id);
       }
     }
+    database.exec(SOURCE_ITEM_OBSERVATIONS_SCHEMA);
     database.exec(`PRAGMA user_version = ${DATABASE_SCHEMA_VERSION}`);
     database.exec("COMMIT");
   } catch (error) {

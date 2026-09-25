@@ -6,6 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { normalizePublicationDate } from "@nju-info/core";
 import type {
+  DiscoveredItem,
   ParsedNotice,
   RawDocument,
   WebPlusSourceConfig,
@@ -38,6 +39,34 @@ function rawDocument(body: string, fetchedAt: string): RawDocument {
     sha256: createHash("sha256").update(body).digest("hex"),
     etag: '"notice-1"',
     lastModified: "Wed, 23 Sep 2026 10:00:00 GMT",
+  };
+}
+
+function listRawDocument(
+  source: WebPlusSourceConfig,
+  body: string,
+  fetchedAt: string,
+): RawDocument {
+  return {
+    ...rawDocument(body, fetchedAt),
+    sourceId: source.id,
+    url: source.url,
+  };
+}
+
+function discoveredItem(
+  source: WebPlusSourceConfig,
+  sourceItemId: string,
+  overrides: Partial<DiscoveredItem> = {},
+): DiscoveredItem {
+  return {
+    sourceId: source.id,
+    sourceItemId,
+    url: `https://example.edu/notices/${sourceItemId}.htm`,
+    acquisitionKind: "webplus-detail",
+    title: "Official list title",
+    publishedAtRaw: "2026-09-23",
+    ...overrides,
   };
 }
 
@@ -136,6 +165,7 @@ describe("InfoHubDatabase", () => {
       expect(temporary.database.stats()).toEqual({
         sources: 1,
         rawDocuments: 1,
+        sourceItemObservations: 0,
         sourceItems: 1,
         noticeRevisions: 1,
         attachments: 1,
@@ -143,7 +173,7 @@ describe("InfoHubDatabase", () => {
 
       const inspection = new DatabaseSync(temporary.path, { readOnly: true });
       try {
-        expect(inspection.prepare("PRAGMA user_version").get()).toEqual({ user_version: 2 });
+        expect(inspection.prepare("PRAGMA user_version").get()).toEqual({ user_version: 3 });
         expect(
           inspection
             .prepare(
@@ -353,6 +383,7 @@ describe("InfoHubDatabase", () => {
       expect(temporary.database.stats()).toEqual({
         sources: 1,
         rawDocuments: 1,
+        sourceItemObservations: 0,
         sourceItems: 1,
         noticeRevisions: 1,
         attachments: 1,
@@ -391,6 +422,7 @@ describe("InfoHubDatabase", () => {
       expect(temporary.database.stats()).toEqual({
         sources: 1,
         rawDocuments: 2,
+        sourceItemObservations: 0,
         sourceItems: 1,
         noticeRevisions: 2,
         attachments: 2,
@@ -412,6 +444,405 @@ describe("InfoHubDatabase", () => {
         ]);
       } finally {
         inspection.close();
+      }
+    } finally {
+      temporary.database.close();
+      rmSync(temporary.directory, { recursive: true, force: true });
+    }
+  });
+  it("persists observed list items as link-only entries with strict indexed storage", () => {
+    const temporary = temporaryDatabase();
+    try {
+      const listRaw = listRawDocument(SOURCE, "<ul><li>Official event</li></ul>", "2026-09-23T10:00:00.000Z");
+      const item = discoveredItem(SOURCE, "official-event", {
+        acquisitionKind: "external-public",
+        publishedAtRaw: "09-21 2026",
+      });
+
+      const result = temporary.database.observeSourceItem(SOURCE, listRaw, item);
+      expect(result).toMatchObject({
+        rawDocumentId: expect.any(Number),
+        sourceItemRowId: expect.any(Number),
+        observationRevisionId: expect.any(Number),
+        revisionNumber: 1,
+        insertedRawDocument: true,
+        insertedRevision: true,
+      });
+      expect(temporary.database.listRecentSourceEntries()).toEqual([{
+        sourceId: SOURCE.id,
+        sourceItemId: "official-event",
+        sourceName: SOURCE.name,
+        organization: SOURCE.organization,
+        url: item.url,
+        title: item.title,
+        publishedAtRaw: "09-21 2026",
+        publishedOn: "2026-09-21",
+        contentStatus: "link-only",
+        acquisitionKind: "external-public",
+        observationRevisionNumber: 1,
+        noticeRevisionNumber: null,
+        bodyText: "",
+        bodyHtml: "",
+        attachments: [],
+        provenance: {
+          fetchedAt: listRaw.fetchedAt,
+          contentSha256: listRaw.sha256,
+        },
+      }]);
+      expect(temporary.database.listRecentNotices()).toEqual([]);
+      expect(temporary.database.stats()).toEqual({
+        sources: 1,
+        rawDocuments: 1,
+        sourceItems: 1,
+        sourceItemObservations: 1,
+        noticeRevisions: 0,
+        attachments: 0,
+      });
+
+      const inspection = new DatabaseSync(temporary.path, { readOnly: true });
+      try {
+        const schema = inspection
+          .prepare("SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = ?")
+          .get("source_item_observations") as { sql: string };
+        expect(schema.sql).toMatch(/STRICT/);
+        expect(inspection.prepare("PRAGMA index_list(source_item_observations)").all())
+          .toContainEqual(expect.objectContaining({ name: "source_item_observations_item_idx" }));
+      } finally {
+        inspection.close();
+      }
+    } finally {
+      temporary.database.close();
+      rmSync(temporary.directory, { recursive: true, force: true });
+    }
+  });
+
+  it("deduplicates unchanged observations and retains first list evidence", () => {
+    const temporary = temporaryDatabase();
+    try {
+      const item = discoveredItem(SOURCE, "replayed-event");
+      const firstRaw = listRawDocument(SOURCE, "<li>First snapshot</li>", "2026-09-23T10:00:00.000Z");
+      const laterRaw = listRawDocument(SOURCE, "<li>Reformatted snapshot</li>", "2026-09-23T11:00:00.000Z");
+      const first = temporary.database.observeSourceItem(SOURCE, firstRaw, item);
+      const duplicate = temporary.database.observeSourceItem(SOURCE, firstRaw, item);
+      const replay = temporary.database.observeSourceItem(SOURCE, laterRaw, item);
+      expect(duplicate).toMatchObject({
+        rawDocumentId: first.rawDocumentId,
+        sourceItemRowId: first.sourceItemRowId,
+        observationRevisionId: first.observationRevisionId,
+        revisionNumber: 1,
+        insertedRawDocument: false,
+        insertedRevision: false,
+      });
+
+      expect(replay).toMatchObject({
+        sourceItemRowId: first.sourceItemRowId,
+        observationRevisionId: first.observationRevisionId,
+        revisionNumber: 1,
+        insertedRawDocument: true,
+        insertedRevision: false,
+      });
+      expect(replay.rawDocumentId).not.toBe(first.rawDocumentId);
+      expect(temporary.database.listRecentSourceEntries()[0]).toMatchObject({
+        sourceItemId: item.sourceItemId,
+        observationRevisionNumber: 1,
+        provenance: {
+          fetchedAt: firstRaw.fetchedAt,
+          contentSha256: firstRaw.sha256,
+        },
+      });
+      expect(temporary.database.stats()).toMatchObject({
+        rawDocuments: 2,
+        sourceItems: 1,
+        sourceItemObservations: 1,
+      });
+    } finally {
+      temporary.database.close();
+      rmSync(temporary.directory, { recursive: true, force: true });
+    }
+  });
+
+  it("records title, date, and acquisition-kind changes as observation revisions", () => {
+    const temporary = temporaryDatabase();
+    try {
+      const observations = [
+        discoveredItem(SOURCE, "changed-event"),
+        discoveredItem(SOURCE, "changed-event", { title: "Updated title" }),
+        discoveredItem(SOURCE, "changed-event", { publishedAtRaw: "09-24 2026" }),
+        discoveredItem(SOURCE, "changed-event", { acquisitionKind: "public-wechat" }),
+      ];
+      const results = observations.map((item, index) =>
+        temporary.database.observeSourceItem(
+          SOURCE,
+          listRawDocument(SOURCE, `<li>Snapshot ${index}</li>`, `2026-09-23T1${index}:00:00.000Z`),
+          item,
+        ),
+      );
+
+      expect(results.map(({ revisionNumber, insertedRevision }) => [revisionNumber, insertedRevision]))
+        .toEqual([[1, true], [2, true], [3, true], [4, true]]);
+      expect(new Set(results.map(({ sourceItemRowId }) => sourceItemRowId)).size).toBe(1);
+      expect(temporary.database.listRecentSourceEntries()).toMatchObject([{
+        sourceItemId: "changed-event",
+        title: "Official list title",
+        publishedAtRaw: "2026-09-23",
+        publishedOn: "2026-09-23",
+        acquisitionKind: "public-wechat",
+        observationRevisionNumber: 4,
+      }]);
+
+      const inspection = new DatabaseSync(temporary.path, { readOnly: true });
+      try {
+        expect(inspection.prepare(
+          `SELECT revision_number, title, published_at_raw, published_on, acquisition_kind
+             FROM source_item_observations
+            ORDER BY revision_number`,
+        ).all()).toEqual([
+          { revision_number: 1, title: "Official list title", published_at_raw: "2026-09-23", published_on: "2026-09-23", acquisition_kind: "webplus-detail" },
+          { revision_number: 2, title: "Updated title", published_at_raw: "2026-09-23", published_on: "2026-09-23", acquisition_kind: "webplus-detail" },
+          { revision_number: 3, title: "Official list title", published_at_raw: "09-24 2026", published_on: "2026-09-24", acquisition_kind: "webplus-detail" },
+          { revision_number: 4, title: "Official list title", published_at_raw: "2026-09-23", published_on: "2026-09-23", acquisition_kind: "public-wechat" },
+        ]);
+      } finally {
+        inspection.close();
+      }
+      expect(temporary.database.stats().sourceItems).toBe(1);
+    } finally {
+      temporary.database.close();
+      rmSync(temporary.directory, { recursive: true, force: true });
+    }
+  });
+
+  it("records a return to earlier list metadata as a new current observation", () => {
+    const temporary = temporaryDatabase();
+    try {
+      const original = discoveredItem(SOURCE, "reverted-event");
+      const renamed = { ...original, title: "Temporary title" };
+      const firstRaw = listRawDocument(SOURCE, "First", "2026-09-23T10:00:00.000Z");
+      const changedRaw = listRawDocument(SOURCE, "Changed", "2026-09-23T11:00:00.000Z");
+      const revertedRaw = listRawDocument(SOURCE, "Reverted", "2026-09-23T12:00:00.000Z");
+      temporary.database.observeSourceItem(SOURCE, firstRaw, original);
+      temporary.database.observeSourceItem(SOURCE, changedRaw, renamed);
+      const reverted = temporary.database.observeSourceItem(SOURCE, revertedRaw, original);
+      expect(reverted).toMatchObject({ revisionNumber: 3, insertedRevision: true });
+      expect(temporary.database.observeSourceItem(SOURCE, revertedRaw, original))
+        .toMatchObject({ revisionNumber: 3, insertedRevision: false });
+      expect(temporary.database.listRecentSourceEntries()).toEqual([expect.objectContaining({
+        title: original.title,
+        observationRevisionNumber: 3,
+        provenance: { fetchedAt: revertedRaw.fetchedAt, contentSha256: revertedRaw.sha256 },
+      })]);
+      expect(temporary.database.stats().sourceItemObservations).toBe(3);
+    } finally {
+      temporary.database.close();
+      rmSync(temporary.directory, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects mismatched raw provenance and invalid list-item identity or date types", () => {
+    const temporary = temporaryDatabase();
+    try {
+      const raw = listRawDocument(SOURCE, "<li>Candidate</li>", "2026-09-23T10:00:00.000Z");
+      const item = discoveredItem(SOURCE, "candidate");
+      expect(() => temporary.database.observeSourceItem(SOURCE, raw, {
+        ...item,
+        sourceId: OTHER_SOURCE.id,
+      })).toThrow("source mismatch");
+      expect(() => temporary.database.observeSourceItem(SOURCE, {
+        ...raw,
+        sourceId: OTHER_SOURCE.id,
+      }, item)).toThrow("source mismatch");
+      expect(() => temporary.database.observeSourceItem(SOURCE, {
+        ...raw,
+        sha256: "invalid-hash",
+      }, item)).toThrow("list raw document hash must be a SHA-256 hex digest");
+      expect(() => temporary.database.observeSourceItem(SOURCE, raw, {
+        ...item,
+        sourceItemId: "  ",
+      })).toThrow("source item identity must not be empty");
+      expect(() => temporary.database.observeSourceItem(SOURCE, raw, {
+        ...item,
+        url: "",
+      })).toThrow("source item URL must not be empty");
+      expect(() => temporary.database.observeSourceItem(SOURCE, raw, {
+        ...item,
+        publishedAtRaw: null as unknown as string,
+      })).toThrow("source item publishedAtRaw must be a string when provided");
+      expect(() => temporary.database.observeSourceItem(SOURCE, { ...raw, url: "" }, item))
+        .toThrow("list raw document URL must not be empty");
+      expect(() => temporary.database.observeSourceItem(SOURCE, { ...raw, fetchedAt: " " }, item))
+        .toThrow("list raw document fetchedAt must not be empty");
+      expect(() => temporary.database.observeSourceItem(SOURCE, raw, {
+        ...item,
+        acquisitionKind: "unsupported",
+      } as unknown as DiscoveredItem)).toThrow("unsupported source item acquisition kind");
+
+      const originalBytes = Buffer.from([0xe9]);
+      const decodedRaw = {
+        ...raw,
+        sha256: createHash("sha256").update(originalBytes).digest("hex"),
+        body: "é",
+      };
+      expect(decodedRaw.sha256).not.toBe(createHash("sha256").update(decodedRaw.body).digest("hex"));
+      expect(temporary.database.observeSourceItem(SOURCE, decodedRaw, item).insertedRevision).toBe(true);
+
+      const invalidDateItem = discoveredItem(SOURCE, "invalid-date", {
+        publishedAtRaw: "2026-02-29",
+      });
+      temporary.database.observeSourceItem(SOURCE, raw, invalidDateItem);
+      expect(temporary.database.listRecentSourceEntries().find((entry) => entry.sourceItemId === "invalid-date"))
+        .toMatchObject({
+        sourceItemId: "invalid-date",
+        publishedAtRaw: "2026-02-29",
+        publishedOn: null,
+      });
+      expect(temporary.database.stats()).toMatchObject({ sourceItems: 2, sourceItemObservations: 2 });
+    } finally {
+      temporary.database.close();
+      rmSync(temporary.directory, { recursive: true, force: true });
+    }
+  });
+
+  it("attaches full notice revisions to an observed stable source-item identity", () => {
+    const temporary = temporaryDatabase();
+    try {
+      const item = discoveredItem(SOURCE, "upgraded-event");
+      const listRaw = listRawDocument(SOURCE, "<li>Upcoming notice</li>", "2026-09-23T10:00:00.000Z");
+      const observation = temporary.database.observeSourceItem(SOURCE, listRaw, item);
+      const detailRaw = rawDocument("<p>Full notice body</p>", "2026-09-23T10:05:00.000Z");
+      detailRaw.url = item.url;
+      const notice = parsedNotice(detailRaw, {
+        sourceItemId: item.sourceItemId,
+        title: "Full notice title",
+      });
+      const ingested = temporary.database.ingestNotice(SOURCE, detailRaw, notice);
+
+      expect(ingested.sourceItemRowId).toBe(observation.sourceItemRowId);
+      expect(temporary.database.listRecentNotices()).toHaveLength(1);
+      expect(temporary.database.listRecentSourceEntries()).toEqual([{
+        sourceId: SOURCE.id,
+        sourceItemId: item.sourceItemId,
+        sourceName: SOURCE.name,
+        organization: SOURCE.organization,
+        url: item.url,
+        title: "Full notice title",
+        publishedAtRaw: "2026-09-23",
+        publishedOn: "2026-09-23",
+        contentStatus: "full",
+        acquisitionKind: "webplus-detail",
+        observationRevisionNumber: 1,
+        noticeRevisionNumber: 1,
+        bodyText: "Notice body",
+        bodyHtml: "<p>Notice body</p>",
+        attachments: notice.attachments,
+        provenance: { fetchedAt: detailRaw.fetchedAt, contentSha256: detailRaw.sha256 },
+      }]);
+      expect(temporary.database.stats()).toMatchObject({
+        sourceItems: 1,
+        sourceItemObservations: 1,
+        noticeRevisions: 1,
+      });
+    } finally {
+      temporary.database.close();
+      rmSync(temporary.directory, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps known full content when a later observation has no successful detail", () => {
+    const temporary = temporaryDatabase();
+    try {
+      const item = discoveredItem(SOURCE, "retained-full");
+      temporary.database.observeSourceItem(
+        SOURCE,
+        listRawDocument(SOURCE, "<li>First list view</li>", "2026-09-23T10:00:00.000Z"),
+        item,
+      );
+      const detailRaw = rawDocument("<p>Previously fetched body</p>", "2026-09-23T10:05:00.000Z");
+      detailRaw.url = item.url;
+      const notice = parsedNotice(detailRaw, {
+        sourceItemId: item.sourceItemId,
+        title: "Previously fetched full title",
+      });
+      temporary.database.ingestNotice(SOURCE, detailRaw, notice);
+
+      const laterItem = discoveredItem(SOURCE, item.sourceItemId, {
+        title: "New list title",
+        publishedAtRaw: "09-24 2026",
+      });
+      const laterRaw = listRawDocument(SOURCE, "<li>Updated list view</li>", "2026-09-24T10:00:00.000Z");
+      temporary.database.observeSourceItem(SOURCE, laterRaw, laterItem);
+
+      expect(temporary.database.listRecentSourceEntries()).toEqual([{
+        sourceId: SOURCE.id,
+        sourceItemId: item.sourceItemId,
+        sourceName: SOURCE.name,
+        organization: SOURCE.organization,
+        url: item.url,
+        title: "Previously fetched full title",
+        publishedAtRaw: "2026-09-23",
+        publishedOn: "2026-09-23",
+        contentStatus: "full",
+        acquisitionKind: "webplus-detail",
+        observationRevisionNumber: 2,
+        noticeRevisionNumber: 1,
+        bodyText: "Notice body",
+        bodyHtml: "<p>Notice body</p>",
+        attachments: notice.attachments,
+        provenance: { fetchedAt: detailRaw.fetchedAt, contentSha256: detailRaw.sha256 },
+      }]);
+    } finally {
+      temporary.database.close();
+      rmSync(temporary.directory, { recursive: true, force: true });
+    }
+  });
+
+  it("orders and filters mixed source entries while keeping notice reads full-only", () => {
+    const temporary = temporaryDatabase();
+    try {
+      const listOnly = discoveredItem(SOURCE, "list-only", { publishedAtRaw: "2026-09-25" });
+      temporary.database.observeSourceItem(
+        SOURCE,
+        listRawDocument(SOURCE, "<li>List only</li>", "2026-09-25T10:00:00.000Z"),
+        listOnly,
+      );
+      ingestItem(temporary.database, SOURCE, "full", "2026-09-23");
+      const siblingItem = discoveredItem(SIBLING_SOURCE, "sibling", { publishedAtRaw: "2026-09-22" });
+      temporary.database.observeSourceItem(
+        SIBLING_SOURCE,
+        listRawDocument(SIBLING_SOURCE, "<li>Sibling</li>", "2026-09-22T10:00:00.000Z"),
+        siblingItem,
+      );
+      ingestItem(temporary.database, OTHER_SOURCE, "other", "2026-09-24");
+
+      const entries = temporary.database.listRecentSourceEntries();
+      expect(entries.map((entry) => entry.sourceItemId)).toEqual([
+        "list-only", "other", "full", "sibling",
+      ]);
+      expect(entries[0]).toMatchObject({ contentStatus: "link-only", bodyText: "", attachments: [] });
+      expect(entries[2]).toMatchObject({ contentStatus: "full", attachments: [expect.any(Object)] });
+      expect(temporary.database.listRecentNotices().map((notice) => notice.sourceItemId))
+        .toEqual(["other", "full"]);
+      expect(temporary.database.listRecentSourceEntries({ limit: 2 })
+        .map((entry) => entry.sourceItemId)).toEqual(["list-only", "other"]);
+      expect(temporary.database.listRecentSourceEntries({ sourceId: SOURCE.id })
+        .map((entry) => entry.sourceItemId)).toEqual(["list-only", "full"]);
+      expect(temporary.database.listRecentSourceEntries({ organizationId: SOURCE.organization.id })
+        .map((entry) => entry.sourceItemId)).toEqual(["list-only", "full", "sibling"]);
+      expect(temporary.database.listRecentSourceEntries({ sourceId: "unknown" })).toEqual([]);
+      for (const limit of [0, -1, 1.5, 101, Number.NaN]) {
+        expect(() => temporary.database.listRecentSourceEntries({ limit }))
+          .toThrow("recent source entry limit must be an integer from 1 to 100");
+      }
+
+      const reader = new InfoHubDatabaseReader(temporary.path);
+      try {
+        expect(reader.listRecentSourceEntries()).toEqual(entries);
+        expect(reader.listRecentSourceEntries({ organizationId: SOURCE.organization.id, limit: 2 }))
+          .toEqual(temporary.database.listRecentSourceEntries({
+            organizationId: SOURCE.organization.id,
+            limit: 2,
+          }));
+      } finally {
+        reader.close();
       }
     } finally {
       temporary.database.close();
@@ -690,7 +1121,7 @@ describe("InfoHubDatabase", () => {
       try {
         const inspection = new DatabaseSync(path, { readOnly: true });
         try {
-          expect(inspection.prepare("PRAGMA user_version").get()).toEqual({ user_version: 2 });
+          expect(inspection.prepare("PRAGMA user_version").get()).toEqual({ user_version: 3 });
           expect(inspection.prepare("SELECT * FROM notice_revisions ORDER BY id").all())
             .toEqual(before.map((row, index) => ({
               ...row,
@@ -700,6 +1131,8 @@ describe("InfoHubDatabase", () => {
             .toEqual([{ notice_revision_id: 13, position: 0,
               url: notice.attachments[0]!.url, title: notice.attachments[0]!.title,
               media_type: notice.attachments[0]!.mediaType ?? null }]);
+          expect(inspection.prepare("SELECT COUNT(*) AS count FROM source_item_observations").get())
+            .toEqual({ count: 0 });
         } finally {
           inspection.close();
         }
@@ -710,6 +1143,18 @@ describe("InfoHubDatabase", () => {
           publishedOn: null,
           provenance: { fetchedAt: raw.fetchedAt, contentSha256: raw.sha256 },
         })]);
+        expect(database.listRecentSourceEntries()).toEqual([expect.objectContaining({
+          sourceItemId: notice.sourceItemId,
+          contentStatus: "full",
+          acquisitionKind: null,
+          observationRevisionNumber: null,
+          noticeRevisionNumber: 3,
+          title: "Invalid-date revision",
+          publishedAtRaw: "2026-02-29",
+          publishedOn: null,
+          provenance: { fetchedAt: raw.fetchedAt, contentSha256: raw.sha256 },
+        })]);
+        expect(database.stats().sourceItemObservations).toBe(0);
         expect(database.ingestNotice(SOURCE, raw, notice)).toMatchObject({
           rawDocumentId: 7, sourceItemRowId: 11, noticeRevisionId: 13,
           revisionNumber: 1, insertedRevision: false,
@@ -722,14 +1167,141 @@ describe("InfoHubDatabase", () => {
       rmSync(directory, { recursive: true, force: true });
     }
   });
+  it("migrates populated v2 history without inventing observations", () => {
+    const directory = mkdtempSync(join(tmpdir(), "nju-info-v2-"));
+    const path = join(directory, "legacy.sqlite");
+    const raw = rawDocument("<html><p>Legacy v2 body</p></html>", "2026-09-23T10:00:00.000Z");
+    const legacyNotices = [
+      parsedNotice(raw, {
+        sourceItemId: "legacy-v2-item",
+        title: "Earlier v2 title",
+        publishedAtRaw: "2026-09-19",
+        publishedOn: "2026-09-19",
+        attachments: [],
+      }),
+      parsedNotice(raw, {
+        sourceItemId: "legacy-v2-item",
+        title: "Latest v2 title",
+        publishedAtRaw: "2026-09-20",
+        publishedOn: "2026-09-20",
+        bodyText: "Latest v2 body",
+        bodyHtml: "<p>Latest v2 body</p>",
+      }),
+    ];
+
+    try {
+      const legacy = new DatabaseSync(path);
+      let before: Record<string, unknown>[] = [];
+      try {
+        legacy.exec(readFileSync(new URL("../fixtures/schema-v1.sql", import.meta.url), "utf8"));
+        legacy.exec("ALTER TABLE notice_revisions ADD COLUMN published_on TEXT");
+        legacy.exec("PRAGMA user_version = 2");
+        legacy.prepare(
+          `INSERT INTO sources (id, name, organization_id, organization_name,
+             homepage_url, adapter_type, config_json, enabled, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(SOURCE.id, SOURCE.name, SOURCE.organization.id,
+          SOURCE.organization.name, SOURCE.url, "webplus", JSON.stringify(SOURCE),
+          1, raw.fetchedAt, raw.fetchedAt);
+        legacy.prepare(
+          `INSERT INTO raw_documents
+             (id, source_id, final_url, fetched_at, content_type, sha256, body, etag, last_modified)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(7, SOURCE.id, raw.url, raw.fetchedAt, raw.contentType, raw.sha256,
+          raw.body, raw.etag ?? null, raw.lastModified ?? null);
+        legacy.prepare(
+          `INSERT INTO source_items (id, source_id, source_item_id, url, first_seen_at)
+           VALUES (?, ?, ?, ?, ?)`,
+        ).run(11, SOURCE.id, "legacy-v2-item", legacyNotices[0]!.url, raw.fetchedAt);
+        const insertRevision = legacy.prepare(
+          `INSERT INTO notice_revisions
+             (id, source_item_row_id, revision_number, raw_document_id, content_sha256,
+              title, published_at_raw, published_on, body_text, body_html, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        );
+        for (const [index, revision] of legacyNotices.entries()) {
+          const revisionHash = createHash("sha256")
+            .update(JSON.stringify({
+              url: revision.url,
+              title: revision.title,
+              publishedAtRaw: revision.publishedAtRaw,
+              bodyText: revision.bodyText,
+              bodyHtml: revision.bodyHtml,
+              attachments: revision.attachments.map(({ url, title, mediaType }) => ({
+                url, title, mediaType: mediaType ?? null,
+              })),
+            }))
+            .digest("hex");
+          insertRevision.run(13 + index, 11, index + 1, 7, revisionHash,
+            revision.title, revision.publishedAtRaw ?? null, revision.publishedOn,
+            revision.bodyText, revision.bodyHtml, raw.fetchedAt);
+        }
+        const latest = legacyNotices[1]!;
+        const attachment = latest.attachments[0]!;
+        legacy.prepare(
+          `INSERT INTO attachments (notice_revision_id, position, url, title, media_type)
+           VALUES (?, ?, ?, ?, ?)`,
+        ).run(14, 0, attachment.url, attachment.title, attachment.mediaType ?? null);
+        before = legacy.prepare("SELECT * FROM notice_revisions ORDER BY id").all();
+      } finally {
+        legacy.close();
+      }
+
+      const database = new InfoHubDatabase(path);
+      try {
+        const inspection = new DatabaseSync(path, { readOnly: true });
+        try {
+          expect(inspection.prepare("PRAGMA user_version").get()).toEqual({ user_version: 3 });
+          expect(inspection.prepare("SELECT * FROM notice_revisions ORDER BY id").all())
+            .toEqual(before);
+          expect(inspection.prepare("SELECT COUNT(*) AS count FROM source_item_observations").get())
+            .toEqual({ count: 0 });
+          expect(inspection.prepare("PRAGMA index_list(source_item_observations)").all())
+            .toContainEqual(expect.objectContaining({ name: "source_item_observations_item_idx" }));
+          expect(inspection.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+        } finally {
+          inspection.close();
+        }
+
+        expect(database.listRecentNotices()).toEqual([expect.objectContaining({
+          sourceItemId: "legacy-v2-item",
+          revisionNumber: 2,
+          title: "Latest v2 title",
+          publishedOn: "2026-09-20",
+        })]);
+        expect(database.listRecentSourceEntries()).toEqual([expect.objectContaining({
+          sourceItemId: "legacy-v2-item",
+          contentStatus: "full",
+          acquisitionKind: null,
+          observationRevisionNumber: null,
+          noticeRevisionNumber: 2,
+          title: "Latest v2 title",
+          publishedOn: "2026-09-20",
+          bodyText: "Latest v2 body",
+          attachments: legacyNotices[1]!.attachments,
+          provenance: { fetchedAt: raw.fetchedAt, contentSha256: raw.sha256 },
+        })]);
+        expect(database.ingestNotice(SOURCE, raw, legacyNotices[1]!)).toMatchObject({
+          sourceItemRowId: 11,
+          revisionNumber: 2,
+          insertedRevision: false,
+        });
+        expect(database.stats().sourceItemObservations).toBe(0);
+      } finally {
+        database.close();
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
   it("rejects unknown database schema versions without changing them", () => {
     const database = new DatabaseSync(":memory:");
     try {
-      database.exec("PRAGMA user_version = 3");
+      database.exec("PRAGMA user_version = 4");
       expect(() => migrateDatabase(database)).toThrow(
-        "unsupported database schema version 3; expected 2",
+        "unsupported database schema version 4; expected 3",
       );
-      expect(database.prepare("PRAGMA user_version").get()).toEqual({ user_version: 3 });
+      expect(database.prepare("PRAGMA user_version").get()).toEqual({ user_version: 4 });
     } finally {
       database.close();
     }

@@ -1,9 +1,9 @@
-import type { NoticeQueryResult, PersistedSourceSummary } from "@nju-info/db";
+import type { PersistedSourceSummary, SourceEntryQueryResult } from "@nju-info/db";
 import { syndicationFeed, type SyndicationContext } from "./syndication.js";
 
-/** Serialize current revisions in database order; day-only timestamps are transport encodings, not source times. */
-export function buildJsonFeed(source: PersistedSourceSummary, notices: NoticeQueryResult[], context: SyndicationContext = {}) {
-  const feed = syndicationFeed(source, notices, context.generatedAt);
+/** Serialize source observations in database order; day-only timestamps are transport encodings, not source times. */
+export function buildJsonFeed(source: PersistedSourceSummary, sourceEntries: SourceEntryQueryResult[], context: SyndicationContext = {}) {
+  const feed = syndicationFeed(source, sourceEntries, context.generatedAt);
   return {
     version: "https://jsonfeed.org/version/1.1",
     title: feed.title,
@@ -32,7 +32,12 @@ export function buildJsonFeed(source: PersistedSourceSummary, notices: NoticeQue
           published_on: entry.publishedOn,
           date_precision: "day",
         }),
-        revision_number: entry.revisionNumber,
+        content_status: entry.contentStatus,
+        ...(entry.acquisitionKind == null ? {} : { acquisition_kind: entry.acquisitionKind }),
+        ...(entry.observationRevisionNumber === undefined ? {} : {
+          observation_revision_number: entry.observationRevisionNumber,
+        }),
+        ...(entry.revisionNumber === undefined ? {} : { revision_number: entry.revisionNumber }),
         fetched_at: entry.fetchedAt,
         content_sha256: entry.contentSha256,
       },

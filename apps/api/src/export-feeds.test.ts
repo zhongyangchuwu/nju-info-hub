@@ -90,7 +90,7 @@ describe("static JSON Feed exporter", () => {
       const source = reader.listSources().find((candidate) => candidate.id === GRADUATE_SOURCE.id);
       if (!source) throw new Error("persisted source missing from test database");
       expect(serialized.endsWith("\n")).toBe(true);
-      expect(serialized).toBe(`${JSON.stringify(buildJsonFeed(source, reader.listRecentNotices({
+      expect(serialized).toBe(`${JSON.stringify(buildJsonFeed(source, reader.listRecentSourceEntries({
         sourceId: source.id,
         limit: 100,
       })), null, 2)}\n`);
@@ -115,6 +115,63 @@ describe("static JSON Feed exporter", () => {
       ]);
     } finally {
       reader.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("upgrades an observed link to full content without changing its exported ID", async () => {
+    const directory = temporaryDirectory();
+    const databasePath = join(directory, "upgrade.sqlite");
+    const outputDirectory = join(directory, "published");
+    const writer = new InfoHubDatabase(databasePath);
+    const reader = new InfoHubDatabaseReader(databasePath);
+    const itemId = "grad-upgrade";
+    const url = `https://cs.nju.edu.cn/notices/${itemId}.htm`;
+    const body = `<li><a href="${url}">Official title</a><span>2026-09-23</span></li>`;
+    const listRaw = {
+      sourceId: GRADUATE_SOURCE.id,
+      url: GRADUATE_SOURCE.url,
+      fetchedAt: "2026-09-23T10:00:00.000Z",
+      contentType: "text/html",
+      body,
+      sha256: createHash("sha256").update(body).digest("hex"),
+    };
+    try {
+      writer.observeSourceItem(GRADUATE_SOURCE, listRaw, {
+        sourceId: GRADUATE_SOURCE.id,
+        sourceItemId: itemId,
+        url,
+        acquisitionKind: "webplus-detail",
+        title: "Official title",
+        publishedAtRaw: "2026-09-23",
+      });
+      expect(reader.listRecentNotices()).toEqual([]);
+      await exportFeeds(reader, outputDirectory, [GRADUATE_SOURCE.id]);
+      const feedPath = join(outputDirectory, "feeds", `${GRADUATE_SOURCE.id}.json`);
+      const initial = JSON.parse(readFileSync(feedPath, "utf8")).items[0];
+      expect(initial).toMatchObject({
+        id: `${GRADUATE_SOURCE.id}:${itemId}`,
+        title: "Official title",
+        url,
+        _nju: { content_status: "link-only", fetched_at: listRaw.fetchedAt, content_sha256: listRaw.sha256 },
+      });
+      expect(initial).not.toHaveProperty("content_html");
+
+      ingestNotice(writer, GRADUATE_SOURCE, itemId);
+      await exportFeeds(reader, outputDirectory, [GRADUATE_SOURCE.id]);
+      const upgraded = JSON.parse(readFileSync(feedPath, "utf8")).items[0];
+      expect(upgraded.id).toBe(initial.id);
+      expect(upgraded).toMatchObject({
+        url,
+        content_text: `${itemId} details`,
+        _nju: { content_status: "full", revision_number: 1, observation_revision_number: 1 },
+      });
+      expect(upgraded.content_html).toBe(`<p>${itemId} details</p>`);
+      expect(reader.listRecentNotices()).toHaveLength(1);
+      expect(reader.listRecentSourceEntries()).toHaveLength(1);
+    } finally {
+      reader.close();
+      writer.close();
       rmSync(directory, { recursive: true, force: true });
     }
   });
@@ -193,7 +250,7 @@ describe("static JSON Feed exporter", () => {
           ...reader.listSources()[0]!,
           id: "../outside",
         }],
-        listRecentNotices: () => [],
+        listRecentSourceEntries: () => [],
       };
       await expect(exportFeeds(unsafeReader, outputDirectory))
         .rejects.toThrow("unsafe source ID");
@@ -244,7 +301,7 @@ describe("static JSON Feed exporter", () => {
         url: special.url, enabled: true },
       { id: SEMINAR_SOURCE.id, name: SEMINAR_SOURCE.name, organization: SEMINAR_SOURCE.organization,
         url: SEMINAR_SOURCE.url, enabled: true }],
-      listRecentNotices: () => [],
+      listRecentSourceEntries: () => [],
     };
     try {
       await exportFeeds(reader, outputDirectory, [special.id], {
