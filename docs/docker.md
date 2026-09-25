@@ -60,13 +60,16 @@ Collection cadence is runtime-neutral. The same metadata is consumed by the resi
 
 `timeZone` must be a valid IANA timezone. Existing v1 configs remain readable: their former `deployment.schedule` is normalized as UTC because GitHub Actions cron semantics are UTC, and `deployment.publicBaseUrl` becomes `publication.publicBaseUrl`.
 
-## Localhost Compose profile
+## Canonical Compose deployment
 
-Set an immutable image reference:
+For the normal repository checkout, copy the example environment and start Compose:
 
 ```bash
-export NJU_INFO_IMAGE=ghcr.io/zhongyangchuwu/nju-info-hub:sha-<revision>
+cp .env.example .env
+docker compose up -d
 ```
+
+The example pins a known-good immutable multi-arch image. To upgrade, replace `NJU_INFO_IMAGE` in `.env` with a newer `sha-*` tag, version tag, or digest. Mutable `latest` is intentionally rejected for the official GHCR repository.
 
 For local development:
 
@@ -78,7 +81,7 @@ export NJU_INFO_IMAGE=nju-info-hub:local
 Start the canonical instance:
 
 ```bash
-docker compose -f deploy/docker/localhost/compose.yaml up -d
+docker compose up -d
 ```
 
 The default Compose services are:
@@ -95,7 +98,7 @@ http://127.0.0.1:3000/v1/health
 Override only the host port when needed:
 
 ```bash
-NJU_INFO_PORT=3100 docker compose -f deploy/docker/localhost/compose.yaml up -d
+NJU_INFO_PORT=3100 docker compose up -d
 ```
 
 A fresh volume does not need a manual database bootstrap. The scheduler creates/updates state through the normal collector. After its first successful run it writes a readiness marker into the data volume; the API does not start serving until that marker exists.
@@ -107,10 +110,31 @@ The API wait timeout defaults to 900 seconds and can be changed with `NJU_INFO_R
 The one-shot collector remains available for explicit refresh/debugging:
 
 ```bash
-docker compose -f deploy/docker/localhost/compose.yaml run --rm collect
+docker compose --profile maintenance run --rm collect
 ```
 
 It is not the normal scheduling mechanism.
+
+### Backup and restore
+
+Create and verify a durable snapshot while the service is running:
+
+```bash
+docker compose --profile maintenance run --rm maintenance
+docker compose --profile maintenance run --rm maintenance verify-backup /backup/state.tar.gz
+```
+
+Snapshots are written under `NJU_INFO_BACKUP_DIR` (default `./backups`). Backup uses SQLite's backup API and is safe while the scheduler/API are running.
+
+Restore is deliberately an offline maintenance operation. Stop the scheduler and API first so no process keeps the old SQLite file open or writes concurrently, restore the snapshot, then restart:
+
+```bash
+docker compose down
+docker compose --profile maintenance run --rm maintenance restore /backup/state.tar.gz
+docker compose up -d
+```
+
+Do not restore into the shared data volume while the resident services are running.
 
 ## Custom instance config
 
@@ -118,7 +142,7 @@ From this repository, Compose defaults to `instances/official.json`. Override it
 
 ```bash
 NJU_INFO_CONFIG_FILE=/absolute/path/to/instance.json \
-  docker compose -f deploy/docker/localhost/compose.yaml up -d
+  docker compose up -d
 ```
 
 Inside scheduler/collector containers the file is mounted as `/config/instance.json`.
@@ -136,7 +160,7 @@ not a source-code fork.
 Stop services without deleting state:
 
 ```bash
-docker compose -f deploy/docker/localhost/compose.yaml down
+docker compose down
 ```
 
 The named volume remains.
@@ -148,8 +172,8 @@ Upgrade:
 3. pull and recreate the services.
 
 ```bash
-docker compose -f deploy/docker/localhost/compose.yaml pull
-docker compose -f deploy/docker/localhost/compose.yaml up -d
+docker compose pull
+docker compose up -d
 ```
 
 The scheduler performs collection using the new image while the SQLite volume is preserved.

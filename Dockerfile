@@ -43,10 +43,11 @@ COPY packages/collector/src packages/collector/src
 COPY packages/instance-config/src packages/instance-config/src
 COPY sources sources
 COPY instances instances
+COPY scripts/state-snapshot.mjs /app/scripts/state-snapshot.mjs
 COPY scripts/container-entrypoint.sh /usr/local/bin/nju-info
 
 RUN chmod 755 /usr/local/bin/nju-info \
-    && chmod -R a+rX /app \
+    && chmod 644 /app/pnpm-workspace.yaml /app/node_modules/.pnpm-workspace-state-v1.json \
     && mkdir -p /data \
     && chown node:node /data
 

@@ -6,8 +6,8 @@ on:
       - '.github/workflows/container.yml'
       - 'Dockerfile'
       - '.dockerignore'
-      - 'deploy/docker/**'
-      - 'scripts/docker-smoke.sh'
+      - 'compose.yaml'
+      - 'scripts/**'
       - 'apps/**'
       - 'packages/**'
       - 'sources/**'
@@ -22,8 +22,8 @@ on:
       - '.github/workflows/container.yml'
       - 'Dockerfile'
       - '.dockerignore'
-      - 'deploy/docker/**'
-      - 'scripts/docker-smoke.sh'
+      - 'compose.yaml'
+      - 'scripts/**'
       - 'apps/**'
       - 'packages/**'
       - 'sources/**'
@@ -40,6 +40,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Validate canonical Compose
+        env:
+          NJU_INFO_IMAGE: ghcr.io/zhongyangchuwu/nju-info-hub:sha-1234567
+        run: docker compose -f compose.yaml config >/dev/null
       - name: Build local image
         run: |
           docker build \
