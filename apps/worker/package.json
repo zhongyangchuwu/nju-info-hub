@@ -7,7 +7,6 @@
     "./collection": "./src/collection.ts"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run src"
   },
