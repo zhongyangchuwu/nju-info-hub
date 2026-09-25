@@ -26,7 +26,7 @@ One image exposes a stable `nju-info` container entrypoint:
 
 The container entrypoint hides the repository's pnpm/workspace layout from users.
 
-SQLite remains on the active host/container volume. The API opens an existing current-schema database read-only and does not create or migrate state.
+SQLite remains on the active host/container volume. The API opens an existing current-schema database read-only and does not create or migrate state. The data volume itself remains writable because SQLite may require WAL/SHM side files even for a read-only application connection.
 
 ## Localhost Compose profile
 
@@ -102,7 +102,7 @@ The named SQLite volume is preserved across container recreation.
 ## Security boundary
 
 - no secrets are baked into the image;
-- API state is mounted read-only;
+- the API opens SQLite through the application's read-only database reader;
 - collection writes only to the local named volume;
 - the official profile collects public sources only;
 - SQLite is not placed on WebDAV/FUSE/network mounts;
