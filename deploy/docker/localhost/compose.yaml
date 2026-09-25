@@ -5,7 +5,7 @@ services:
     ports:
       - "127.0.0.1:${NJU_INFO_PORT:-3000}:3000"
     volumes:
-      - nju-info-data:/data:ro
+      - nju-info-data:/data
 
   collect:
     image: ${NJU_INFO_IMAGE:?Set NJU_INFO_IMAGE to an immutable GHCR tag or local image}
