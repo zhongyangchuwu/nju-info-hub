@@ -35,8 +35,10 @@ COPY packages/collector/src packages/collector/src
 COPY packages/instance-config/src packages/instance-config/src
 COPY sources sources
 COPY instances instances
+COPY scripts/container-entrypoint.sh /usr/local/bin/nju-info
 
-RUN chmod -R a+rX /app \
+RUN chmod 755 /usr/local/bin/nju-info \
+    && chmod -R a+rX /app \
     && mkdir -p /data \
     && chown node:node /data
 
@@ -48,4 +50,5 @@ VOLUME ["/data"]
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:3000/v1/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
 
-CMD ["pnpm", "api", "--", "/data/feeds.sqlite", "--host", "0.0.0.0", "--port", "3000"]
+ENTRYPOINT ["/usr/local/bin/nju-info"]
+CMD ["serve"]
