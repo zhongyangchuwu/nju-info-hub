@@ -11,6 +11,38 @@ import type {
   WebPlusSourceConfig,
 } from "@nju-info/core";
 
+export class RestrictedDetailError extends Error {
+  constructor(readonly restrictionClass: "campus-network" | "authentication") {
+    super(`restricted WebPlus detail: ${restrictionClass}`);
+    this.name = "RestrictedDetailError";
+  }
+}
+
+function isCampusNetworkRestriction($: cheerio.CheerioAPI): boolean {
+  const hasPromptTitle =
+    normalizeText($("title").first().text()) === "提示信息" ||
+    normalizeText($("h1, h2").first().text()) === "提示信息";
+  const pageText = normalizeText($.root().text());
+  return (
+    hasPromptTitle &&
+    (/IP\s*非校内地址/i.test(pageText) ||
+      pageText.includes("仅允许校内地址访问"))
+  );
+}
+
+function isUnifiedIdentityRedirect(raw: RawDocument, discovered?: DiscoveredItem): boolean {
+  if (!discovered || raw.url === discovered.url) return false;
+  try {
+    const finalUrl = new URL(raw.url);
+    return (
+      finalUrl.hostname.toLowerCase() === "authserver.nju.edu.cn" &&
+      /^\/authserver\/(?:login|oauth2\/authorize)(?:\/|$)/i.test(finalUrl.pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+
 const DATE_RE =
   /20\d{2}[-/.年]\d{1,2}[-/.月]\d{1,2}(?:日)?|\d{1,2}[-/.]\d{1,2}\s+20\d{2}/;
 const DEFAULT_LIST_LINK_SELECTOR = [
@@ -285,6 +317,12 @@ export function parseWebPlusNotice(
   discovered?: DiscoveredItem,
 ): ParsedNotice {
   const $ = cheerio.load(raw.body);
+  if (isUnifiedIdentityRedirect(raw, discovered)) {
+    throw new RestrictedDetailError("authentication");
+  }
+  if (isCampusNetworkRestriction($)) {
+    throw new RestrictedDetailError("campus-network");
+  }
   const titleSelector =
     source.adapter.selectors?.title ?? DEFAULT_TITLE_SELECTOR;
   const publishedSelector =

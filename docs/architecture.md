@@ -55,6 +55,8 @@ The parser keeps heuristics narrow so that navigation links are not mistaken for
 
 List discovery preserves source/DOM order, including pinned or featured items. Publication-recency ordering is a separate operation: parseable dates are ordered newest-first, equal dates retain source order, and missing or unparseable dates follow dated items while retaining their source order. The development CLI applies that ordering only to limited `fetch` and `ingest` operations. It reads one additional page after first collecting enough candidates, bounded by the command's page cap, so first-page pinned items do not displace newer dated notices on the next page. Full `discover-pages` results remain in source order and retain pinned items.
 
+Discovery labels each list item `webplus-detail`, `public-wechat`, or `external-public` without fetching the detail; explicitly configured list selectors may include external links, while default discovery remains limited to WebPlus-shaped article URLs. Limited `fetch` and `ingest` preflight each candidate: unsupported acquisition is skipped without a detail request, and recognized campus-network warnings or observable NJU unified-identity redirects are skipped after an ordinary public request. The worker reports source, item URL, and skip class, then continues through later candidates within the 100-page cap; ordinary malformed details remain errors. Neither restricted nor unsupported details become canonical notices or persisted detail raw bodies.
+
 ## Raw and canonical data
 
 `RawDocument` preserves:

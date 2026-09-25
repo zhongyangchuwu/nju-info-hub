@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { fetchRawDocument } from "@nju-info/collector";
 import type { DiscoveredItem, RawDocument } from "@nju-info/core";
-import { fetchWebPlusDetail } from "./detail-acquisition.js";
+import { UnsupportedDetailAcquisitionError, fetchWebPlusDetail } from "./detail-acquisition.js";
 
 vi.mock("@nju-info/collector", () => ({ fetchRawDocument: vi.fn() }));
 
@@ -19,9 +19,12 @@ describe("worker detail acquisition", () => {
   ] as const)("rejects %s before requesting detail", async (kind, url) => {
     fetchDetail.mockClear();
 
-    await expect(fetchWebPlusDetail(item(url, kind))).rejects.toThrow(
-      `unsupported detail acquisition for ${sourceId} (${kind}): ${url}`,
-    );
+    await expect(fetchWebPlusDetail(item(url, kind))).rejects.toMatchObject({
+      name: "UnsupportedDetailAcquisitionError",
+      acquisitionKind: kind,
+      sourceId,
+      url,
+    } satisfies Partial<UnsupportedDetailAcquisitionError>);
     expect(fetchDetail).not.toHaveBeenCalled();
   });
 
