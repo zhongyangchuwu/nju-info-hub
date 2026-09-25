@@ -36,7 +36,9 @@ COPY packages/instance-config/src packages/instance-config/src
 COPY sources sources
 COPY instances instances
 
-RUN mkdir -p /data && chown node:node /data
+RUN chmod -R a+rX /app \
+    && mkdir -p /data \
+    && chown node:node /data
 
 USER node
 
