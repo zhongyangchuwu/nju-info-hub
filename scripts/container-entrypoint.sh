@@ -14,6 +14,8 @@ api_tsx="/app/apps/api/node_modules/.bin/tsx"
 api_cli="/app/apps/api/src/cli.ts"
 worker_tsx="/app/apps/worker/node_modules/.bin/tsx"
 worker_cli="/app/apps/worker/src/cli.ts"
+mcp_tsx="/app/apps/mcp/node_modules/.bin/tsx"
+mcp_cli="/app/apps/mcp/src/cli.ts"
 
 command="${1:-serve}"
 if [ "$#" -gt 0 ]; then shift; fi
@@ -35,8 +37,11 @@ case "$command" in
   worker)
     exec "$worker_tsx" "$worker_cli" "$@"
     ;;
+  mcp)
+    exec "$mcp_tsx" "$mcp_cli" "$database" "$@"
+    ;;
   *)
-    echo "usage: nju-info [serve|validate|collect|export|worker]" >&2
+    echo "usage: nju-info [serve|validate|collect|export|worker|mcp]" >&2
     exit 64
     ;;
 esac
