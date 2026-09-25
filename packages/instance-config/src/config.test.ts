@@ -54,6 +54,16 @@ describe("instance config", () => {
     await expect(loadInstanceConfig(file, sourceDir)).rejects.toThrow("duplicate published source id");
   });
 
+  it("rejects multiple curated source sets in v1", async () => {
+    const file = await withConfig((value) => value.publication.sets.push({
+      id: "second",
+      title: "Second",
+      sources: ["nju-cs-graduate"],
+      opml: "subscriptions/second.opml",
+    }));
+    await expect(loadInstanceConfig(file, sourceDir)).rejects.toThrow("v1 supports at most one curated source set");
+  });
+
   it("rejects duplicate and unpublished curated-set members", async () => {
     const duplicate = await withConfig((value) => value.publication.sets[0].sources.push("nju-cs-graduate"));
     await expect(loadInstanceConfig(duplicate, sourceDir)).rejects.toThrow("duplicate source id in set cs");
