@@ -70,8 +70,8 @@ jobs:
           fi
 
           remote_path="${REMOTE_PATH:-nju-info-hub/state/current.tar.gz}"
-          if [[ "$remote_path" = /* || "$remote_path" == *:* ]]; then
-            echo "durable state remote path must be relative and contain no colon" >&2
+          if [[ "$remote_path" = /* || "$remote_path" == *:* || ! "$remote_path" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+            echo "durable state remote path must be a relative path using only letters, digits, dot, underscore, hyphen, and slash" >&2
             exit 1
           fi
           IFS="/" read -r -a remote_parts <<< "$remote_path"
@@ -112,7 +112,7 @@ jobs:
               echo "restored=true" >> "$GITHUB_OUTPUT"
             else
               echo "::warning::durable state snapshot is invalid; falling back to Actions cache"
-              rm -f "$snapshot" "$NJU_INFO_DB" "$NJU_INFO_DB-wal" "$NJU_INFO_DB-shm"
+              rm -f "$snapshot"
               echo "restored=false" >> "$GITHUB_OUTPUT"
             fi
           else
