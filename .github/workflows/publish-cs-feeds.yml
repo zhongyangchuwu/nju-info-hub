@@ -9,6 +9,7 @@ on:
       - 'apps/**'
       - 'packages/**'
       - 'sources/**'
+      - 'scripts/**'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
@@ -44,7 +45,83 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Prepare cache and Pages output
         run: mkdir -p "$NJU_INFO_CACHE_DIR" "$NJU_INFO_PAGES_DIR"
+      - name: Configure durable WebDAV state
+        id: durable_state
+        env:
+          WEBDAV_URL: ${{ secrets.NJU_INFO_STATE_WEBDAV_URL }}
+          WEBDAV_USER: ${{ secrets.NJU_INFO_STATE_WEBDAV_USER }}
+          WEBDAV_PASSWORD: ${{ secrets.NJU_INFO_STATE_WEBDAV_PASSWORD }}
+          WEBDAV_VENDOR: ${{ vars.NJU_INFO_STATE_WEBDAV_VENDOR }}
+          REMOTE_PATH: ${{ vars.NJU_INFO_STATE_REMOTE_PATH }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          present=0
+          [[ -n "$WEBDAV_URL" ]] && present=$((present + 1))
+          [[ -n "$WEBDAV_USER" ]] && present=$((present + 1))
+          [[ -n "$WEBDAV_PASSWORD" ]] && present=$((present + 1))
+          if [[ "$present" -eq 0 ]]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "$present" -ne 3 ]]; then
+            echo "durable WebDAV state requires URL, user, and password together" >&2
+            exit 1
+          fi
+
+          remote_path="${REMOTE_PATH:-nju-info-hub/state/current.tar.gz}"
+          if [[ "$remote_path" = /* || "$remote_path" == *:* ]]; then
+            echo "durable state remote path must be relative and contain no colon" >&2
+            exit 1
+          fi
+          IFS="/" read -r -a remote_parts <<< "$remote_path"
+          for part in "${remote_parts[@]}"; do
+            if [[ -z "$part" || "$part" = "." || "$part" = ".." ]]; then
+              echo "durable state remote path contains an unsafe component" >&2
+              exit 1
+            fi
+          done
+
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq rclone
+          config="$RUNNER_TEMP/nju-info-rclone.conf"
+          install -m 600 /dev/null "$config"
+          obscured="$(printf "%s\n" "$WEBDAV_PASSWORD" | rclone obscure -)"
+          rclone --config "$config" config create nju-state webdav \
+            url "$WEBDAV_URL" \
+            vendor "${WEBDAV_VENDOR:-other}" \
+            user "$WEBDAV_USER" \
+            pass "$obscured" \
+            --no-obscure --no-output
+          unset obscured
+
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+          echo "config=$config" >> "$GITHUB_OUTPUT"
+          echo "remote=nju-state:$remote_path" >> "$GITHUB_OUTPUT"
+      - name: Restore durable state snapshot
+        id: durable_restore
+        if: steps.durable_state.outputs.enabled == 'true'
+        env:
+          RCLONE_CONFIG: ${{ steps.durable_state.outputs.config }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          snapshot="$RUNNER_TEMP/nju-info-state.tar.gz"
+          if bash scripts/state-rclone.sh restore "${{ steps.durable_state.outputs.remote }}" "$snapshot"; then
+            if pnpm state:snapshot -- restore "$snapshot" "$NJU_INFO_DB"; then
+              echo "restored=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "::warning::durable state snapshot is invalid; falling back to Actions cache"
+              rm -f "$snapshot" "$NJU_INFO_DB" "$NJU_INFO_DB-wal" "$NJU_INFO_DB-shm"
+              echo "restored=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "::warning::durable state snapshot is unavailable; falling back to Actions cache"
+            rm -f "$snapshot"
+            echo "restored=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Restore SQLite database cache
+        if: steps.durable_restore.outputs.restored != 'true'
         uses: actions/cache/restore@v4
         continue-on-error: true
         with:
@@ -73,6 +150,17 @@ jobs:
         with:
           path: ${{ env.NJU_INFO_CACHE_DIR }}
           key: nju-info-feeds-v2-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Persist durable state snapshot
+        if: steps.durable_state.outputs.enabled == 'true'
+        env:
+          RCLONE_CONFIG: ${{ steps.durable_state.outputs.config }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          snapshot="$RUNNER_TEMP/nju-info-state.tar.gz"
+          pnpm state:snapshot -- pack "$NJU_INFO_DB" "$snapshot"
+          NJU_INFO_STATE_UPLOAD_ID="${{ github.run_id }}-${{ github.run_attempt }}" \
+            bash scripts/state-rclone.sh upload "$snapshot" "${{ steps.durable_state.outputs.remote }}"
       - uses: actions/upload-pages-artifact@v4
         with:
           path: ${{ env.NJU_INFO_PAGES_DIR }}
