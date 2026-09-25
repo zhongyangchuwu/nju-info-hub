@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "instance": {
+    "id": "official",
+    "name": "NJU Info Hub"
+  },
+  "publication": {
+    "sources": [
+      { "id": "nju-cs-graduate", "limit": 10 },
+      { "id": "nju-cs-internal-notices", "limit": 10 },
+      { "id": "nju-cs-seminars", "limit": 10 },
+      { "id": "nju-itsc-notices", "limit": 10 },
+      { "id": "nju-library-news-notices", "limit": 10 },
+      { "id": "nju-graduate-school-notices", "limit": 10 },
+      { "id": "nju-undergraduate-notices", "limit": 5 },
+      { "id": "nju-youth-league-announcements", "limit": 5 },
+      { "id": "nju-student-affairs-notices", "limit": 10 }
+    ],
+    "sets": [
+      {
+        "id": "cs",
+        "title": "计算机学院公开信息",
+        "sources": [
+          "nju-cs-graduate",
+          "nju-cs-internal-notices",
+          "nju-cs-seminars"
+        ],
+        "opml": "subscriptions/cs.opml"
+      }
+    ]
+  },
+  "deployment": {
+    "mode": "github-pages",
+    "publicBaseUrl": "https://zhongyangchuwu.github.io/nju-info-hub/",
+    "schedule": "17 */2 * * *"
+  },
+  "storage": {
+    "mode": "optional-webdav"
+  }
+}
