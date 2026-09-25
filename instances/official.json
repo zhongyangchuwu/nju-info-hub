@@ -30,7 +30,6 @@
     ]
   },
   "deployment": {
-    "mode": "github-pages",
     "publicBaseUrl": "https://zhongyangchuwu.github.io/nju-info-hub/",
     "schedule": "17 */2 * * *"
   },
