@@ -2,7 +2,7 @@ FROM node:26.10.0-bookworm-slim AS runtime
 
 ARG VERSION=dev
 ARG REVISION=unknown
-ARG TARGETARCH=amd64
+ARG TARGETARCH
 
 LABEL org.opencontainers.image.title="NJU Info Hub" \
       org.opencontainers.image.description="Public, read-only information aggregation for Nanjing University" \
@@ -10,10 +10,11 @@ LABEL org.opencontainers.image.title="NJU Info Hub" \
       org.opencontainers.image.version="$VERSION" \
       org.opencontainers.image.revision="$REVISION"
 
-RUN case "$TARGETARCH" in \
+RUN arch="${TARGETARCH:-$(dpkg --print-architecture)}" \
+    && case "$arch" in \
       amd64) pnpm_arch=x64 ;; \
       arm64) pnpm_arch=arm64 ;; \
-      *) echo "unsupported container architecture: $TARGETARCH" >&2; exit 1 ;; \
+      *) echo "unsupported container architecture: $arch" >&2; exit 1 ;; \
     esac \
     && npm install --global "@pnpm/exe.linux-${pnpm_arch}@12.5.1" --fetch-retries=1 --fetch-timeout=15000 \
     && ln -s "/usr/local/lib/node_modules/@pnpm/exe.linux-${pnpm_arch}/pnpm" /usr/local/bin/pnpm \
