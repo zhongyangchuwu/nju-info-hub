@@ -14,9 +14,13 @@ trap cleanup EXIT
 
 docker volume create "$volume" >/dev/null
 
-docker run --rm "$image"   pnpm instance -- validate instances/official.json sources/nju
+docker run --rm "$image" validate
 
-docker run --rm -v "$volume:/data" "$image"   tsx -e 'import { InfoHubDatabase } from "@nju-info/db"; const db = new InfoHubDatabase("/data/feeds.sqlite"); db.close();'
+docker run --rm \
+  -v "$volume:/data" \
+  --entrypoint /app/apps/worker/node_modules/.bin/tsx \
+  "$image" \
+  -e 'import { InfoHubDatabase } from "/app/packages/db/src/index.ts"; const db = new InfoHubDatabase("/data/feeds.sqlite"); db.close();'
 
 wait_healthy() {
   for _ in $(seq 1 20); do
