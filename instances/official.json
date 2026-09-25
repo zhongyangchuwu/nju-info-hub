@@ -1,10 +1,11 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "instance": {
     "id": "official",
     "name": "NJU Info Hub"
   },
   "publication": {
+    "publicBaseUrl": "https://zhongyangchuwu.github.io/nju-info-hub/",
     "sources": [
       { "id": "nju-cs-graduate", "limit": 10 },
       { "id": "nju-cs-internal-notices", "limit": 10 },
@@ -29,9 +30,9 @@
       }
     ]
   },
-  "deployment": {
-    "publicBaseUrl": "https://zhongyangchuwu.github.io/nju-info-hub/",
-    "schedule": "17 */2 * * *"
+  "collection": {
+    "schedule": "17 */2 * * *",
+    "timeZone": "UTC"
   },
   "storage": {
     "mode": "optional-webdav"

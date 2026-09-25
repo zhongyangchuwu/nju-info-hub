@@ -14,7 +14,8 @@
   },
   "dependencies": {
     "@nju-info/collector": "workspace:*",
-    "zod": "4.6.5",
-    "tsx": "4.23.15"
+    "croner": "10.0.1",
+    "tsx": "4.23.15",
+    "zod": "4.6.5"
   }
 }

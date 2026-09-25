@@ -1,6 +1,6 @@
 # Docker / GHCR
 
-The official container is a public-data-only runtime for NJU Info Hub. It does not contain or request NJU SSO credentials, personal cookies, QQ/WeChat sessions, or private campus data.
+Docker Compose is the canonical product deployment for NJU Info Hub. GitHub Actions/Pages remains the official public reference publisher and CI surface, not a second user deployment architecture.
 
 ## Image
 
@@ -16,27 +16,49 @@ The image uses Node 26 and the repository-pinned pnpm/tsx versions. It runs as t
 
 ## Runtime model
 
-One image exposes a stable `nju-info` container entrypoint:
+One image exposes a stable `nju-info` entrypoint:
 
 - `serve` (default): read-only HTTP API on port 3000;
 - `validate`: validate the selected instance configuration;
-- `collect`: collect configured public sources into local SQLite;
+- `collect`: run one configured public collection;
+- `schedule`: run one collection at startup, then collect on the configured cron/timezone;
 - `export`: generate static syndication output;
 - `worker`: access lower-level public collector commands;
 - `mcp`: run the existing read-only stdio MCP server against the same persistent database.
 
-The container entrypoint hides the repository's pnpm/workspace layout from users.
+All commands use the same image and local SQLite volume. The scheduler owns recurring collection; API and MCP remain read-only consumers.
 
-For stdio MCP clients, run the same image interactively:
+For stdio MCP clients:
 
 ```bash
 docker run --rm -i -v nju-info-data:/data \
   ghcr.io/zhongyangchuwu/nju-info-hub:<version> mcp
 ```
 
-The MCP command is read-only and uses the same SQLite state as the API.
+SQLite remains local to the active runtime. The API opens an existing current-schema database read-only and does not create or migrate state.
 
-SQLite remains on the active host/container volume. The API opens an existing current-schema database read-only and does not create or migrate state. The data volume itself remains writable because SQLite may require WAL/SHM side files even for a read-only application connection.
+## Instance configuration
+
+Current instance files use schema version 2:
+
+```json
+{
+  "schemaVersion": 2,
+  "publication": {
+    "publicBaseUrl": "https://example.invalid/",
+    "sources": [],
+    "sets": []
+  },
+  "collection": {
+    "schedule": "17 */2 * * *",
+    "timeZone": "UTC"
+  }
+}
+```
+
+Collection cadence is runtime-neutral. The same metadata is consumed by the resident Docker scheduler and checked against the static GitHub Actions cron for the official reference deployment.
+
+`timeZone` must be a valid IANA timezone. Existing v1 configs remain readable: their former `deployment.schedule` is normalized as UTC because GitHub Actions cron semantics are UTC, and `deployment.publicBaseUrl` becomes `publication.publicBaseUrl`.
 
 ## Localhost Compose profile
 
@@ -46,79 +68,115 @@ Set an immutable image reference:
 export NJU_INFO_IMAGE=ghcr.io/zhongyangchuwu/nju-info-hub:sha-<revision>
 ```
 
-For local development, a locally built tag can be used instead:
+For local development:
 
 ```bash
 docker build -t nju-info-hub:local .
 export NJU_INFO_IMAGE=nju-info-hub:local
 ```
 
-The Compose file is `deploy/docker/localhost/compose.yaml`.
-
-First create/update the local SQLite state with the public collector:
+Start the canonical instance:
 
 ```bash
-docker compose -f deploy/docker/localhost/compose.yaml run --rm collect
+docker compose -f deploy/docker/localhost/compose.yaml up -d
 ```
 
-Then start the read-only API:
+The default Compose services are:
 
-```bash
-docker compose -f deploy/docker/localhost/compose.yaml up -d api
-```
+- `scheduler`: performs an initial collection, then follows the instance cron/timezone;
+- `api`: waits for the first successful collection readiness marker, then serves the read-only API.
 
-It is bound to `127.0.0.1:3000` by default. Override the host port only:
-
-```bash
-NJU_INFO_PORT=3100 docker compose -f deploy/docker/localhost/compose.yaml up -d api
-```
-
-Health endpoint:
+Both share the named `nju-info-data` volume. The API is bound to `127.0.0.1:3000` by default:
 
 ```text
 http://127.0.0.1:3000/v1/health
 ```
 
-Stop the API without deleting state:
+Override only the host port when needed:
+
+```bash
+NJU_INFO_PORT=3100 docker compose -f deploy/docker/localhost/compose.yaml up -d
+```
+
+A fresh volume does not need a manual database bootstrap. The scheduler creates/updates state through the normal collector. After its first successful run it writes a readiness marker into the data volume; the API does not start serving until that marker exists.
+
+The API wait timeout defaults to 900 seconds and can be changed with `NJU_INFO_READY_TIMEOUT_SECONDS`.
+
+### Manual collection
+
+The one-shot collector remains available for explicit refresh/debugging:
+
+```bash
+docker compose -f deploy/docker/localhost/compose.yaml run --rm collect
+```
+
+It is not the normal scheduling mechanism.
+
+## Custom instance config
+
+From this repository, Compose defaults to `instances/official.json`. Override it without changing the Compose file:
+
+```bash
+NJU_INFO_CONFIG_FILE=/absolute/path/to/instance.json \
+  docker compose -f deploy/docker/localhost/compose.yaml up -d
+```
+
+Inside scheduler/collector containers the file is mounted as `/config/instance.json`.
+
+The deployment contract is:
+
+```text
+immutable image + instance config + persistent data volume
+```
+
+not a source-code fork.
+
+## Stop and upgrade
+
+Stop services without deleting state:
 
 ```bash
 docker compose -f deploy/docker/localhost/compose.yaml down
 ```
 
-The named volume `nju-info-data` remains. Removing the volume is a destructive state reset and is intentionally not part of the normal stop/upgrade flow.
+The named volume remains.
 
-## Configuration
+Upgrade:
 
-The localhost profile mounts an instance configuration explicitly. From this repository it defaults to `instances/official.json`. Override it without changing the Compose file:
-
-```bash
-NJU_INFO_CONFIG_FILE=/absolute/path/to/instance.json \
-  docker compose -f deploy/docker/localhost/compose.yaml run --rm collect
-```
-
-Inside the container the file is always exposed as `/config/instance.json`. The deployment contract is the image + instance configuration + persistent data volume, not a source-code fork.
-
-A later deployment-template milestone will make user-owned config/version pins the product onboarding path. This profile intentionally does not introduce that template yet.
-
-## Upgrade
-
-1. Choose a new immutable GHCR revision/version tag.
-2. Update `NJU_INFO_IMAGE`.
-3. Run the one-shot collector if you want fresh state.
-4. Recreate the API:
+1. choose a new immutable GHCR revision/version tag;
+2. update `NJU_INFO_IMAGE`;
+3. pull and recreate the services.
 
 ```bash
-docker compose -f deploy/docker/localhost/compose.yaml pull api
-docker compose -f deploy/docker/localhost/compose.yaml up -d api
+docker compose -f deploy/docker/localhost/compose.yaml pull
+docker compose -f deploy/docker/localhost/compose.yaml up -d
 ```
 
-The named SQLite volume is preserved across container recreation.
+The scheduler performs collection using the new image while the SQLite volume is preserved.
+
+Removing the named volume is a destructive state reset and is intentionally not part of normal stop/upgrade flow.
+
+## Health and readiness
+
+The image healthcheck probes the API's existing `/v1/health` endpoint. The scheduler service disables that HTTP healthcheck because it does not expose HTTP.
+
+Compose readiness is state-based:
+
+1. scheduler validates config;
+2. startup collection succeeds;
+3. scheduler writes `/data/.collection-ready`;
+4. API proceeds to open the existing database read-only;
+5. HTTP healthcheck becomes healthy.
+
+If startup collection fails because an upstream is transiently unavailable, the scheduler logs the failure and remains alive for the next configured run. It does not publish readiness until a collection succeeds.
 
 ## Security boundary
 
-- no secrets are baked into the image;
-- the API opens SQLite through the application's read-only database reader;
+- no credentials are baked into the image;
 - collection writes only to the local named volume;
-- the official profile collects public sources only;
+- API/MCP remain read-only application paths;
+- the current official config collects public sources only;
 - SQLite is not placed on WebDAV/FUSE/network mounts;
-- private authentication/session support is out of scope for this image milestone.
+- private authentication/session support remains out of scope for this milestone.
+
+Future private data belongs in the same canonical Docker/Compose instance architecture but must remain security-separated from public state and outputs.

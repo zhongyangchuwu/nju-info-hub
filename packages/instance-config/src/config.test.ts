@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,13 +10,21 @@ const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
 const sourceDir = path.join(repoRoot, "sources/nju");
 const officialPath = path.join(repoRoot, "instances/official.json");
 
-async function withConfig(mutator: (value: any) => void): Promise<string> {
-  const value = JSON.parse(await import("node:fs/promises").then(({ readFile }) => readFile(officialPath, "utf8")));
-  mutator(value);
+async function official(): Promise<any> {
+  return JSON.parse(await readFile(officialPath, "utf8"));
+}
+
+async function writeConfig(value: any): Promise<string> {
   const dir = await mkdtemp(path.join(tmpdir(), "nju-instance-"));
   const file = path.join(dir, "instance.json");
   await writeFile(file, JSON.stringify(value));
   return file;
+}
+
+async function withConfig(mutator: (value: any) => void): Promise<string> {
+  const value = await official();
+  mutator(value);
+  return writeConfig(value);
 }
 
 describe("instance config", () => {
@@ -29,19 +37,47 @@ describe("instance config", () => {
     expect(result.status, result.stderr || result.stdout).toBe(0);
   });
 
-  it("loads the official deployment with nine published sources and the three-source cs set", async () => {
+  it("loads the official v2 config without changing publication behavior", async () => {
     const config = await loadInstanceConfig(officialPath, sourceDir);
+    expect(config.schemaVersion).toBe(2);
     expect(config.publication.sources).toHaveLength(9);
-    expect(config.publication.sets).toEqual([
-      {
-        id: "cs",
-        title: "计算机学院公开信息",
-        sources: ["nju-cs-graduate", "nju-cs-internal-notices", "nju-cs-seminars"],
-        opml: "subscriptions/cs.opml",
-      },
+    expect(config.publication.publicBaseUrl).toBe("https://zhongyangchuwu.github.io/nju-info-hub/");
+    expect(config.publication.sets[0]?.sources).toEqual([
+      "nju-cs-graduate",
+      "nju-cs-internal-notices",
+      "nju-cs-seminars",
     ]);
-    expect(config.deployment.publicBaseUrl).toBe("https://zhongyangchuwu.github.io/nju-info-hub/");
+    expect(config.collection).toEqual({ schedule: "17 */2 * * *", timeZone: "UTC" });
     expect(config.storage.mode).toBe("optional-webdav");
+  });
+
+  it("normalizes a v1 config to v2 with UTC schedule semantics", async () => {
+    const current = await official();
+    const file = await writeConfig({
+      schemaVersion: 1,
+      instance: current.instance,
+      publication: {
+        sources: current.publication.sources,
+        sets: current.publication.sets,
+      },
+      deployment: {
+        publicBaseUrl: current.publication.publicBaseUrl,
+        schedule: current.collection.schedule,
+      },
+      storage: current.storage,
+    });
+    const config = await loadInstanceConfig(file, sourceDir);
+    expect(config.schemaVersion).toBe(2);
+    expect(config.publication.publicBaseUrl).toBe(current.publication.publicBaseUrl);
+    expect(config.collection).toEqual({ schedule: current.collection.schedule, timeZone: "UTC" });
+  });
+
+  it("rejects invalid cron schedules and time zones", async () => {
+    const badSchedule = await withConfig((value) => { value.collection.schedule = "not a cron"; });
+    await expect(loadInstanceConfig(badSchedule, sourceDir)).rejects.toThrow("invalid cron schedule");
+
+    const badZone = await withConfig((value) => { value.collection.timeZone = "Moon/SeaOfTranquility"; });
+    await expect(loadInstanceConfig(badZone, sourceDir)).rejects.toThrow("invalid IANA time zone");
   });
 
   it("rejects an unsupported storage mode", async () => {
@@ -49,27 +85,23 @@ describe("instance config", () => {
     await expect(loadInstanceConfig(file, sourceDir)).rejects.toThrow();
   });
 
-  it("rejects unknown published sources", async () => {
-    const file = await withConfig((value) => value.publication.sources.push({ id: "missing-source", limit: 1 }));
-    await expect(loadInstanceConfig(file, sourceDir)).rejects.toThrow("unknown published source id: missing-source");
+  it("rejects unknown or duplicate published sources", async () => {
+    const unknown = await withConfig((value) => value.publication.sources.push({ id: "missing-source", limit: 1 }));
+    await expect(loadInstanceConfig(unknown, sourceDir)).rejects.toThrow("unknown published source id: missing-source");
+
+    const duplicate = await withConfig((value) => value.publication.sources.push(value.publication.sources[0]));
+    await expect(loadInstanceConfig(duplicate, sourceDir)).rejects.toThrow("duplicate published source id");
   });
 
-  it("rejects duplicate published sources", async () => {
-    const file = await withConfig((value) => value.publication.sources.push(value.publication.sources[0]));
-    await expect(loadInstanceConfig(file, sourceDir)).rejects.toThrow("duplicate published source id");
-  });
-
-  it("rejects multiple curated source sets in v1", async () => {
-    const file = await withConfig((value) => value.publication.sets.push({
+  it("rejects multiple, duplicate, and unpublished curated-set members", async () => {
+    const multiple = await withConfig((value) => value.publication.sets.push({
       id: "second",
       title: "Second",
       sources: ["nju-cs-graduate"],
       opml: "subscriptions/second.opml",
     }));
-    await expect(loadInstanceConfig(file, sourceDir)).rejects.toThrow("v1 supports at most one curated source set");
-  });
+    await expect(loadInstanceConfig(multiple, sourceDir)).rejects.toThrow("at most one curated source set");
 
-  it("rejects duplicate and unpublished curated-set members", async () => {
     const duplicate = await withConfig((value) => value.publication.sets[0].sources.push("nju-cs-graduate"));
     await expect(loadInstanceConfig(duplicate, sourceDir)).rejects.toThrow("duplicate source id in set cs");
 

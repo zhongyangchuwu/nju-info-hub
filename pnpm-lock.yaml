@@ -254,6 +254,9 @@ importers:
       '@nju-info/collector':
         specifier: workspace:*
         version: link:../collector
+      croner:
+        specifier: 10.0.1
+        version: 10.0.1
       tsx:
         specifier: 4.23.15
         version: 4.23.15
@@ -706,6 +709,10 @@ packages:
   cheerio@1.2.0:
     resolution: {integrity: sha512-WDrybc/gKFpTYQutKIK6UvfcuxijIZfMfXaYm8NMsPQxSYvf+13fXUJ4rztGGbJcBQ/GF55gvrZ0Bc0bj/mqvg==}
     engines: {node: '>=20.18.1'}
+
+  croner@10.0.1:
+    resolution: {integrity: sha512-ixNtAJndqh173VQ4KodSdJEI6nuioBWI0V1ITNKhZZsO0pEMoDxz539T4FTTbSZ/xIOSuDnzxLVRqBVSvPNE2g==}
+    engines: {node: '>=18.0'}
 
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
@@ -1355,6 +1362,8 @@ snapshots:
       parse5-parser-stream: 7.1.2
       undici: 7.29.1
       whatwg-mimetype: 4.0.0
+
+  croner@10.0.1: {}
 
   cross-spawn@7.0.6:
     dependencies:
