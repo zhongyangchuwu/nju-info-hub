@@ -1,0 +1,62 @@
+name: ${NJU_INFO_PROJECT_NAME:-nju-info-hub}
+
+x-image: &image
+  image: ${NJU_INFO_IMAGE:?Set NJU_INFO_IMAGE to an immutable GHCR tag or local development image}
+
+x-image-environment: &image-environment
+  NJU_INFO_IMAGE_REF: ${NJU_INFO_IMAGE}
+
+services:
+  scheduler:
+    <<: *image
+    restart: unless-stopped
+    command: ["schedule"]
+    environment:
+      <<: *image-environment
+      NJU_INFO_CONFIG: /config/instance.json
+      NJU_INFO_READY_FILE: /data/.collection-ready
+    volumes:
+      - nju-info-data:/data
+      - ${NJU_INFO_CONFIG_FILE:-./instances/official.json}:/config/instance.json:ro
+    healthcheck:
+      disable: true
+
+  api:
+    <<: *image
+    restart: unless-stopped
+    depends_on:
+      scheduler:
+        condition: service_started
+    ports:
+      - "${NJU_INFO_BIND_ADDRESS:-127.0.0.1}:${NJU_INFO_PORT:-3000}:3000"
+    environment:
+      <<: *image-environment
+      NJU_INFO_READY_FILE: /data/.collection-ready
+      NJU_INFO_READY_TIMEOUT_SECONDS: ${NJU_INFO_READY_TIMEOUT_SECONDS:-900}
+    volumes:
+      - nju-info-data:/data
+
+  collect:
+    <<: *image
+    profiles: ["maintenance"]
+    command: ["collect"]
+    environment:
+      <<: *image-environment
+      NJU_INFO_CONFIG: /config/instance.json
+    volumes:
+      - nju-info-data:/data
+      - ${NJU_INFO_CONFIG_FILE:-./instances/official.json}:/config/instance.json:ro
+
+  maintenance:
+    <<: *image
+    profiles: ["maintenance"]
+    command: ["backup", "/backup/state.tar.gz"]
+    environment:
+      <<: *image-environment
+      NJU_INFO_READY_FILE: /data/.collection-ready
+    volumes:
+      - nju-info-data:/data
+      - ${NJU_INFO_BACKUP_DIR:-./backups}:/backup
+
+volumes:
+  nju-info-data:
