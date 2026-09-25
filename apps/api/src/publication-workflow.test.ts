@@ -51,6 +51,7 @@ describe("public Pages workflow", () => {
     expect(collection).toBeGreaterThan(cacheRestore);
     expect(workflow).toContain("if: steps.durable_restore.outputs.restored != 'true'");
     expect(workflow).toContain("falling back to Actions cache");
+    expect(workflow).not.toContain('rm -f "$snapshot" "$NJU_INFO_DB"');
   });
 
   it("fails durable persistence before Pages artifact upload when configured", () => {
@@ -71,6 +72,7 @@ describe("public Pages workflow", () => {
     expect(workflow).toContain("NJU_INFO_STATE_WEBDAV_PASSWORD");
     expect(workflow).toContain("install -m 600 /dev/null");
     expect(workflow).toContain("rclone obscure -");
+    expect(workflow).toContain('[[ "$remote_path" = /* || "$remote_path" == *:* || ! "$remote_path" =~ ^[A-Za-z0-9._/-]+$ ]]');
     expect(workflow).not.toMatch(/path:\s*\$\{\{\s*secrets\./);
   });
 });
