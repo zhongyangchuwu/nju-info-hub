@@ -13,11 +13,10 @@ import { createMcpServer } from "./server.js";
 const source = {
   schemaVersion: 1 as const, id: "source-a", name: "First source",
   organization: { id: "group-a", name: "First organization" },
-  url: "https://example.edu/a/list.htm", audience: ["students"],
-  categories: ["notices"], enabled: true, adapter: { type: "webplus" as const },
+  url: "https://example.edu/a/list.htm", adapter: { type: "webplus" as const },
 };
 const sibling = {
-  ...source, id: "source-b", name: "Second source", enabled: false,
+  ...source, id: "source-b", name: "Second source",
   organization: { id: "group-b", name: "Second organization" },
 };
 const dirs: string[] = [];
@@ -184,7 +183,7 @@ it("launches actual stdio server with official client and reaps the child on clo
   expect(transport.pid).not.toBeNull();
   expect(await result(client, "list_sources")).toEqual({ sources: [
     { id: "source-a", name: "First source", organization: source.organization,
-      url: source.url, enabled: true },
+      url: source.url },
   ] });
   expect(await result(client, "list_recent_notices")).toEqual({ notices: [] });
   expect(diagnostics).toBe("");

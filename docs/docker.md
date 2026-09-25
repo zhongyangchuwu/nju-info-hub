@@ -58,7 +58,7 @@ Current instance files use schema version 2:
 
 Collection cadence is runtime-neutral. The same metadata is consumed by the resident Docker scheduler and checked against the static GitHub Actions cron for the official reference deployment.
 
-`timeZone` must be a valid IANA timezone. Existing v1 configs remain readable: their former `deployment.schedule` is normalized as UTC because GitHub Actions cron semantics are UTC, and `deployment.publicBaseUrl` becomes `publication.publicBaseUrl`.
+`timeZone` must be a valid IANA timezone. The current instance contract is schema v2; older pre-release shapes are rejected instead of normalized at runtime.
 
 ## Canonical Compose deployment
 

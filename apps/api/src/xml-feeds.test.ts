@@ -5,7 +5,7 @@ import { buildAtomFeed, buildRssFeed } from "./xml-feeds.js";
 const source: PersistedSourceSummary = {
   id: "nju-cs-graduate", name: '通告 & <课程> "甲"',
   organization: { id: "nju-cs", name: '计算机 & <学院> "乙"' },
-  url: "https://cs.nju.edu.cn/list.htm?x=1&y=2", enabled: true,
+  url: "https://cs.nju.edu.cn/list.htm?x=1&y=2",
 };
 const notice: SourceEntryQueryResult = {
   sourceId: source.id, sourceItemId: "news/123:4", sourceName: source.name,

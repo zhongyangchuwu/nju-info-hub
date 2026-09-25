@@ -4,7 +4,7 @@ import { z } from "zod";
 
 const organization = z.object({ id: z.string(), name: z.string() });
 const source = z.object({
-  id: z.string(), name: z.string(), organization, url: z.string(), enabled: z.boolean(),
+  id: z.string(), name: z.string(), organization, url: z.string(),
 });
 const attachment = z.object({
   url: z.string(), title: z.string(), mediaType: z.string().optional(),
@@ -49,7 +49,7 @@ export function createMcpServer(reader: Reader, onClose: () => void = () => read
   };
 
   server.registerTool("list_sources", {
-    description: "List persisted public sources and their organizations, URLs, and enabled status.",
+    description: "List persisted public sources and their organizations and URLs.",
     inputSchema: emptyInput, outputSchema: sourcesOutput, annotations,
   }, () => query(() => ({ sources: reader.listSources() })));
 

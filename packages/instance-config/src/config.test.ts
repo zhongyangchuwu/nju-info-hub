@@ -37,7 +37,7 @@ describe("instance config", () => {
     expect(result.status, result.stderr || result.stdout).toBe(0);
   });
 
-  it("loads the official v2 config without changing publication behavior", async () => {
+  it("loads the official config without changing publication behavior", async () => {
     const config = await loadInstanceConfig(officialPath, sourceDir);
     expect(config.schemaVersion).toBe(2);
     expect(config.publication.sources).toHaveLength(9);
@@ -48,10 +48,9 @@ describe("instance config", () => {
       "nju-cs-seminars",
     ]);
     expect(config.collection).toEqual({ schedule: "17 */2 * * *", timeZone: "UTC" });
-    expect(config.storage.mode).toBe("optional-webdav");
   });
 
-  it("normalizes a v1 config to v2 with UTC schedule semantics", async () => {
+  it("rejects the obsolete v1 instance shape", async () => {
     const current = await official();
     const file = await writeConfig({
       schemaVersion: 1,
@@ -64,12 +63,8 @@ describe("instance config", () => {
         publicBaseUrl: current.publication.publicBaseUrl,
         schedule: current.collection.schedule,
       },
-      storage: current.storage,
     });
-    const config = await loadInstanceConfig(file, sourceDir);
-    expect(config.schemaVersion).toBe(2);
-    expect(config.publication.publicBaseUrl).toBe(current.publication.publicBaseUrl);
-    expect(config.collection).toEqual({ schedule: current.collection.schedule, timeZone: "UTC" });
+    await expect(loadInstanceConfig(file, sourceDir)).rejects.toThrow();
   });
 
   it("rejects invalid cron schedules and time zones", async () => {
@@ -78,11 +73,6 @@ describe("instance config", () => {
 
     const badZone = await withConfig((value) => { value.collection.timeZone = "Moon/SeaOfTranquility"; });
     await expect(loadInstanceConfig(badZone, sourceDir)).rejects.toThrow("invalid IANA time zone");
-  });
-
-  it("rejects an unsupported storage mode", async () => {
-    const file = await withConfig((value) => { value.storage.mode = "inline-sqlite-over-webdav"; });
-    await expect(loadInstanceConfig(file, sourceDir)).rejects.toThrow();
   });
 
   it("rejects unknown or duplicate published sources", async () => {

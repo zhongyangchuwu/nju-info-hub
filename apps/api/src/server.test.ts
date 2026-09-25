@@ -16,9 +16,6 @@ const source: Source = {
   name: "First source",
   organization: { id: "group-a", name: "First organization" },
   url: "https://example.edu/a/list.htm",
-  audience: ["students"],
-  categories: ["notices"],
-  enabled: true,
   adapter: { type: "webplus" },
 };
 const sibling: Source = {
@@ -26,7 +23,6 @@ const sibling: Source = {
   id: "notices-b",
   name: "Second source",
   organization: { id: "group-b", name: "Second organization" },
-  enabled: false,
 };
 
 const services: ApiService[] = [];
@@ -312,7 +308,7 @@ describe("read-only API", () => {
     const listRecentNotices = vi.fn(() => []);
     const listRecentSourceEntries = vi.fn(() => []);
     const listSources = vi.fn(() => [{ id: source.id, name: source.name,
-      organization: source.organization, url: source.url, enabled: true }]);
+      organization: source.organization, url: source.url }]);
     const server = createApiServer({ listSources, listRecentNotices, listRecentSourceEntries,
       listOrganizations: vi.fn(() => []) });
     extraServers.push(server);

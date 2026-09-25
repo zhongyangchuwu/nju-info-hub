@@ -27,7 +27,7 @@ notice_revisions
 
 ### `sources`
 
-Stores the registry identity and provenance needed to interpret collected data: source name, organization, homepage/list URL, adapter type, enabled state, and the normalized source configuration as JSON. Re-registering an unchanged source is a no-op; a changed configuration updates the same source row.
+Stores the registry identity and provenance needed to interpret collected data: source name, organization, homepage/list URL, adapter type, and the normalized source configuration as JSON. The physical schema still contains the pre-release `enabled` column for database compatibility, but current source configuration has no enable/disable switch and writers persist that legacy column as `1`. Re-registering an unchanged source is a no-op; a changed configuration updates the same source row.
 
 ### `raw_documents`
 
@@ -77,7 +77,7 @@ For read-only delivery, use `new InfoHubDatabaseReader(path)` from `@nju-info/db
 
 `stats().sourceItemObservations` counts persisted observation revisions, not just current source items; it can exceed the number of link-only entries. `sourceItems` counts identities with either observations or full notices.
 
-`InfoHubDatabase.listSources()` returns persisted source summaries (`id`, `name`, `organization: { id, name }`, `url`, `enabled`) ordered by source ID. `InfoHubDatabase.listOrganizations()` returns unique `{ id, name }` summaries derived from persisted sources, ordered by organization ID. If sources sharing an organization ID disagree on its name, the name from the lowest source ID wins; there is no separate organization table. Both queries reflect current persisted source metadata and return empty arrays for an empty database. They include sources with no notices and disabled sources; `enabled` does not change notice-filter behavior. Consumers can discover `sourceId` and `organizationId` for `listRecentNotices` using only this database package, without loading registry YAML.
+`InfoHubDatabase.listSources()` returns persisted source summaries (`id`, `name`, `organization: { id, name }`, `url`) ordered by source ID. `InfoHubDatabase.listOrganizations()` returns unique `{ id, name }` summaries derived from persisted sources, ordered by organization ID. If sources sharing an organization ID disagree on its name, the name from the lowest source ID wins; there is no separate organization table. Both queries reflect current persisted source metadata and return empty arrays for an empty database. They include registered sources with no notices. Consumers can discover `sourceId` and `organizationId` for `listRecentNotices` using only this database package, without loading registry YAML.
 
 `apps/api` opens this reader once at startup and serves the persisted query results without accessing registry YAML or the ingestion API. Its default loopback bind does not change SQLite's live-WAL sidecar requirements above; a reader must be able to access the live database and its sidecars. API startup fails for missing or unsupported-schema files rather than initializing them.
 

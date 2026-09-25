@@ -4,7 +4,7 @@ import type { InfoHubDatabaseReader, PersistedSourceSummary, SourceEntryQueryRes
 import { buildAtomBundle, buildJsonBundle, buildRssBundle, type BundlePart } from "./bundle.js";
 import { buildJsonFeed } from "./feed.js";
 import { buildOpml } from "./opml.js";
-import { buildSetCatalog, buildSourceCatalog, bundleSelfUrl, resolveSourceSet, subscriptionSelfUrl, type SourceSetDefinition } from "./source-set.js";
+import { buildSetCatalog, buildSourceCatalog, bundleSelfUrl, resolveSourceSet, type SourceSetDefinition } from "./source-set.js";
 import { feedSelfUrl, publicBaseUrl } from "./syndication.js";
 import { buildAtomFeed, buildRssFeed } from "./xml-feeds.js";
 

@@ -53,7 +53,6 @@ export interface PersistedSourceSummary {
   name: string;
   organization: PersistedOrganizationSummary;
   url: string;
-  enabled: boolean;
 }
 
 export interface RecentNoticeOptions {
@@ -104,7 +103,6 @@ interface SourceSummaryRow {
   organization_id: string;
   organization_name: string;
   homepage_url: string;
-  enabled: number;
 }
 
 interface NoticeQueryRow {
@@ -546,7 +544,7 @@ export class InfoHubDatabase implements Disposable {
         source.url,
         source.adapter.type,
         configJson,
-        source.enabled ? 1 : 0,
+        1,
         now,
         now,
       );
@@ -699,7 +697,7 @@ class DatabaseQueries {
   listSources(): PersistedSourceSummary[] {
     const rows = this.#database
       .prepare(
-        `SELECT id, name, organization_id, organization_name, homepage_url, enabled
+        `SELECT id, name, organization_id, organization_name, homepage_url
            FROM sources
           ORDER BY id`,
       )
@@ -709,7 +707,6 @@ class DatabaseQueries {
       name: row.name,
       organization: { id: row.organization_id, name: row.organization_name },
       url: row.homepage_url,
-      enabled: row.enabled === 1,
     }));
   }
 

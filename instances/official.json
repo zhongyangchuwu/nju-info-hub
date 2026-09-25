@@ -33,8 +33,5 @@
   "collection": {
     "schedule": "17 */2 * * *",
     "timeZone": "UTC"
-  },
-  "storage": {
-    "mode": "optional-webdav"
   }
 }

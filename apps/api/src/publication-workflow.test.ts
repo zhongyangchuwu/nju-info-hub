@@ -16,8 +16,8 @@ describe("public Pages workflow", () => {
     );
     expect(workflow).not.toContain("pnpm worker -- ingest nju-");
     expect(workflow).not.toContain("export-feeds --");
-    expect(workflow).toContain("name: Read instance storage mode");
-    expect(workflow).toContain("if: steps.instance_config.outputs.storage_mode == 'optional-webdav'");
+    expect(workflow).not.toContain("storage.mode");
+    expect(workflow).not.toContain("instance_config.outputs.storage_mode");
   });
 
   it("keeps the GitHub schedule synchronized with official instance metadata", () => {

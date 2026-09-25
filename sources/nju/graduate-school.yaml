@@ -7,11 +7,3 @@ organization:
 url: https://grawww.nju.edu.cn/905/list.htm
 adapter:
   type: webplus
-audience:
-  - graduate
-categories:
-  - graduate
-  - student-affairs
-crawl:
-  intervalMinutes: 30
-enabled: true

@@ -7,11 +7,3 @@ organization:
 url: https://scit.nju.edu.cn/10916/list.htm
 adapter:
   type: webplus
-audience:
-  - graduate
-  - faculty
-categories:
-  - research
-crawl:
-  intervalMinutes: 60
-enabled: true

@@ -18,9 +18,6 @@ const GRADUATE_SOURCE: Source = {
   name: "Graduate notices",
   organization: { id: "nju-cs", name: "School of Computer Science" },
   url: "https://cs.nju.edu.cn/graduate/list.htm",
-  audience: ["students"],
-  categories: ["notices"],
-  enabled: true,
   adapter: { type: "webplus" },
 };
 
@@ -298,9 +295,9 @@ describe("static JSON Feed exporter", () => {
       url: "https://cs.nju.edu.cn/list.htm?x=1&y=2" };
     const reader: FeedExportReader = {
       listSources: () => [{ id: special.id, name: special.name, organization: special.organization,
-        url: special.url, enabled: true },
+        url: special.url },
       { id: SEMINAR_SOURCE.id, name: SEMINAR_SOURCE.name, organization: SEMINAR_SOURCE.organization,
-        url: SEMINAR_SOURCE.url, enabled: true }],
+        url: SEMINAR_SOURCE.url }],
       listRecentSourceEntries: () => [],
     };
     try {

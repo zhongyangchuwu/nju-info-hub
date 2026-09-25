@@ -11,35 +11,30 @@ const sources: PersistedSourceSummary[] = [
     name: "Graduate notices",
     organization: { id: "nju-cs", name: "School of Computer Science" },
     url: "https://cs.nju.edu.cn/1703/list.htm",
-    enabled: true,
   },
   {
     id: "nju-cs-seminars",
     name: "Seminars",
     organization: { id: "nju-cs", name: "School of Computer Science" },
     url: "https://cs.nju.edu.cn/1706/list.htm",
-    enabled: true,
   },
   {
     id: "nju-cs-undergraduate",
     name: "Undergraduate notices",
     organization: { id: "nju-cs", name: "School of Computer Science" },
     url: "https://cs.nju.edu.cn/1704/list.htm",
-    enabled: true,
   },
   {
     id: "nju-library",
     name: "Library notices",
     organization: { id: "nju-library", name: "University Library" },
     url: "https://lib.nju.edu.cn/notices/list.htm",
-    enabled: true,
   },
   {
     id: "nju-math",
     name: "Mathematics notices",
     organization: { id: "nju-math", name: "School of Mathematics" },
     url: "https://math.nju.edu.cn/notices/list.htm",
-    enabled: true,
   },
 ];
 

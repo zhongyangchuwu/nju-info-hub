@@ -8,14 +8,12 @@ const sources: PersistedSourceSummary[] = [
     name: "Graduate notices",
     organization: { id: "nju-cs", name: "School of Computer Science" },
     url: "https://cs.nju.edu.cn/1703/list.htm",
-    enabled: true,
   },
   {
     id: "nju-cs-seminars",
     name: "Seminars",
     organization: { id: "nju-cs", name: "School of Computer Science" },
     url: "https://cs.nju.edu.cn/1706/list.htm",
-    enabled: true,
   },
 ];
 
