@@ -11,6 +11,7 @@
     "dev": "tsx src/cli.ts"
   },
   "dependencies": {
-    "@nju-info/db": "workspace:*"
+    "@nju-info/db": "workspace:*",
+    "tsx": "4.23.15"
   }
 }

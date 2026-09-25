@@ -184,6 +184,9 @@ importers:
       '@nju-info/db':
         specifier: workspace:*
         version: link:../../packages/db
+      tsx:
+        specifier: 4.23.15
+        version: 4.23.15
 
   apps/mcp:
     dependencies:
@@ -193,6 +196,9 @@ importers:
       '@nju-info/db':
         specifier: workspace:*
         version: link:../../packages/db
+      tsx:
+        specifier: 4.23.15
+        version: 4.23.15
       zod:
         specifier: 4.6.5
         version: 4.6.5
@@ -212,6 +218,9 @@ importers:
       '@nju-info/db':
         specifier: workspace:*
         version: link:../../packages/db
+      tsx:
+        specifier: 4.23.15
+        version: 4.23.15
 
   packages/collector:
     dependencies:
@@ -245,6 +254,9 @@ importers:
       '@nju-info/collector':
         specifier: workspace:*
         version: link:../collector
+      tsx:
+        specifier: 4.23.15
+        version: 4.23.15
       zod:
         specifier: 4.6.5
         version: 4.6.5

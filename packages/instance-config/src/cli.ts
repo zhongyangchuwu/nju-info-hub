@@ -33,7 +33,7 @@ async function main(): Promise<void> {
     const [database] = rest;
     if (!database) throw new Error("collect requires <database>");
     for (const source of config.publication.sources) {
-      run(["worker", "--", "ingest", source.id, database, String(source.limit)]);
+      run(["--filter", "@nju-info/worker", "exec", "tsx", "src/cli.ts", "--", "ingest", source.id, database, String(source.limit)]);
     }
     return;
   }
@@ -42,7 +42,7 @@ async function main(): Promise<void> {
     const [database, outputDir] = rest;
     if (!database || !outputDir) throw new Error("export requires <database> <output-dir>");
     const args = [
-      "--filter", "@nju-info/api", "export-feeds", "--",
+      "--filter", "@nju-info/api", "exec", "tsx", "src/export-feeds-cli.ts", "--",
       database,
       outputDir,
       ...config.publication.sources.map((source) => source.id),

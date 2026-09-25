@@ -36,7 +36,7 @@ Most new WebPlus/Sudy sources should require configuration only. Source-specific
 
 ## Instance configuration
 
-Deployment/publication policy is separate from the source registry. Checked-in instance files under `instances/` select already-registered sources and describe one deployment profile without changing collector semantics.
+Instance publication policy is separate from both the source registry and the runtime. Checked-in instance files under `instances/` select already-registered sources without choosing whether the same instance runs under Docker, GitHub-hosted automation, or another runner.
 
 The official public deployment uses `instances/official.json` as the reviewed source of truth for:
 
@@ -44,12 +44,12 @@ The official public deployment uses `instances/official.json` as the reviewed so
 - published source IDs and per-run collection limits;
 - the single v1 curated source set and its OPML path;
 - public base URL;
-- deployment mode and schedule metadata;
+- publication base URL and collection schedule metadata;
 - storage mode selection.
 
-`@nju-info/instance-config` validates the file against the source registry before collection/export. Unknown source IDs, duplicate publication membership, invalid or duplicate set membership, and unsupported deployment/storage modes fail before collection starts. v1 intentionally permits at most one curated set because the current static exporter accepts one named set per invocation.
+`@nju-info/instance-config` validates the file against the source registry before collection/export. Unknown source IDs, duplicate publication membership, invalid or duplicate set membership, and unsupported storage modes fail before collection starts. v1 intentionally permits at most one curated set because the current static exporter accepts one named set per invocation.
 
-Secrets are not instance configuration. WebDAV URL/user/password remain runtime deployment secrets, and runtime SQLite/storage transport stays outside the collector/source registry.
+Secrets are not instance configuration. WebDAV URL/user/password remain runtime secrets, and runtime SQLite/storage transport stays outside the collector/source registry. Runtime choice is deliberately not encoded as an instance mode; Docker is the canonical product deployment while the existing GitHub Pages workflow remains a reference publisher for the official public instance.
 
 ## Adapter boundary
 

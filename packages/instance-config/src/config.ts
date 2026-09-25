@@ -25,7 +25,6 @@ export const instanceConfigSchema = z.object({
     sets: z.array(sourceSetSchema).max(1, "v1 supports at most one curated source set"),
   }).strict(),
   deployment: z.object({
-    mode: z.literal("github-pages"),
     publicBaseUrl: z.url(),
     schedule: z.string().min(1),
   }).strict(),

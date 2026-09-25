@@ -12,7 +12,7 @@
   "dependencies": {
     "@nju-info/collector": "workspace:*",
     "@nju-info/core": "workspace:*",
-    "@nju-info/db": "workspace:*"
+    "@nju-info/db": "workspace:*",
+    "tsx": "4.23.15"
   }
 }
-
