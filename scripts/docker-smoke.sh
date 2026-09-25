@@ -19,6 +19,7 @@ cleanup() {
 trap cleanup EXIT
 
 mkdir -p "$tmpdir/sources" "$tmpdir/site"
+chmod 755 "$tmpdir" "$tmpdir/sources" "$tmpdir/site"
 
 cat > "$tmpdir/sources/smoke-source.yaml" <<'YAML'
 schemaVersion: 1
