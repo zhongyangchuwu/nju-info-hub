@@ -21,7 +21,9 @@ import type {
 import { UnsupportedDetailAcquisitionError, fetchWebPlusDetail } from "./detail-acquisition.js";
 
 function sourceDirectory(): string {
-  return fileURLToPath(new URL("../../../sources/nju/", import.meta.url));
+  return process.env.NJU_INFO_SOURCE_DIR
+    ? resolve(process.env.NJU_INFO_SOURCE_DIR)
+    : fileURLToPath(new URL("../../../sources/nju/", import.meta.url));
 }
 
 async function loadSources(): Promise<SourceConfig[]> {

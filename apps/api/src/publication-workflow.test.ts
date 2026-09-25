@@ -22,7 +22,7 @@ describe("public Pages workflow", () => {
 
   it("keeps the GitHub schedule synchronized with official instance metadata", () => {
     const cron = workflow.match(/- cron: '([^']+)'/)?.[1];
-    expect(cron).toBe(officialConfig.deployment.schedule);
+    expect(cron).toBe(officialConfig.collection.schedule);
   });
 
   it("restores durable state before the best-effort Actions cache", () => {
