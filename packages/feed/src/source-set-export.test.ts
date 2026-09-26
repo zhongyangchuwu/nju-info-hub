@@ -184,8 +184,13 @@ describe("source catalog and source-set export", () => {
         publicBaseUrl: "https://example.org/nju",
       });
       expect(readdirSync(join(directory, "catalog"))).toEqual(["sources.json"]);
+      expect(existsSync(join(directory, "bundles"))).toBe(false);
+      expect(existsSync(join(directory, "subscriptions"))).toBe(false);
+
       await exportFeeds(reader, directory, sources.map((source) => source.id));
       expect(existsSync(join(directory, "catalog"))).toBe(false);
+      expect(existsSync(join(directory, "bundles"))).toBe(false);
+      expect(existsSync(join(directory, "subscriptions"))).toBe(false);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

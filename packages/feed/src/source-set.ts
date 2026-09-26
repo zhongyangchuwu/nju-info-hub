@@ -64,13 +64,22 @@ export function buildSourceCatalog(sources: readonly PersistedSourceSummary[], b
   };
 }
 
-export function subscriptionSelfUrl(base: URL, opmlPath: string): string {
+export function validateSubscriptionPath(opmlPath: string): string {
   const segments = opmlPath.split("/");
-  if (!opmlPath || segments.some((part) => !/^[a-z0-9][a-z0-9._-]*$/i.test(part) || part === "." || part === "..") ||
-    ["feeds", "catalog", "bundles"].includes(segments[0]!.toLowerCase())) {
-    throw new Error("unsafe OPML path: expected a relative path outside exporter-owned directories");
+  if (
+    !opmlPath ||
+    segments.length !== 2 ||
+    segments[0]?.toLowerCase() !== "subscriptions" ||
+    !segments[1]?.toLowerCase().endsWith(".opml") ||
+    segments.some((part) => !/^[a-z0-9][a-z0-9._-]*$/i.test(part) || part === "." || part === "..")
+  ) {
+    throw new Error("unsafe OPML path: expected subscriptions/<name>.opml");
   }
-  return new URL(opmlPath, base).href;
+  return opmlPath;
+}
+
+export function subscriptionSelfUrl(base: URL, opmlPath: string): string {
+  return new URL(validateSubscriptionPath(opmlPath), base).href;
 }
 
 export function buildSetCatalog(set: ResolvedSourceSet, base: URL, opmlPath: string) {
