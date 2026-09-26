@@ -41,14 +41,15 @@ Instance publication policy is separate from both the source registry and the ru
 The official public deployment uses `instances/official.json` as the reviewed source of truth for:
 
 - instance identity;
-- published source IDs and per-run collection limits;
+- collected source IDs and per-run recent-ingest limits;
+- published source IDs and per-source feed item limit;
 - the single curated source set and its OPML path;
 - publication base URL;
 - runtime-neutral collection cron and IANA timezone.
 
-Instance schema v2 places publication URL metadata under `publication` and recurring collection metadata under `collection`; it does not encode deployment or storage transport choices. Pre-v2 instance shapes are intentionally unsupported before a stable release rather than carrying a permanent normalization layer.
+Instance schema v3 separates collection policy from publication policy. `collection.sources[].recentLimit` controls collection depth, while `publication.sources` and `publication.itemLimit` control feed membership and output depth. Published sources must also be collected by the same instance. The schema does not encode deployment or storage transport choices; older pre-release shapes are intentionally unsupported before a stable release rather than carrying permanent normalization layers.
 
-`@nju-info/instance-config` owns the declarative instance contract; `apps/nju-info` loads and validates it before collection/export/scheduling. Unknown source IDs, duplicate publication membership, invalid or duplicate set membership, and invalid cron/timezone values fail before collection starts. The current schema intentionally permits at most one curated set because the static exporter accepts one named set per invocation.
+`@nju-info/instance-config` owns the declarative instance contract; `apps/nju-info` loads and validates it before collection/export/scheduling. Unknown source IDs, duplicate collection/publication membership, published-but-uncollected sources, invalid or duplicate set membership, and invalid cron/timezone values fail before collection starts. The current schema intentionally permits at most one curated set because the static exporter accepts one named set per invocation.
 
 Secrets are not instance configuration. WebDAV URL/user/password remain runtime secrets, and runtime SQLite/storage transport stays outside the collector/source registry. Runtime choice is deliberately not encoded as an instance mode; Docker/Compose is the canonical product deployment while the existing GitHub Pages workflow remains a reference publisher for the official public instance.
 

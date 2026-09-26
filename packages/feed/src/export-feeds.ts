@@ -20,6 +20,7 @@ function validateSourceId(id: string): void {
 
 export interface FeedExportOptions {
   publicBaseUrl?: string;
+  itemLimit?: number;
   opmlPath?: string;
   sourceSet?: SourceSetDefinition;
 }
@@ -85,6 +86,10 @@ export async function exportFeeds(
   if (options.opmlPath !== undefined && !base) throw new Error("OPML export requires a public base URL");
   if (options.sourceSet !== undefined && !base) throw new Error("source set export requires a public base URL");
 
+  const itemLimit = options.itemLimit ?? 100;
+  if (!Number.isInteger(itemLimit) || itemLimit < 1 || itemLimit > 100) {
+    throw new Error("feed item limit must be an integer from 1 to 100");
+  }
   const sourceSet = options.sourceSet === undefined ? undefined : resolveSourceSet(options.sourceSet, selectedSources);
   const opmlPath = options.opmlPath ?? (sourceSet ? `subscriptions/${sourceSet.id}.opml` : undefined);
   const opmlTarget = opmlPath === undefined ? undefined : await safeOpmlPath(outputDirectory, opmlPath);
@@ -96,7 +101,7 @@ export async function exportFeeds(
 
   const sourceEntriesBySource = new Map<string, SourceEntryQueryResult[]>();
   for (const source of selectedSources) {
-    sourceEntriesBySource.set(source.id, reader.listRecentSourceEntries({ sourceId: source.id, limit: 100 }));
+    sourceEntriesBySource.set(source.id, reader.listRecentSourceEntries({ sourceId: source.id, limit: itemLimit }));
   }
 
   const feedsDirectory = join(outputDirectory, "feeds");

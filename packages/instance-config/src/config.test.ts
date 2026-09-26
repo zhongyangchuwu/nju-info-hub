@@ -27,50 +27,96 @@ async function withConfig(mutator: (value: any) => void): Promise<string> {
 }
 
 describe("instance config", () => {
-  it("loads the official config without changing publication behavior", async () => {
+  it("loads the official v3 collection and publication policy", async () => {
     const config = await loadInstanceConfig(officialPath, sourceDir);
-    expect(config.schemaVersion).toBe(2);
+    expect(config.schemaVersion).toBe(3);
     expect(config.publication.sources).toHaveLength(9);
-    expect(config.publication.publicBaseUrl).toBe("https://zhongyangchuwu.github.io/nju-info-hub/");
+    expect(config.publication.itemLimit).toBe(100);
+    expect(config.publication.publicBaseUrl)
+      .toBe("https://zhongyangchuwu.github.io/nju-info-hub/");
     expect(config.publication.sets[0]?.sources).toEqual([
       "nju-cs-graduate",
       "nju-cs-internal-notices",
       "nju-cs-seminars",
     ]);
-    expect(config.collection).toEqual({ schedule: "17 */2 * * *", timeZone: "UTC" });
+    expect(config.collection.schedule).toBe("17 */2 * * *");
+    expect(config.collection.timeZone).toBe("UTC");
+    expect(config.collection.sources).toHaveLength(9);
+    expect(config.collection.sources[0]).toEqual({
+      id: "nju-cs-graduate",
+      recentLimit: 10,
+    });
   });
 
-  it("rejects the obsolete v1 instance shape", async () => {
+  it("rejects the obsolete v2 instance shape", async () => {
     const current = await official();
     const file = await writeConfig({
-      schemaVersion: 1,
+      schemaVersion: 2,
       instance: current.instance,
       publication: {
-        sources: current.publication.sources,
+        publicBaseUrl: current.publication.publicBaseUrl,
+        sources: current.collection.sources.map((source: any) => ({
+          id: source.id,
+          limit: source.recentLimit,
+        })),
         sets: current.publication.sets,
       },
-      deployment: {
-        publicBaseUrl: current.publication.publicBaseUrl,
+      collection: {
         schedule: current.collection.schedule,
+        timeZone: current.collection.timeZone,
       },
     });
     await expect(loadInstanceConfig(file, sourceDir)).rejects.toThrow();
   });
 
   it("rejects invalid cron schedules and time zones", async () => {
-    const badSchedule = await withConfig((value) => { value.collection.schedule = "not a cron"; });
-    await expect(loadInstanceConfig(badSchedule, sourceDir)).rejects.toThrow("invalid cron schedule");
+    const badSchedule = await withConfig((value) => {
+      value.collection.schedule = "not a cron";
+    });
+    await expect(loadInstanceConfig(badSchedule, sourceDir))
+      .rejects.toThrow("invalid cron schedule");
 
-    const badZone = await withConfig((value) => { value.collection.timeZone = "Moon/SeaOfTranquility"; });
-    await expect(loadInstanceConfig(badZone, sourceDir)).rejects.toThrow("invalid IANA time zone");
+    const badZone = await withConfig((value) => {
+      value.collection.timeZone = "Moon/SeaOfTranquility";
+    });
+    await expect(loadInstanceConfig(badZone, sourceDir))
+      .rejects.toThrow("invalid IANA time zone");
   });
 
-  it("rejects unknown or duplicate published sources", async () => {
-    const unknown = await withConfig((value) => value.publication.sources.push({ id: "missing-source", limit: 1 }));
-    await expect(loadInstanceConfig(unknown, sourceDir)).rejects.toThrow("unknown published source id: missing-source");
+  it("rejects unknown and duplicate collection sources", async () => {
+    const unknown = await withConfig((value) => {
+      value.collection.sources.push({ id: "missing-source", recentLimit: 1 });
+    });
+    await expect(loadInstanceConfig(unknown, sourceDir))
+      .rejects.toThrow("unknown collection source id: missing-source");
 
-    const duplicate = await withConfig((value) => value.publication.sources.push(value.publication.sources[0]));
-    await expect(loadInstanceConfig(duplicate, sourceDir)).rejects.toThrow("duplicate published source id");
+    const duplicate = await withConfig((value) => {
+      value.collection.sources.push(value.collection.sources[0]);
+    });
+    await expect(loadInstanceConfig(duplicate, sourceDir))
+      .rejects.toThrow("duplicate collection source id");
+  });
+
+  it("rejects unknown, duplicate, and uncollected published sources", async () => {
+    const unknown = await withConfig((value) => {
+      value.publication.sources.push("missing-source");
+    });
+    await expect(loadInstanceConfig(unknown, sourceDir))
+      .rejects.toThrow("unknown published source id: missing-source");
+
+    const duplicate = await withConfig((value) => {
+      value.publication.sources.push(value.publication.sources[0]);
+    });
+    await expect(loadInstanceConfig(duplicate, sourceDir))
+      .rejects.toThrow("duplicate published source id");
+
+    const uncollected = await withConfig((value) => {
+      value.publication.sources.push("nju-student-exchange");
+    });
+    await expect(loadInstanceConfig(uncollected, sourceDir))
+      .rejects.toThrow(
+        "published source id is not collected by this instance: nju-student-exchange",
+      );
   });
 
   it("rejects multiple, duplicate, and unpublished curated-set members", async () => {
@@ -80,12 +126,16 @@ describe("instance config", () => {
       sources: ["nju-cs-graduate"],
       opml: "subscriptions/second.opml",
     }));
-    await expect(loadInstanceConfig(multiple, sourceDir)).rejects.toThrow("at most one curated source set");
+    await expect(loadInstanceConfig(multiple, sourceDir))
+      .rejects.toThrow("at most one curated source set");
 
-    const duplicate = await withConfig((value) => value.publication.sets[0].sources.push("nju-cs-graduate"));
-    await expect(loadInstanceConfig(duplicate, sourceDir)).rejects.toThrow("duplicate source id in set cs");
+    const duplicate = await withConfig((value) =>
+      value.publication.sets[0].sources.push("nju-cs-graduate"));
+    await expect(loadInstanceConfig(duplicate, sourceDir))
+      .rejects.toThrow("duplicate source id in set cs");
 
-    const unpublished = await withConfig((value) => value.publication.sets[0].sources.push("nju-student-exchange"));
+    const unpublished = await withConfig((value) =>
+      value.publication.sets[0].sources.push("nju-student-exchange"));
     await expect(loadInstanceConfig(unpublished, sourceDir)).rejects.toThrow(
       "source set cs references unpublished source id: nju-student-exchange",
     );
