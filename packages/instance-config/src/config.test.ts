@@ -27,11 +27,10 @@ async function withConfig(mutator: (value: any) => void): Promise<string> {
 }
 
 describe("instance config", () => {
-  it("loads the official v3 collection and publication policy", async () => {
+  it("loads the official v4 collection and publication policy", async () => {
     const config = await loadInstanceConfig(officialPath, sourceDir);
-    expect(config.schemaVersion).toBe(3);
+    expect(config.schemaVersion).toBe(4);
     expect(config.publication.sources).toHaveLength(9);
-    expect(config.publication.itemLimit).toBe(100);
     expect(config.publication.publicBaseUrl)
       .toBe("https://zhongyangchuwu.github.io/nju-info-hub/");
     expect(config.publication.sets[0]?.sources).toEqual([
@@ -48,22 +47,14 @@ describe("instance config", () => {
     });
   });
 
-  it("rejects the obsolete v2 instance shape", async () => {
+  it("rejects the obsolete v3 instance shape", async () => {
     const current = await official();
     const file = await writeConfig({
-      schemaVersion: 2,
-      instance: current.instance,
+      ...current,
+      schemaVersion: 3,
       publication: {
-        publicBaseUrl: current.publication.publicBaseUrl,
-        sources: current.collection.sources.map((source: any) => ({
-          id: source.id,
-          limit: source.recentLimit,
-        })),
-        sets: current.publication.sets,
-      },
-      collection: {
-        schedule: current.collection.schedule,
-        timeZone: current.collection.timeZone,
+        ...current.publication,
+        itemLimit: 100,
       },
     });
     await expect(loadInstanceConfig(file, sourceDir)).rejects.toThrow();

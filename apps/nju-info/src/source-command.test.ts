@@ -77,7 +77,7 @@ afterEach(() => {
 });
 
 describe("worker restricted details", () => {
-  it("skips the newest IP-restricted item, preserving dated recency and one-page-beyond ordering", async () => {
+  it("keeps the newest restricted item in the recent window without refilling from older items", async () => {
     const requested = mockPages({
       [sourceUrl]: {
         body: list(
@@ -93,13 +93,11 @@ describe("worker restricted details", () => {
       },
       [detail("blocked")]: { body: restriction },
       [detail("public-new")]: { body: publicDetail("public-new") },
-      [detail("public-old")]: { body: publicDetail("public-old") },
     });
 
     const result = await run("fetch", "2");
     expect(JSON.parse(result.output).map((notice: { title: string }) => notice.title)).toEqual([
       "public-new",
-      "public-old",
     ]);
     expect(result.errors).toContain(`nju-student-exchange ${detail("blocked")}: campus-network`);
     expect(requested).toEqual([
@@ -107,7 +105,6 @@ describe("worker restricted details", () => {
       `${baseUrl}/2539/list2.htm`,
       detail("blocked"),
       detail("public-new"),
-      detail("public-old"),
     ]);
   });
 
@@ -136,7 +133,7 @@ describe("worker restricted details", () => {
       const result = await run("ingest", path, "2");
       expect(JSON.parse(result.output)).toMatchObject({
         pagesVisited: 2,
-        itemsDiscovered: 2,
+        itemsObserved: 2,
         noticesIngested: 2,
         stats: { sourceItems: 2, sourceItemObservations: 2, noticeRevisions: 2 },
       });
@@ -163,10 +160,11 @@ describe("worker restricted details", () => {
     }
   });
 
-  it("continues beyond the initial one-page window for multiple restrictions and persists only public details", async () => {
+  it("does not refill from older pages when the newest source items are restricted", async () => {
     const directory = mkdtempSync(join(tmpdir(), "nju-restricted-worker-"));
     const path = join(directory, "notices.sqlite");
     try {
+      const secondListUrl = `${baseUrl}/2539/list2.htm`;
       const requested = mockPages({
         [sourceUrl]: {
           body: list(
@@ -177,66 +175,43 @@ describe("worker restricted details", () => {
             "/2539/list2.htm",
           ),
         },
-        [`${baseUrl}/2539/list2.htm`]: {
+        [secondListUrl]: {
           body: list([{ name: "ip-blocked-two", date: "2026-09-22" }], "/2539/list3.htm"),
-        },
-        [`${baseUrl}/2539/list3.htm`]: {
-          body: list([
-            { name: "public-first", date: "2026-09-21" },
-            { name: "public-second", date: "2026-09-20" },
-          ]),
         },
         [detail("ip-blocked")]: { body: restriction },
         [detail("auth-blocked")]: {
           body: "<html>Sign in</html>",
           finalUrl: "https://authserver.nju.edu.cn/authserver/login?service=test",
         },
-        [detail("ip-blocked-two")]: { body: restriction },
-        [detail("public-first")]: { body: publicDetail("public-first") },
-        [detail("public-second")]: { body: publicDetail("public-second") },
       });
 
       const result = await run("ingest", path, "2");
       const summary = JSON.parse(result.output);
-      expect(summary.itemsDiscovered).toBe(5);
-      expect(summary.noticesIngested).toBe(2);
-      expect(summary.insertedRevisions).toBe(2);
+      expect(summary).toMatchObject({
+        pagesVisited: 2,
+        itemsObserved: 2,
+        noticesIngested: 0,
+        insertedRevisions: 0,
+      });
       expect(result.errors).toContain(`${detail("ip-blocked")}: campus-network`);
       expect(result.errors).toContain(`${detail("auth-blocked")}: authentication`);
-      expect(result.errors).toContain(`${detail("ip-blocked-two")}: campus-network`);
-      expect(requested).toContain(`${baseUrl}/2539/list3.htm`);
+      expect(requested).toEqual([
+        sourceUrl,
+        secondListUrl,
+        detail("ip-blocked"),
+        detail("auth-blocked"),
+      ]);
+
       const database = new DatabaseSync(path);
       try {
         expect(database.prepare("SELECT url FROM source_items ORDER BY url").all()).toEqual([
           { url: detail("auth-blocked") },
-          { url: detail("ip-blocked-two") },
           { url: detail("ip-blocked") },
-          { url: detail("public-first") },
-          { url: detail("public-second") },
         ]);
-        expect(database.prepare("SELECT count(*) AS count FROM source_item_observations").get()).toEqual({ count: 5 });
-        expect(
-          database.prepare(`
-            SELECT source_items.url, raw_documents.final_url AS list_url
-            FROM source_item_observations
-            JOIN source_items ON source_items.id = source_item_observations.source_item_row_id
-            JOIN raw_documents ON raw_documents.id = source_item_observations.raw_document_id
-            ORDER BY source_items.url
-          `).all(),
-        ).toEqual([
-          { url: detail("auth-blocked"), list_url: sourceUrl },
-          { url: detail("ip-blocked-two"), list_url: `${baseUrl}/2539/list2.htm` },
-          { url: detail("ip-blocked"), list_url: sourceUrl },
-          { url: detail("public-first"), list_url: `${baseUrl}/2539/list3.htm` },
-          { url: detail("public-second"), list_url: `${baseUrl}/2539/list3.htm` },
-        ]);
-        expect(database.prepare("SELECT count(*) AS count FROM notice_revisions").get()).toEqual({ count: 2 });
-        expect(
-          database.prepare("SELECT final_url FROM raw_documents WHERE final_url LIKE '%/page.htm' ORDER BY final_url").all(),
-        ).toEqual([
-          { final_url: detail("public-first") },
-          { final_url: detail("public-second") },
-        ]);
+        expect(database.prepare("SELECT count(*) AS count FROM source_item_observations").get())
+          .toEqual({ count: 2 });
+        expect(database.prepare("SELECT count(*) AS count FROM notice_revisions").get())
+          .toEqual({ count: 0 });
       } finally {
         database.close();
       }
@@ -272,7 +247,7 @@ describe("worker restricted details", () => {
     expect(result.errors).toBe("");
   });
 
-  it("skips an official public-WeChat row without requesting it and refills from older WebPlus rows", async () => {
+  it("keeps public-WeChat link-only items inside the recent window without refilling", async () => {
     const directory = mkdtempSync(join(tmpdir(), "nju-mixed-worker-"));
     const path = join(directory, "notices.sqlite");
     const listUrl = "https://xgb.nju.edu.cn/gsgg/list.htm";
@@ -289,31 +264,25 @@ describe("worker restricted details", () => {
           </ul>`,
         },
         [first]: { body: publicDetail("First public") },
-        [second]: { body: publicDetail("Second public") },
       });
       const result = await runSource("nju-student-affairs-notices", "ingest", path, "2");
       expect(JSON.parse(result.output)).toMatchObject({
-        itemsDiscovered: 3,
-        noticesIngested: 2,
-        insertedRevisions: 2,
+        itemsObserved: 2,
+        noticesIngested: 1,
+        insertedRevisions: 1,
       });
       expect(result.errors).toContain(`nju-student-affairs-notices ${wechatUrl}: public-wechat`);
-      expect(requested).toEqual([listUrl, first, second]);
+      expect(requested).toEqual([listUrl, first]);
       const database = new DatabaseSync(path);
       try {
         expect(database.prepare("SELECT url FROM source_items ORDER BY url").all()).toEqual([
           { url: wechatUrl },
           { url: first },
-          { url: second },
         ]);
-        expect(database.prepare("SELECT count(*) AS count FROM source_item_observations").get()).toEqual({ count: 3 });
-        expect(
-          database.prepare(`
-            SELECT DISTINCT raw_documents.final_url
-            FROM source_item_observations
-            JOIN raw_documents ON raw_documents.id = source_item_observations.raw_document_id
-          `).all(),
-        ).toEqual([{ final_url: listUrl }]);
+        expect(database.prepare("SELECT count(*) AS count FROM source_item_observations").get())
+          .toEqual({ count: 2 });
+        expect(database.prepare("SELECT count(*) AS count FROM notice_revisions").get())
+          .toEqual({ count: 1 });
       } finally {
         database.close();
       }

@@ -846,6 +846,34 @@ describe("InfoHubDatabase", () => {
       rmSync(temporary.directory, { recursive: true, force: true });
     }
   });
+  it("returns all source entries when no query limit is supplied", () => {
+    const temporary = temporaryDatabase();
+    try {
+      for (let index = 0; index < 125; index += 1) {
+        const id = `item-${String(index).padStart(3, "0")}`;
+        temporary.database.observeSourceItem(
+          SOURCE,
+          listRawDocument(
+            SOURCE,
+            `<li>${id}</li>`,
+            `2026-09-25T10:${String(index % 60).padStart(2, "0")}:00.000Z`,
+          ),
+          discoveredItem(SOURCE, id, {
+            publishedAtRaw: `2026-09-${String((index % 25) + 1).padStart(2, "0")}`,
+          }),
+        );
+      }
+
+      expect(temporary.database.listRecentSourceEntries({ sourceId: SOURCE.id }))
+        .toHaveLength(125);
+      expect(temporary.database.listRecentSourceEntries({ sourceId: SOURCE.id, limit: 100 }))
+        .toHaveLength(100);
+    } finally {
+      temporary.database.close();
+      rmSync(temporary.directory, { recursive: true, force: true });
+    }
+  });
+
   it("returns no metadata from an empty database", () => {
     const temporary = temporaryDatabase();
     try {

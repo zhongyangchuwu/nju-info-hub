@@ -13,13 +13,16 @@ import type {
   RawDocument,
   WebPlusSourceConfig,
 } from "@nju-info/core";
-import { UnsupportedDetailAcquisitionError, fetchWebPlusDetail } from "./detail-acquisition.js";
+import {
+  UnsupportedDetailAcquisitionError,
+  fetchWebPlusDetail,
+} from "./detail-acquisition.js";
 
 export interface IngestSummary {
   sourceId: string;
   databasePath: string;
   pagesVisited: number;
-  itemsDiscovered: number;
+  itemsObserved: number;
   noticesIngested: number;
   insertedRevisions: number;
   unchangedRevisions: number;
@@ -30,16 +33,23 @@ export interface DiscoverPagesOptions {
   maxPages: number;
   recentLimit?: number;
   onPage?: (rawDocument: RawDocument) => void;
-  onCandidate?: (item: DiscoveredItem, listRaw: RawDocument) => Promise<boolean>;
+  onCandidate?: (item: DiscoveredItem, listRaw: RawDocument) => Promise<void>;
 }
 
+/**
+ * Discover enough list pages to choose the latest requested source items.
+ *
+ * Once a page reaches the requested limit, one additional page is fetched when
+ * available so pinned/out-of-order list rows cannot displace a newer dated item.
+ * Detail availability never expands the candidate window: link-only and full
+ * entries are equally valid source observations.
+ */
 export async function discoverPages(
   source: WebPlusSourceConfig,
   options: DiscoverPagesOptions,
 ): Promise<{
   pagesVisited: number;
   items: DiscoveredItem[];
-  candidatesConsidered: number;
 }> {
   const firstListRawByUrl = new Map<string, RawDocument>();
   const items = new Map<string, DiscoveredItem>();
@@ -47,21 +57,6 @@ export async function discoverPages(
   let pageUrl: string | undefined = source.url;
   let pagesVisited = 0;
   let reachedRecentLimit = false;
-  const attempted = new Set<string>();
-  let usableCount = 0;
-
-  const processCandidates = async (): Promise<boolean> => {
-    if (!options.onCandidate) return false;
-    for (const item of orderDiscoveredItemsByPublicationRecency([...items.values()])) {
-      if (attempted.has(item.url)) continue;
-      attempted.add(item.url);
-      const listRaw = firstListRawByUrl.get(item.url);
-      if (!listRaw) throw new Error(`missing list-page provenance for ${item.url}`);
-      if (await options.onCandidate(item, listRaw)) usableCount += 1;
-      if (usableCount === options.recentLimit) return true;
-    }
-    return false;
-  };
 
   while (pageUrl && pagesVisited < options.maxPages && !seenPages.has(pageUrl)) {
     seenPages.add(pageUrl);
@@ -76,33 +71,26 @@ export async function discoverPages(
     pageUrl = page.nextPageUrl;
 
     if (options.recentLimit !== undefined && items.size >= options.recentLimit) {
-      if (reachedRecentLimit) {
-        if (!options.onCandidate || (await processCandidates())) break;
-      } else {
-        reachedRecentLimit = true;
-      }
+      if (reachedRecentLimit || !pageUrl) break;
+      reachedRecentLimit = true;
     }
   }
 
-  if (
-    options.onCandidate &&
-    options.recentLimit !== undefined &&
-    usableCount < options.recentLimit
-  ) {
-    await processCandidates();
+  const sourceOrderedItems = [...items.values()];
+  const selectedItems = options.recentLimit === undefined
+    ? sourceOrderedItems
+    : orderDiscoveredItemsByPublicationRecency(sourceOrderedItems)
+        .slice(0, options.recentLimit);
+
+  if (options.onCandidate) {
+    for (const item of selectedItems) {
+      const listRaw = firstListRawByUrl.get(item.url);
+      if (!listRaw) throw new Error(`missing list-page provenance for ${item.url}`);
+      await options.onCandidate(item, listRaw);
+    }
   }
 
-  const sourceOrderedItems = [...items.values()];
-  return {
-    pagesVisited,
-    candidatesConsidered: attempted.size,
-    items: options.recentLimit === undefined
-      ? sourceOrderedItems
-      : orderDiscoveredItemsByPublicationRecency(sourceOrderedItems).slice(
-          0,
-          options.onCandidate ? undefined : options.recentLimit,
-        ),
-  };
+  return { pagesVisited, items: selectedItems };
 }
 
 export async function collectNotices(
@@ -113,11 +101,11 @@ export async function collectNotices(
   onCandidate?: (item: DiscoveredItem, listRaw: RawDocument) => void,
 ): Promise<{
   pagesVisited: number;
-  itemsDiscovered: number;
+  itemsObserved: number;
   notices: ParsedNotice[];
 }> {
   const notices: ParsedNotice[] = [];
-  const { pagesVisited, candidatesConsidered } = await discoverPages(source, {
+  const { pagesVisited, items } = await discoverPages(source, {
     maxPages: 100,
     recentLimit: limit,
     ...(onPage ? { onPage } : {}),
@@ -128,31 +116,30 @@ export async function collectNotices(
         const notice = parseWebPlusNotice(detailRaw, source, item);
         onNotice?.(detailRaw, notice);
         notices.push(notice);
-        return true;
       } catch (error) {
         if (error instanceof RestrictedDetailError) {
           console.error(
             `skipping restricted detail ${source.id} ${item.url}: ${error.restrictionClass}`,
           );
-          return false;
+          return;
         }
         if (error instanceof UnsupportedDetailAcquisitionError) {
           console.error(
             `skipping unsupported detail ${error.sourceId} ${error.url}: ${error.acquisitionKind}`,
           );
-          return false;
+          return;
         }
         throw error;
       }
     },
   });
-  return { pagesVisited, itemsDiscovered: candidatesConsidered, notices };
+  return { pagesVisited, itemsObserved: items.length, notices };
 }
 
 export async function ingestSource(
   source: WebPlusSourceConfig,
   databasePath: string,
-  itemLimit: number,
+  recentItemLimit: number,
 ): Promise<IngestSummary> {
   const resolvedDatabasePath = resolve(databasePath);
   const database = new InfoHubDatabase(resolvedDatabasePath);
@@ -160,9 +147,9 @@ export async function ingestSource(
   try {
     let insertedRevisions = 0;
     let unchangedRevisions = 0;
-    const { pagesVisited, itemsDiscovered, notices } = await collectNotices(
+    const { pagesVisited, itemsObserved, notices } = await collectNotices(
       source,
-      itemLimit,
+      recentItemLimit,
       (rawDocument) => database.persistRawDocument(source, rawDocument),
       (detailRaw, notice) => {
         const result = database.ingestNotice(source, detailRaw, notice);
@@ -176,7 +163,7 @@ export async function ingestSource(
       sourceId: source.id,
       databasePath: resolvedDatabasePath,
       pagesVisited,
-      itemsDiscovered,
+      itemsObserved,
       noticesIngested: notices.length,
       insertedRevisions,
       unchangedRevisions,

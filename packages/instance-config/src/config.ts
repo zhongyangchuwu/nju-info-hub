@@ -13,7 +13,6 @@ const sourceSetSchema = z.object({
 const publicationSchema = z.object({
   publicBaseUrl: z.url(),
   sources: z.array(z.string().min(1)).min(1),
-  itemLimit: z.number().int().min(1).max(100),
   sets: z.array(sourceSetSchema).max(
     1,
     "instance config currently supports at most one curated source set",
@@ -62,7 +61,7 @@ const instanceIdentitySchema = z.object({
 }).strict();
 
 export const instanceConfigSchema = z.object({
-  schemaVersion: z.literal(3),
+  schemaVersion: z.literal(4),
   instance: instanceIdentitySchema,
   publication: publicationSchema,
   collection: collectionSchema,

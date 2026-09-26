@@ -42,12 +42,12 @@ The official public deployment uses `instances/official.json` as the reviewed so
 
 - instance identity;
 - collected source IDs and per-run recent-ingest limits;
-- published source IDs and per-source feed item limit;
+- published source IDs;
 - the single curated source set and its OPML path;
 - publication base URL;
 - runtime-neutral collection cron and IANA timezone.
 
-Instance schema v3 separates collection policy from publication policy. `collection.sources[].recentLimit` controls collection depth, while `publication.sources` and `publication.itemLimit` control feed membership and output depth. Published sources must also be collected by the same instance. The schema does not encode deployment or storage transport choices; older pre-release shapes are intentionally unsupported before a stable release rather than carrying permanent normalization layers.
+Instance schema v4 separates collection policy from publication policy. `collection.sources[].recentLimit` bounds the recent source-item window examined per run; full-detail acquisition is best-effort within that window and link-only entries do not trigger refill from older items. `publication.sources` controls feed membership, while publication emits every persisted current source entry without an arbitrary item-count cap. Published sources must also be collected by the same instance. The schema does not encode deployment or storage transport choices; older pre-release shapes are intentionally unsupported before a stable release rather than carrying permanent normalization layers.
 
 `@nju-info/instance-config` owns the declarative instance contract; `apps/nju-info` loads and validates it before collection/export/scheduling. Unknown source IDs, duplicate collection/publication membership, published-but-uncollected sources, invalid or duplicate set membership, and invalid cron/timezone values fail before collection starts. The current schema intentionally permits at most one curated set because the static exporter accepts one named set per invocation.
 
