@@ -87,7 +87,10 @@ describe("source catalog and source-set export", () => {
       });
       expect(listRecentSourceEntries).toHaveBeenCalledTimes(sources.length);
       for (const source of sources) {
-        expect(listRecentSourceEntries).toHaveBeenCalledWith({ sourceId: source.id });
+        expect(listRecentSourceEntries).toHaveBeenCalledWith({
+          sourceId: source.id,
+          limit: 100,
+        });
       }
 
       const catalog = JSON.parse(readFileSync(join(directory, "catalog/sources.json"), "utf8"));
@@ -256,7 +259,7 @@ describe("source catalog and source-set export", () => {
     }
   });
 
-  it("publishes every persisted entry without imposing a feed item limit", async () => {
+  it("uses the producer recent window instead of the full archive", async () => {
     const listRecentSourceEntries = vi.fn(() => []);
     const reader: FeedExportReader = {
       listSources: () => sources.slice(0, 1),
@@ -267,6 +270,7 @@ describe("source catalog and source-set export", () => {
       await exportFeeds(reader, directory, [sources[0]!.id]);
       expect(listRecentSourceEntries).toHaveBeenCalledWith({
         sourceId: sources[0]!.id,
+        limit: 100,
       });
     } finally {
       rmSync(directory, { recursive: true, force: true });

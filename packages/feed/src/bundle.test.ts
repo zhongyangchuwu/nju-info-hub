@@ -111,6 +111,34 @@ describe("combined source-set feeds", () => {
     });
   });
 
+  it("caps the combined source-set feed at the producer recent window", () => {
+    const manyParts = [
+      {
+        source: graduate,
+        entries: Array.from({ length: 75 }, (_, index) =>
+          notice(
+            graduate,
+            `grad-${String(index).padStart(3, "0")}`,
+            "2026-09-25",
+            "2026-09-25T10:00:00Z",
+          )),
+      },
+      {
+        source: seminars,
+        entries: Array.from({ length: 75 }, (_, index) =>
+          notice(
+            seminars,
+            `seminar-${String(index).padStart(3, "0")}`,
+            "2026-09-25",
+            "2026-09-25T10:00:00Z",
+          )),
+      },
+    ];
+    expect(buildJsonBundle(set, manyParts).items).toHaveLength(100);
+    expect(buildAtomBundle(set, manyParts).match(/<entry>/g)).toHaveLength(100);
+    expect(buildRssBundle(set, manyParts).match(/<item>/g)).toHaveLength(100);
+  });
+
   it("uses standard Atom and RSS attribution while preserving link-only notes", () => {
     const atom = buildAtomBundle(set, parts, {
       selfUrl: "https://example.org/bundles/cs.atom",

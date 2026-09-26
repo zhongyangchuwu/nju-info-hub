@@ -1,7 +1,13 @@
-import { createServer, type Server, type ServerResponse } from "node:http";
+import { createHash } from "node:crypto";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { InfoHubDatabaseReader, type RecentNoticeOptions } from "@nju-info/db";
 import type { ApiConfig } from "./config.js";
-import { buildAtomFeed, buildJsonFeed, buildRssFeed } from "@nju-info/feed";
+import {
+  buildAtomFeed,
+  buildJsonFeed,
+  buildRssFeed,
+  feedRecentItemLimit,
+} from "@nju-info/feed";
 
 const paths: Record<string, true> = {
   "/v1/health": true,
@@ -24,6 +30,71 @@ function json(response: ServerResponse, status: number, body: unknown, allow?: s
 
 function error(response: ServerResponse, status: number, code: string, message: string, allow?: string): void {
   json(response, status, { error: { code, message } }, allow);
+}
+
+
+function feedEtag(body: string): string {
+  const digest = createHash("sha256").update(body).digest("base64url");
+  return `"sha256-${digest}"`;
+}
+
+function feedLastModified(entries: ReturnType<Reader["listRecentSourceEntries"]>): string | undefined {
+  let latest = 0;
+  for (const entry of entries) {
+    const time = Date.parse(entry.provenance.fetchedAt);
+    if (Number.isFinite(time) && time > latest) latest = time;
+  }
+  if (latest === 0) return undefined;
+  return new Date(Math.floor(latest / 1000) * 1000).toUTCString();
+}
+
+function weakEtag(value: string): string {
+  return value.trim().replace(/^W\//, "");
+}
+
+function ifNoneMatchMatches(value: string | string[] | undefined, etag: string): boolean {
+  if (value === undefined) return false;
+  const combined = Array.isArray(value) ? value.join(",") : value;
+  return combined.split(",").some((candidate) => {
+    const trimmed = candidate.trim();
+    return trimmed === "*" || weakEtag(trimmed) === weakEtag(etag);
+  });
+}
+
+function conditionalFeed(
+  request: IncomingMessage,
+  response: ServerResponse,
+  body: string,
+  contentType: string,
+  entries: ReturnType<Reader["listRecentSourceEntries"]>,
+): void {
+  const etag = feedEtag(body);
+  const lastModified = feedLastModified(entries);
+  const ifNoneMatch = request.headers["if-none-match"];
+  let notModified = ifNoneMatchMatches(ifNoneMatch, etag);
+
+  if (ifNoneMatch === undefined && lastModified !== undefined) {
+    const value = request.headers["if-modified-since"];
+    const header = Array.isArray(value) ? value[0] : value;
+    if (header !== undefined) {
+      const modifiedSince = Date.parse(header);
+      const current = Date.parse(lastModified);
+      if (Number.isFinite(modifiedSince) && modifiedSince >= current) notModified = true;
+    }
+  }
+
+  const cacheHeaders = {
+    ETag: etag,
+    "Cache-Control": "public, max-age=0, must-revalidate",
+    ...(lastModified === undefined ? {} : { "Last-Modified": lastModified }),
+  };
+  if (notModified) {
+    response.writeHead(304, cacheHeaders);
+    response.end();
+    return;
+  }
+  response.writeHead(200, { "Content-Type": contentType, ...cacheHeaders });
+  response.end(body);
 }
 
 function recentOptions(params: URLSearchParams): RecentNoticeOptions | undefined {
@@ -82,15 +153,27 @@ export function createApiServer(reader: Reader): Server {
           error(response, 404, "not_found", "Not found");
           return;
         }
-        const sourceEntries = reader.listRecentSourceEntries({ sourceId: feedSourceId, limit: 100 });
+        const sourceEntries = reader.listRecentSourceEntries({
+          sourceId: feedSourceId,
+          limit: feedRecentItemLimit,
+        });
         if (feedMatch?.[2] === "json") {
-          json(response, 200, buildJsonFeed(source, sourceEntries), undefined, "application/feed+json; charset=utf-8");
+          conditionalFeed(
+            request,
+            response,
+            JSON.stringify(buildJsonFeed(source, sourceEntries)),
+            "application/feed+json; charset=utf-8",
+            sourceEntries,
+          );
         } else {
           const atom = feedMatch?.[2] === "atom";
-          const document = atom ? buildAtomFeed(source, sourceEntries) : buildRssFeed(source, sourceEntries);
-          response.writeHead(200, { "Content-Type": atom
-            ? "application/atom+xml; charset=utf-8" : "application/rss+xml; charset=utf-8" });
-          response.end(document);
+          conditionalFeed(
+            request,
+            response,
+            atom ? buildAtomFeed(source, sourceEntries) : buildRssFeed(source, sourceEntries),
+            atom ? "application/atom+xml; charset=utf-8" : "application/rss+xml; charset=utf-8",
+            sourceEntries,
+          );
         }
         return;
       }

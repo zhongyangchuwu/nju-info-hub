@@ -6,6 +6,7 @@ import { InfoHubDatabase, InfoHubDatabaseReader } from "@nju-info/db";
 import { describe, expect, it } from "vitest";
 import { buildJsonFeed } from "./feed.js";
 import { exportFeeds, type FeedExportReader } from "./export-feeds.js";
+import { feedRecentItemLimit } from "./policy.js";
 
 type Source = Parameters<InfoHubDatabase["upsertSource"]>[0];
 type RawDocument = Parameters<InfoHubDatabase["ingestNotice"]>[1];
@@ -88,6 +89,7 @@ describe("static JSON Feed exporter", () => {
       expect(serialized.endsWith("\n")).toBe(true);
       expect(serialized).toBe(`${JSON.stringify(buildJsonFeed(source, reader.listRecentSourceEntries({
         sourceId: source.id,
+        limit: feedRecentItemLimit,
       })), null, 2)}\n`);
       expect(feed.items[0]).toMatchObject({
         id: "nju-cs-graduate:grad-123",
@@ -104,7 +106,8 @@ describe("static JSON Feed exporter", () => {
         },
       });
       expect(feed.items[0]).not.toHaveProperty("date_published");
-      expect(feed.items).toHaveLength(125);
+      expect(reader.listRecentSourceEntries({ sourceId: source.id })).toHaveLength(125);
+      expect(feed.items).toHaveLength(feedRecentItemLimit);
       expect(readdirSync(join(outputDirectory, "feeds"))).toEqual([
         `${GRADUATE_SOURCE.id}.atom`, `${GRADUATE_SOURCE.id}.json`, `${GRADUATE_SOURCE.id}.rss`,
       ]);

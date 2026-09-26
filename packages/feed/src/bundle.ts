@@ -1,5 +1,6 @@
 import type { PersistedSourceSummary, SourceEntryQueryResult } from "@nju-info/db";
 import { atomEntryLines, jsonFeedItem, rssItemLines } from "./entry-renderers.js";
+import { feedRecentItemLimit } from "./policy.js";
 import { feedMetadataNamespace, feedTitle, syndicationFeed, xmlEscape, type SyndicationContext, type SyndicationEntry } from "./syndication.js";
 import type { ResolvedSourceSet } from "./source-set.js";
 
@@ -38,7 +39,7 @@ function bundleEntries(parts: readonly BundlePart[]): BundleEntry[] {
       sourceUrl: source.url,
       sourceTitle: feedTitle(source),
     })));
-  return orderEntries(entries);
+  return orderEntries(entries).slice(0, feedRecentItemLimit);
 }
 
 function bundleUpdatedAt(entries: readonly BundleEntry[], generatedAt?: string): string {
