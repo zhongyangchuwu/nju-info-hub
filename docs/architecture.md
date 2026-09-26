@@ -21,12 +21,12 @@ source adapter
     +--> public detail raw + provenance (when available)
               |
               v
-         parsed full notice revision --> full syndication / REST notices / MCP
+         parsed full notice revision --> full syndication / optional REST notices
 
 published-source catalog / curated sets --> select syndication membership
 ```
 
-The registry, WebPlus/Sudy adapter, raw-document/list-observation/full-notice persistence, read-only REST/standard syndication output, and local stdio MCP adapter are implemented. Output processes read existing persisted entries through `@nju-info/db`; collection remains a separate process.
+The registry, WebPlus/Sudy adapter, raw-document/list-observation/full-notice persistence, standard syndication output, and optional read-only REST adapter are implemented. `packages/feed` is the primary output engine over persisted entries from `@nju-info/db`; collection remains separate from output rendering.
 
 ## Source registry
 
@@ -56,7 +56,7 @@ The canonical Compose instance runs the unified `nju-info` runtime as a resident
 
 ## Adapter boundary
 
-An adapter is responsible for source-specific acquisition and parsing. It must not depend on a web UI, MCP, or downstream storage.
+An adapter is responsible for source-specific acquisition and parsing. It must not depend on a web UI, output protocol, or downstream storage.
 
 The first adapter targets common WebPlus/Sudy conventions observed on multiple NJU sites:
 
@@ -112,19 +112,15 @@ Runtime database files remain local to the active host. The public Pages deploym
 
 ## Read-only HTTP delivery
 
-`apps/api` uses Node's HTTP server and only the `@nju-info/db` reader. It serves health, persisted source and organization summaries, current recent **full** notice revisions at `/v1/notices/recent`, and mixed full/link-only source entries in per-source JSON Feed 1.1, Atom 1.0, and RSS 2.0. The server cannot ingest, create, or migrate a database and does not load the source registry. Its local feeds omit self URLs because a reliable public origin is unknown. The server defaults to a local bind; see the README for commands and routes.
+`apps/api` is an optional read-only HTTP adapter over `@nju-info/db` and `@nju-info/feed`. It serves health, persisted source and organization summaries, current recent **full** notice revisions at `/v1/notices/recent`, and mixed full/link-only source entries in per-source JSON Feed 1.1, Atom 1.0, and RSS 2.0. The server cannot ingest, create, or migrate a database and does not load the source registry. Its local feeds omit self URLs because a reliable public origin is unknown. The server defaults to a local bind; see the README for commands and routes.
 
-## Standard syndication output layer
+## Feed publication core
 
-The read-only output layer projects persisted source entries (latest official list observation with optional latest full notice, or legacy full notice alone) into one format-neutral feed model before serialization. Stable source-item IDs, organization/source identity, original item and source URLs, day transport value, and selected raw provenance share one mapping. Full entries retain detail title/date/body/attachments and detail-raw provenance; link-only entries use list title/date/list-raw provenance, no article body or attachments, and a short hub-generated availability note. JSON Feed marks `_nju.content_status` as `full` or `link-only` and exposes known acquisition kind; Atom/RSS carry the same availability note and a namespaced link-only status, acquisition kind, and list-raw fetch time/hash. JSON Feed retains structured provenance and full attachments; Atom uses standard enclosure links; RSS uses item-description attachment links, not `<enclosure>` without reliable byte length. No format triggers crawling or changes database precision. Publication days remain `YYYY-MM-DD` in the database and `/v1` API; transport uses start-of-day Asia/Shanghai (`YYYY-MM-DDT00:00:00+08:00`), not an exact source time. Atom `updated` uses the emitted entry's raw fetch time (detail for full, list for link-only), with maximum across entries or generation time when empty. RSS `lastBuildDate` is likewise hub observation/build metadata, not upstream modification time. Full-only XML feeds remain unchanged.
+`packages/feed` projects persisted source entries (latest official list observation with optional latest full notice, or legacy full notice alone) into one format-neutral feed model before serialization. Stable source-item IDs, organization/source identity, original item and source URLs, day transport value, and selected raw provenance share one mapping. Full entries retain detail title/date/body/attachments and detail-raw provenance; link-only entries use list title/date/list-raw provenance, no article body or attachments, and a short hub-generated availability note. JSON Feed marks `_nju.content_status` as `full` or `link-only` and exposes known acquisition kind; Atom/RSS carry the same availability note and a namespaced link-only status, acquisition kind, and list-raw fetch time/hash. JSON Feed retains structured provenance and full attachments; Atom uses standard enclosure links; RSS uses item-description attachment links, not `<enclosure>` without reliable byte length. No format triggers crawling or changes database precision. Publication days remain `YYYY-MM-DD` in the database and `/v1` API; transport uses start-of-day Asia/Shanghai (`YYYY-MM-DDT00:00:00+08:00`), not an exact source time. Atom `updated` uses the emitted entry's raw fetch time (detail for full, list for link-only), with maximum across entries or generation time when empty. RSS `lastBuildDate` is likewise hub observation/build metadata, not upstream modification time. Full-only XML feeds remain unchanged.
 
 The static exporter takes a publication allow-list and writes `.json`, `.atom`, and `.rss` for each selected source. With a validated public base URL it writes `catalog/sources.json` for that complete publication selection, with absolute feed URLs. A named curated set is explicit and separate: its required source IDs are resolved against the published selection, and only those members appear in the set's OPML and combined feeds. The versioned `catalog/sets.json` records the resolved membership and absolute OPML (defaulting to `subscriptions/<setId>.opml`) and combined JSON/Atom/RSS bundle URLs. Without a named set, OPML uses the publication selection. The exporter owns and replaces the generated catalog directory; Pages copies static `index.html`, JavaScript, and CSS there only after export. The pilot selector reads these static catalogs; it does not generate server-side arbitrary combined feeds or expand the central publication allow-list.
 
 The Pages workflow publishes the original six sources plus Undergraduate School announcements, Youth League announcements, and Student Affairs. The three newly admitted sources may emit link-only official-list entries when detail acquisition is authentication-restricted, campus-network-restricted, or public-WeChat-unsupported. The `cs` curated set still contains only the three CS IDs. Student Exchange remains deferred because the current full-notice refill path is restriction-heavy (5 full notices required 99 candidates across 8 pages in the latest admission smoke). The nine-source publication is live, and publication-relevant pushes to `main` trigger a Pages rebuild in addition to the two-hour schedule.
-
-## Read-only local MCP delivery
-
-`apps/mcp` serves stdio tools over `InfoHubDatabaseReader`: source summaries, organization summaries, and current recent **full** notices with optional source/organization filters and limit. It opens an existing current-schema database read-only, never imports collectors or the source registry, and does not own query ordering, revisions, or provenance semantics. MCP notice output remains full-only; it never returns link-only observations. stdout carries MCP messages only; diagnostics use stderr.
 
 ## Future adapters
 

@@ -5,7 +5,6 @@
   "type": "module",
   "exports": {
     "./config": "./src/config.ts",
-    "./export-feeds": "./src/export-feeds.ts",
     "./server": "./src/server.ts"
   },
   "scripts": {
@@ -13,6 +12,7 @@
     "test": "vitest run src static/catalog"
   },
   "dependencies": {
-    "@nju-info/db": "workspace:*"
+    "@nju-info/db": "workspace:*",
+    "@nju-info/feed": "workspace:*"
   }
 }

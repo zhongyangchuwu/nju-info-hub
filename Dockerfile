@@ -18,10 +18,10 @@ WORKDIR /src
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/worker/package.json apps/worker/package.json
-COPY apps/mcp/package.json apps/mcp/package.json
 COPY apps/nju-info/package.json apps/nju-info/package.json
 COPY packages/core/package.json packages/core/package.json
 COPY packages/db/package.json packages/db/package.json
+COPY packages/feed/package.json packages/feed/package.json
 COPY packages/collector/package.json packages/collector/package.json
 COPY packages/instance-config/package.json packages/instance-config/package.json
 

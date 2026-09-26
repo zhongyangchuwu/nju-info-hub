@@ -55,7 +55,7 @@ public detail raw + provenance (when available)
 parsed full notice revision --> full feed entry / REST notices / MCP
 ```
 
-The source adapter boundary is intentionally independent of MCP. Future WeChat/QQ support should add new adapters or a local sidecar without changing the canonical data model.
+The source adapter boundary is intentionally independent of output protocols. Future WeChat/QQ support should add new adapters or a local sidecar without changing the canonical data model.
 
 ## Repository layout
 
@@ -63,12 +63,12 @@ The source adapter boundary is intentionally independent of MCP. Future WeChat/Q
 apps/
   nju-info/      product CLI and runtime orchestration
   worker/        collection and ingestion application logic
-  api/           read-only HTTP and syndication output adapters
-  mcp/           read-only local stdio MCP adapter over persisted queries
+  api/           optional read-only HTTP adapter
 packages/
   core/          shared schemas and canonical types
   collector/     source registry loader and source adapters
   db/            SQLite schema, migrations, and read/write database APIs
+  feed/          JSON Feed / Atom / RSS / OPML publication engine
 sources/
   nju/           declarative source definitions
 ```
@@ -112,9 +112,6 @@ pnpm nju-info -- source ingest nju-cs-graduate /tmp/nju-info.sqlite 10
 
 # serve an existing current-schema database
 pnpm nju-info -- serve /tmp/nju-info.sqlite --host 127.0.0.1 --port 3001
-
-# serve the same database to a local MCP host over stdio
-pnpm nju-info -- mcp /tmp/nju-info.sqlite
 ```
 
 Source-level fetch and ingest commands access public NJU websites. Unit tests use local fixtures instead.

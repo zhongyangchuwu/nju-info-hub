@@ -24,16 +24,8 @@ One image exposes a stable `nju-info` entrypoint:
 - `schedule`: run one collection at startup, then collect on the configured cron/timezone;
 - `export`: generate static syndication output;
 - `source`: access lower-level public source discovery/fetch/ingest commands;
-- `mcp`: run the existing read-only stdio MCP server against the same persistent database.
 
-All commands use the same image and local SQLite volume. The scheduler owns recurring collection; API and MCP remain read-only consumers.
-
-For stdio MCP clients:
-
-```bash
-docker run --rm -i -v nju-info-data:/data \
-  ghcr.io/zhongyangchuwu/nju-info-hub:<version> mcp
-```
+All commands use the same image and local SQLite volume. The scheduler owns recurring collection; the optional HTTP API remains a read-only consumer.
 
 SQLite remains local to the active runtime. The API opens an existing current-schema database read-only and does not create or migrate state.
 

@@ -1,8 +1,7 @@
 import { createServer, type Server, type ServerResponse } from "node:http";
 import { InfoHubDatabaseReader, type RecentNoticeOptions } from "@nju-info/db";
 import type { ApiConfig } from "./config.js";
-import { buildJsonFeed } from "./feed.js";
-import { buildAtomFeed, buildRssFeed } from "./xml-feeds.js";
+import { buildAtomFeed, buildJsonFeed, buildRssFeed } from "@nju-info/feed";
 
 const paths: Record<string, true> = {
   "/v1/health": true,
