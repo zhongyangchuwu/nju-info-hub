@@ -172,7 +172,7 @@ describe("static JSON Feed exporter", () => {
     }
   });
 
-  it("replaces only the feeds directory on allow-listed export", async () => {
+  it("replaces publication-owned directories while preserving unrelated root files", async () => {
     const directory = temporaryDirectory();
     const database = createPersistedDatabase(directory);
     const outputDirectory = join(directory, "published");
@@ -341,6 +341,46 @@ describe("static JSON Feed exporter", () => {
       expect(readFileSync(join(outputDirectory, "feeds/previous.json"), "utf8")).toBe("previous");
     } finally {
       reader.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("leaves the previous publication untouched when rendering the next generation fails", async () => {
+    const directory = temporaryDirectory();
+    const databasePath = createPersistedDatabase(directory);
+    const outputDirectory = join(directory, "published");
+    mkdirSync(join(outputDirectory, "feeds"), { recursive: true });
+    mkdirSync(join(outputDirectory, "catalog"), { recursive: true });
+    writeFileSync(join(outputDirectory, "feeds/previous.json"), "previous feed");
+    writeFileSync(join(outputDirectory, "catalog/sources.json"), "previous catalog");
+
+    const persisted = new InfoHubDatabaseReader(databasePath);
+    try {
+      const brokenReader: FeedExportReader = {
+        listSources: () => persisted.listSources(),
+        listRecentSourceEntries: (options) => {
+          const entries = persisted.listRecentSourceEntries(options);
+          if (options?.sourceId !== SEMINAR_SOURCE.id) return entries;
+          return entries.map((entry) => ({
+            ...entry,
+            provenance: { ...entry.provenance, fetchedAt: "not-a-timestamp" },
+          }));
+        },
+      };
+      await expect(exportFeeds(
+        brokenReader,
+        outputDirectory,
+        [GRADUATE_SOURCE.id, SEMINAR_SOURCE.id],
+        { publicBaseUrl: "https://example.org/" },
+      )).rejects.toThrow("invalid feed timestamp");
+
+      expect(readFileSync(join(outputDirectory, "feeds/previous.json"), "utf8"))
+        .toBe("previous feed");
+      expect(readFileSync(join(outputDirectory, "catalog/sources.json"), "utf8"))
+        .toBe("previous catalog");
+      expect(readdirSync(join(outputDirectory, "feeds"))).toEqual(["previous.json"]);
+    } finally {
+      persisted.close();
       rmSync(directory, { recursive: true, force: true });
     }
   });

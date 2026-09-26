@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { PersistedSourceSummary } from "@nju-info/db";
-import { buildSourceCatalog, bundleSelfUrl, resolveSourceSet } from "./source-set.js";
+import {
+  buildSourceCatalog,
+  bundleSelfUrl,
+  resolveSourceSet,
+  subscriptionSelfUrl,
+  validateSubscriptionPath,
+} from "./source-set.js";
 
 const sources: PersistedSourceSummary[] = [
   {
@@ -78,5 +84,24 @@ describe("published source sets", () => {
     });
     expect(bundleSelfUrl(base, "cs", "json"))
       .toBe("https://example.org/nju-info-hub/bundles/cs.json");
+  });
+
+  it("keeps subscription files inside the publication-owned subscriptions directory", () => {
+    const base = new URL("https://example.org/nju-info-hub/");
+    expect(validateSubscriptionPath("subscriptions/cs.opml"))
+      .toBe("subscriptions/cs.opml");
+    expect(subscriptionSelfUrl(base, "subscriptions/cs.opml"))
+      .toBe("https://example.org/nju-info-hub/subscriptions/cs.opml");
+    for (const unsafe of [
+      "cs.opml",
+      "custom/cs.opml",
+      "subscriptions/../cs.opml",
+      "subscriptions/nested/cs.opml",
+      "subscriptions/cs.txt",
+      "feeds/cs.opml",
+      "/subscriptions/cs.opml",
+    ]) {
+      expect(() => validateSubscriptionPath(unsafe)).toThrow("unsafe OPML path");
+    }
   });
 });
