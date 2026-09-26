@@ -8,7 +8,6 @@ import { startApi } from "@nju-info/api/server";
 import { loadInstanceConfig } from "@nju-info/instance-config";
 import { collectInstance, exportInstance } from "./operations.js";
 import { createCollectionScheduler } from "./scheduler.js";
-import { serveMcp } from "./mcp-runtime.js";
 import { runSourceCommand } from "./source-command.js";
 
 const packageRoot = fileURLToPath(new URL("../", import.meta.url));
@@ -37,7 +36,7 @@ function normalizeArgs(argv: string[]): string[] {
 function usage(): string {
   return [
     "usage: nju-info <command> [args...]",
-    "commands: serve, validate, collect, schedule, export, backup, restore, verify-backup, mcp, source",
+    "commands: serve, validate, collect, schedule, export, backup, restore, verify-backup, source",
   ].join("\n");
 }
 
@@ -224,11 +223,6 @@ async function runVerifyBackup(args: string[]): Promise<void> {
   console.log(JSON.stringify(await (await snapshots()).verifySnapshot(resolveUserPath(args[0]!))));
 }
 
-async function runMcp(args: string[]): Promise<void> {
-  if (args.length > 1) throw new Error("usage: nju-info mcp [database]");
-  serveMcp(databasePath(args[0]));
-}
-
 export async function main(argv: string[]): Promise<void> {
   const args = normalizeArgs(argv);
   const command = args.shift() ?? "serve";
@@ -258,9 +252,6 @@ export async function main(argv: string[]): Promise<void> {
       return;
     case "verify-backup":
       await runVerifyBackup(args);
-      return;
-    case "mcp":
-      await runMcp(args);
       return;
     case "source":
       await runSourceCommand(args, sourceDirectory(), invocationRoot);

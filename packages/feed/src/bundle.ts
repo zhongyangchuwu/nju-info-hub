@@ -1,5 +1,6 @@
 import type { PersistedSourceSummary, SourceEntryQueryResult } from "@nju-info/db";
-import { feedMetadataNamespace, feedTitle, linkOnlyXmlMetadata, syndicationFeed, xmlEscape, type SyndicationContext, type SyndicationEntry } from "./syndication.js";
+import { atomEntryLines, jsonFeedItem, rssItemLines } from "./entry-renderers.js";
+import { feedMetadataNamespace, feedTitle, syndicationFeed, xmlEscape, type SyndicationContext, type SyndicationEntry } from "./syndication.js";
 import type { ResolvedSourceSet } from "./source-set.js";
 
 const xmlDeclaration = '<?xml version="1.0" encoding="UTF-8"?>';
@@ -48,41 +49,6 @@ function bundleUpdatedAt(entries: readonly BundleEntry[], generatedAt?: string):
   return time.toISOString();
 }
 
-function jsonItem(entry: BundleEntry) {
-  return {
-    id: entry.id,
-    url: entry.url,
-    title: entry.title,
-    ...(entry.publishedAt ? { date_published: entry.publishedAt } : {}),
-    ...(entry.bodyHtml ? { content_html: entry.bodyHtml } : {}),
-    content_text: entry.bodyText,
-    ...(entry.attachments.length ? {
-      attachments: entry.attachments.map((attachment) => ({
-        url: attachment.url,
-        mime_type: attachment.mimeType,
-        title: attachment.title,
-      })),
-    } : {}),
-    _nju: {
-      source_id: entry.sourceId,
-      source_name: entry.sourceName,
-      organization: entry.organization,
-      ...(entry.publishedOn === null ? {} : {
-        published_on: entry.publishedOn,
-        date_precision: "day",
-      }),
-      content_status: entry.contentStatus,
-      ...(entry.acquisitionKind == null ? {} : { acquisition_kind: entry.acquisitionKind }),
-      ...(entry.observationRevisionNumber === undefined ? {} : {
-        observation_revision_number: entry.observationRevisionNumber,
-      }),
-      ...(entry.revisionNumber === undefined ? {} : { revision_number: entry.revisionNumber }),
-      fetched_at: entry.fetchedAt,
-      content_sha256: entry.contentSha256,
-    },
-  };
-}
-
 export function buildJsonBundle(
   set: ResolvedSourceSet,
   parts: readonly BundlePart[],
@@ -100,7 +66,7 @@ export function buildJsonBundle(
         source_ids: set.sourceIds,
       },
     },
-    items: entries.map(jsonItem),
+    items: entries.map(jsonFeedItem),
   };
 }
 
@@ -119,38 +85,13 @@ export function buildAtomBundle(
     "  <title>" + xmlEscape(set.title) + "</title>",
     ...(context.selfUrl ? ['  <link rel="self" type="application/atom+xml" href="' + xmlEscape(context.selfUrl) + '"/>'] : []),
     "  <updated>" + xmlEscape(updatedAt) + "</updated>",
-    ...entries.flatMap((entry) => [
-      "  <entry>",
-      "    <id>" + xmlEscape(entry.id) + "</id>",
-      "    <title>" + xmlEscape(entry.title) + "</title>",
-      '    <link rel="alternate" href="' + xmlEscape(entry.url) + '"/>',
-      "    <updated>" + xmlEscape(entry.updatedAt) + "</updated>",
-      ...(entry.publishedAt ? ["    <published>" + xmlEscape(entry.publishedAt) + "</published>"] : []),
-      ...(entry.bodyHtml
-        ? ['    <content type="html">' + xmlEscape(entry.bodyHtml) + "</content>"]
-        : ['    <content type="text">' + xmlEscape(entry.bodyText) + "</content>"]),
-      ...linkOnlyXmlMetadata(entry, "    "),
-      "    <source>",
-      "      <id>" + xmlEscape(entry.sourceUrl) + "</id>",
-      "      <title>" + xmlEscape(entry.sourceTitle) + "</title>",
-      '      <link rel="alternate" href="' + xmlEscape(entry.sourceUrl) + '"/>',
-      "    </source>",
-      ...entry.attachments.map((attachment) =>
-        '    <link rel="enclosure" href="' + xmlEscape(attachment.url) + '" type="' +
-        xmlEscape(attachment.mimeType) + '" title="' + xmlEscape(attachment.title) + '"/>'),
-      "  </entry>",
-    ]),
+    ...entries.flatMap((entry) => atomEntryLines(entry, {
+      url: entry.sourceUrl,
+      title: entry.sourceTitle,
+    })),
     "</feed>",
   ];
   return lines.join("\n") + "\n";
-}
-
-function rssDescription(entry: BundleEntry): string {
-  const content = entry.bodyHtml || xmlEscape(entry.bodyText).replace(/\n/g, "<br/>");
-  if (!entry.attachments.length) return content;
-  const links = entry.attachments.map((attachment) =>
-    '<li><a href="' + xmlEscape(attachment.url) + '">' + xmlEscape(attachment.title) + "</a></li>").join("");
-  return content + "<p>Attachments:</p><ul>" + links + "</ul>";
 }
 
 export function buildRssBundle(
@@ -169,17 +110,10 @@ export function buildRssBundle(
     "    <link>" + xmlEscape(channelLink) + "</link>",
     "    <description>" + xmlEscape(set.title) + "</description>",
     "    <lastBuildDate>" + new Date(updatedAt).toUTCString() + "</lastBuildDate>",
-    ...entries.flatMap((entry) => [
-      "    <item>",
-      '      <guid isPermaLink="false">' + xmlEscape(entry.id) + "</guid>",
-      "      <title>" + xmlEscape(entry.title) + "</title>",
-      "      <link>" + xmlEscape(entry.url) + "</link>",
-      ...(entry.publishedAt ? ["      <pubDate>" + new Date(entry.publishedAt).toUTCString() + "</pubDate>"] : []),
-      '      <source url="' + xmlEscape(entry.sourceUrl) + '">' + xmlEscape(entry.sourceTitle) + "</source>",
-      "      <description>" + xmlEscape(rssDescription(entry)) + "</description>",
-      ...linkOnlyXmlMetadata(entry, "      "),
-      "    </item>",
-    ]),
+    ...entries.flatMap((entry) => rssItemLines(entry, {
+      url: entry.sourceUrl,
+      title: entry.sourceTitle,
+    })),
     "  </channel>",
     "</rss>",
   ];

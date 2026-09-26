@@ -1,7 +1,7 @@
 import { InfoHubDatabaseReader } from "@nju-info/db";
 import { loadSourceDirectory } from "@nju-info/collector";
 import { ingestSource } from "@nju-info/worker/collection";
-import { exportFeeds } from "@nju-info/api/export-feeds";
+import { exportFeeds } from "@nju-info/feed";
 import type { InstanceConfig } from "@nju-info/instance-config";
 
 export async function collectInstance(

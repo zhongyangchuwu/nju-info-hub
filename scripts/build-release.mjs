@@ -10,12 +10,12 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 const releaseRoot = path.join(root, "dist/release");
 const packagePaths = [
   "apps/api/package.json",
-  "apps/mcp/package.json",
   "apps/nju-info/package.json",
   "apps/worker/package.json",
   "packages/collector/package.json",
   "packages/core/package.json",
   "packages/db/package.json",
+  "packages/feed/package.json",
   "packages/instance-config/package.json",
 ];
 
