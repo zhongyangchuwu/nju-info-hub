@@ -38,16 +38,18 @@ YAML
 
 cat > "$tmpdir/instance.json" <<'JSON'
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "instance": { "id": "smoke", "name": "Smoke Instance" },
   "publication": {
     "publicBaseUrl": "http://localhost:3000/",
-    "sources": [{ "id": "smoke-source", "limit": 1 }],
+    "sources": ["smoke-source"],
+    "itemLimit": 100,
     "sets": []
   },
   "collection": {
     "schedule": "0 0 1 1 *",
-    "timeZone": "UTC"
+    "timeZone": "UTC",
+    "sources": [{ "id": "smoke-source", "recentLimit": 1 }]
   }
 }
 JSON

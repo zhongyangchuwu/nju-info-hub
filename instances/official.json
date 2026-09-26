@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "instance": {
     "id": "official",
     "name": "NJU Info Hub"
@@ -7,16 +7,17 @@
   "publication": {
     "publicBaseUrl": "https://zhongyangchuwu.github.io/nju-info-hub/",
     "sources": [
-      { "id": "nju-cs-graduate", "limit": 10 },
-      { "id": "nju-cs-internal-notices", "limit": 10 },
-      { "id": "nju-cs-seminars", "limit": 10 },
-      { "id": "nju-itsc-notices", "limit": 10 },
-      { "id": "nju-library-news-notices", "limit": 10 },
-      { "id": "nju-graduate-school-notices", "limit": 10 },
-      { "id": "nju-undergraduate-notices", "limit": 5 },
-      { "id": "nju-youth-league-announcements", "limit": 5 },
-      { "id": "nju-student-affairs-notices", "limit": 10 }
+      "nju-cs-graduate",
+      "nju-cs-internal-notices",
+      "nju-cs-seminars",
+      "nju-itsc-notices",
+      "nju-library-news-notices",
+      "nju-graduate-school-notices",
+      "nju-undergraduate-notices",
+      "nju-youth-league-announcements",
+      "nju-student-affairs-notices"
     ],
+    "itemLimit": 100,
     "sets": [
       {
         "id": "cs",
@@ -32,6 +33,44 @@
   },
   "collection": {
     "schedule": "17 */2 * * *",
-    "timeZone": "UTC"
+    "timeZone": "UTC",
+    "sources": [
+      {
+        "id": "nju-cs-graduate",
+        "recentLimit": 10
+      },
+      {
+        "id": "nju-cs-internal-notices",
+        "recentLimit": 10
+      },
+      {
+        "id": "nju-cs-seminars",
+        "recentLimit": 10
+      },
+      {
+        "id": "nju-itsc-notices",
+        "recentLimit": 10
+      },
+      {
+        "id": "nju-library-news-notices",
+        "recentLimit": 10
+      },
+      {
+        "id": "nju-graduate-school-notices",
+        "recentLimit": 10
+      },
+      {
+        "id": "nju-undergraduate-notices",
+        "recentLimit": 5
+      },
+      {
+        "id": "nju-youth-league-announcements",
+        "recentLimit": 5
+      },
+      {
+        "id": "nju-student-affairs-notices",
+        "recentLimit": 10
+      }
+    ]
   }
 }

@@ -13,10 +13,10 @@ export async function collectInstance(
     (await loadSourceDirectory(sourceDirectory)).map((source) => [source.id, source]),
   );
 
-  for (const selected of config.publication.sources) {
+  for (const selected of config.collection.sources) {
     const source = registered.get(selected.id);
-    if (!source) throw new Error(`unknown published source id: ${selected.id}`);
-    const summary = await ingestSource(source, database, selected.limit);
+    if (!source) throw new Error(`unknown collection source id: ${selected.id}`);
+    const summary = await ingestSource(source, database, selected.recentLimit);
     console.log(JSON.stringify(summary, null, 2));
   }
 }
@@ -26,12 +26,13 @@ export async function exportInstance(
   database: string,
   outputDir: string,
 ): Promise<void> {
-  const sourceIds = config.publication.sources.map((source) => source.id);
+  const sourceIds = config.publication.sources;
   const set = config.publication.sets[0];
   const reader = new InfoHubDatabaseReader(database);
   try {
     await exportFeeds(reader, outputDir, sourceIds, {
       publicBaseUrl: config.publication.publicBaseUrl,
+      itemLimit: config.publication.itemLimit,
       ...(set === undefined ? {} : {
         opmlPath: set.opml,
         sourceSet: {

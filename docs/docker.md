@@ -31,26 +31,32 @@ SQLite remains local to the active runtime. The API opens an existing current-sc
 
 ## Instance configuration
 
-Current instance files use schema version 2:
+Current instance files use schema version 3:
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "publication": {
     "publicBaseUrl": "https://example.invalid/",
-    "sources": [],
+    "sources": ["nju-example"],
+    "itemLimit": 100,
     "sets": []
   },
   "collection": {
     "schedule": "17 */2 * * *",
-    "timeZone": "UTC"
+    "timeZone": "UTC",
+    "sources": [
+      { "id": "nju-example", "recentLimit": 10 }
+    ]
   }
 }
 ```
 
-Collection cadence is runtime-neutral. The same metadata is consumed by the resident Docker scheduler and checked against the static GitHub Actions cron for the official reference deployment.
+Collection and publication policy are intentionally separate. `collection.sources[].recentLimit` controls how many recent usable notices each collection run tries to ingest. `publication.sources` controls which persisted sources are exposed, and `publication.itemLimit` controls the maximum number of entries read per source when generating feeds. Published sources must also be collected by the same instance.
 
-`timeZone` must be a valid IANA timezone. The current instance contract is schema v2; older pre-release shapes are rejected instead of normalized at runtime.
+Collection cadence is runtime-neutral. The same schedule metadata is consumed by the resident Docker scheduler and checked against the static GitHub Actions cron for the official reference deployment.
+
+`timeZone` must be a valid IANA timezone. The current instance contract is schema v3; older pre-release shapes are rejected instead of normalized at runtime.
 
 ## Canonical Compose deployment
 

@@ -250,4 +250,27 @@ describe("source catalog and source-set export", () => {
       rmSync(directory, { recursive: true, force: true });
     }
   });
+
+  it("uses an explicit publication item limit and rejects invalid limits", async () => {
+    const listRecentSourceEntries = vi.fn(() => []);
+    const reader: FeedExportReader = {
+      listSources: () => sources.slice(0, 1),
+      listRecentSourceEntries,
+    };
+    const directory = mkdtempSync(join(tmpdir(), "nju-info-source-set-"));
+    try {
+      await exportFeeds(reader, directory, [sources[0]!.id], { itemLimit: 7 });
+      expect(listRecentSourceEntries).toHaveBeenCalledWith({
+        sourceId: sources[0]!.id,
+        limit: 7,
+      });
+
+      await expect(exportFeeds(reader, directory, [sources[0]!.id], { itemLimit: 0 }))
+        .rejects.toThrow("feed item limit");
+      await expect(exportFeeds(reader, directory, [sources[0]!.id], { itemLimit: 101 }))
+        .rejects.toThrow("feed item limit");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
 });
