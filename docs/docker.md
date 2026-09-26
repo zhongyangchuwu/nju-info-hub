@@ -98,7 +98,7 @@ Override only the host port when needed:
 NJU_INFO_PORT=3100 docker compose up -d
 ```
 
-A fresh volume does not need a manual database bootstrap. The scheduler creates/updates state through the normal collector. After its first successful run it writes a readiness marker into the data volume; the API does not start serving until that marker exists.
+A fresh volume does not need a manual database bootstrap. The scheduler creates/updates state through the normal collector. After its first usable run (at least one configured source succeeds) it writes a readiness marker into the data volume; the API does not start serving until that marker exists.
 
 The API wait timeout defaults to 900 seconds and can be changed with `NJU_INFO_READY_TIMEOUT_SECONDS`.
 
@@ -189,7 +189,7 @@ Compose readiness is state-based:
 4. API proceeds to open the existing database read-only;
 5. HTTP healthcheck becomes healthy.
 
-If startup collection fails because an upstream is transiently unavailable, the scheduler logs the failure and remains alive for the next configured run. It does not publish readiness until a collection succeeds.
+A failure from one source is logged without blocking later sources in the same run; that source keeps its previously persisted entries until a later run succeeds. If every configured source fails, the run fails and the scheduler remains alive for the next configured run. On a fresh volume it does not publish readiness until at least one source succeeds.
 
 ## Security boundary
 

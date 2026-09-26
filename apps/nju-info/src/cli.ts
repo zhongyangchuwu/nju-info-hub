@@ -176,13 +176,15 @@ async function runSchedule(args: string[]): Promise<void> {
   const scheduler = createCollectionScheduler({
     schedule: runtime.config.collection.schedule,
     timeZone: runtime.config.collection.timeZone,
-    collect: () => collectInstance(runtime.config, databasePath(args[2]), runtime.sourceDir),
+    collect: async () => {
+      await collectInstance(runtime.config, databasePath(args[2]), runtime.sourceDir);
+    },
     onError: (error, trigger) => {
       console.error(`[scheduler] ${trigger} collection failed: ${message(error)}`);
     },
     onSuccess: async (trigger) => {
       if (readyFile) await writeFile(readyFile, `${new Date().toISOString()} ${trigger}\n`);
-      console.log(`[scheduler] ${trigger} collection succeeded`);
+      console.log(`[scheduler] ${trigger} collection run completed`);
     },
   });
 
