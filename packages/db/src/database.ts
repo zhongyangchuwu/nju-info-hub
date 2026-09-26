@@ -806,8 +806,11 @@ class DatabaseQueries {
   }
 
   listRecentSourceEntries(options: RecentNoticeOptions = {}): SourceEntryQueryResult[] {
-    const limit = options.limit ?? 50;
-    if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+    const limit = options.limit;
+    if (
+      limit !== undefined &&
+      (!Number.isInteger(limit) || limit < 1 || limit > 100)
+    ) {
       throw new Error("recent source entry limit must be an integer from 1 to 100");
     }
 
@@ -869,9 +872,9 @@ class DatabaseQueries {
           ORDER BY CASE WHEN n.id IS NOT NULL THEN n.published_on ELSE o.published_on END IS NULL,
                    CASE WHEN n.id IS NOT NULL THEN n.published_on ELSE o.published_on END DESC,
                    s.id, si.source_item_id
-          LIMIT ?`,
+          ${limit === undefined ? "" : "LIMIT ?"}`,
       )
-      .all(...parameters, limit) as unknown as SourceEntryQueryRow[];
+      .all(...parameters, ...(limit === undefined ? [] : [limit])) as unknown as SourceEntryQueryRow[];
     if (rows.length === 0) return [];
 
     const noticeRevisionIds = rows.flatMap((row) =>

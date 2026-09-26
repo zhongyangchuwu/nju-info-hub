@@ -32,7 +32,6 @@ export async function exportInstance(
   try {
     await exportFeeds(reader, outputDir, sourceIds, {
       publicBaseUrl: config.publication.publicBaseUrl,
-      itemLimit: config.publication.itemLimit,
       ...(set === undefined ? {} : {
         opmlPath: set.opml,
         sourceSet: {

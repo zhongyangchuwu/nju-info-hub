@@ -76,7 +76,7 @@ function createPersistedDatabase(directory: string, graduateItems = 1): string {
 describe("static JSON Feed exporter", () => {
   it("writes the selected persisted feed with the same semantics as the API builder", async () => {
     const directory = temporaryDirectory();
-    const database = createPersistedDatabase(directory, 51);
+    const database = createPersistedDatabase(directory, 125);
     const outputDirectory = join(directory, "published");
     const reader = new InfoHubDatabaseReader(database);
     try {
@@ -88,7 +88,6 @@ describe("static JSON Feed exporter", () => {
       expect(serialized.endsWith("\n")).toBe(true);
       expect(serialized).toBe(`${JSON.stringify(buildJsonFeed(source, reader.listRecentSourceEntries({
         sourceId: source.id,
-        limit: 100,
       })), null, 2)}\n`);
       expect(feed.items[0]).toMatchObject({
         id: "nju-cs-graduate:grad-123",
@@ -105,7 +104,7 @@ describe("static JSON Feed exporter", () => {
         },
       });
       expect(feed.items[0]).not.toHaveProperty("date_published");
-      expect(feed.items).toHaveLength(51);
+      expect(feed.items).toHaveLength(125);
       expect(readdirSync(join(outputDirectory, "feeds"))).toEqual([
         `${GRADUATE_SOURCE.id}.atom`, `${GRADUATE_SOURCE.id}.json`, `${GRADUATE_SOURCE.id}.rss`,
       ]);

@@ -87,7 +87,7 @@ describe("source catalog and source-set export", () => {
       });
       expect(listRecentSourceEntries).toHaveBeenCalledTimes(sources.length);
       for (const source of sources) {
-        expect(listRecentSourceEntries).toHaveBeenCalledWith({ sourceId: source.id, limit: 100 });
+        expect(listRecentSourceEntries).toHaveBeenCalledWith({ sourceId: source.id });
       }
 
       const catalog = JSON.parse(readFileSync(join(directory, "catalog/sources.json"), "utf8"));
@@ -256,7 +256,7 @@ describe("source catalog and source-set export", () => {
     }
   });
 
-  it("uses an explicit publication item limit and rejects invalid limits", async () => {
+  it("publishes every persisted entry without imposing a feed item limit", async () => {
     const listRecentSourceEntries = vi.fn(() => []);
     const reader: FeedExportReader = {
       listSources: () => sources.slice(0, 1),
@@ -264,16 +264,10 @@ describe("source catalog and source-set export", () => {
     };
     const directory = mkdtempSync(join(tmpdir(), "nju-info-source-set-"));
     try {
-      await exportFeeds(reader, directory, [sources[0]!.id], { itemLimit: 7 });
+      await exportFeeds(reader, directory, [sources[0]!.id]);
       expect(listRecentSourceEntries).toHaveBeenCalledWith({
         sourceId: sources[0]!.id,
-        limit: 7,
       });
-
-      await expect(exportFeeds(reader, directory, [sources[0]!.id], { itemLimit: 0 }))
-        .rejects.toThrow("feed item limit");
-      await expect(exportFeeds(reader, directory, [sources[0]!.id], { itemLimit: 101 }))
-        .rejects.toThrow("feed item limit");
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
