@@ -93,7 +93,6 @@ describe("static JSON Feed exporter", () => {
       expect(feed.items[0]).toMatchObject({
         id: "nju-cs-graduate:grad-123",
         url: "https://cs.nju.edu.cn/notices/grad-123.htm",
-        date_published: "2026-09-23T00:00:00+08:00",
         attachments: [
           { url: "https://cs.nju.edu.cn/files/grad-123.pdf", mime_type: "application/pdf" },
           { url: "https://cs.nju.edu.cn/files/grad-123.bin", mime_type: "application/octet-stream" },
@@ -105,6 +104,7 @@ describe("static JSON Feed exporter", () => {
           date_precision: "day",
         },
       });
+      expect(feed.items[0]).not.toHaveProperty("date_published");
       expect(feed.items).toHaveLength(51);
       expect(readdirSync(join(outputDirectory, "feeds"))).toEqual([
         `${GRADUATE_SOURCE.id}.atom`, `${GRADUATE_SOURCE.id}.json`, `${GRADUATE_SOURCE.id}.rss`,

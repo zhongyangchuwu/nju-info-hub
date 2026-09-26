@@ -1,16 +1,23 @@
 import type { PersistedSourceSummary, SourceEntryQueryResult } from "@nju-info/db";
 
 const linkOnlyContentText = "Full text is unavailable from the public collector; open the original item.";
-/** XML extension is emitted only when a feed contains link-only entries. */
+/** Namespace for metadata that standard feed formats cannot represent without fabricating precision. */
 export const feedMetadataNamespace = "https://zhongyangchuwu.github.io/nju-info-hub/ns/feed";
 
-export function linkOnlyXmlMetadata(entry: SyndicationEntry, indent: string): string[] {
-  if (entry.contentStatus !== "link-only") return [];
+export function entryXmlMetadata(entry: SyndicationEntry, indent: string): string[] {
   return [
-    `${indent}<nju:content_status>link-only</nju:content_status>`,
-    ...(entry.acquisitionKind ? [`${indent}<nju:acquisition_kind>${xmlEscape(entry.acquisitionKind)}</nju:acquisition_kind>`] : []),
-    `${indent}<nju:fetched_at>${xmlEscape(entry.fetchedAt)}</nju:fetched_at>`,
-    `${indent}<nju:content_sha256>${xmlEscape(entry.contentSha256)}</nju:content_sha256>`,
+    ...(entry.publishedOn === null ? [] : [
+      `${indent}<nju:published_on>${xmlEscape(entry.publishedOn)}</nju:published_on>`,
+      `${indent}<nju:date_precision>day</nju:date_precision>`,
+    ]),
+    ...(entry.contentStatus !== "link-only" ? [] : [
+      `${indent}<nju:content_status>link-only</nju:content_status>`,
+      ...(entry.acquisitionKind ? [
+        `${indent}<nju:acquisition_kind>${xmlEscape(entry.acquisitionKind)}</nju:acquisition_kind>`,
+      ] : []),
+      `${indent}<nju:fetched_at>${xmlEscape(entry.fetchedAt)}</nju:fetched_at>`,
+      `${indent}<nju:content_sha256>${xmlEscape(entry.contentSha256)}</nju:content_sha256>`,
+    ]),
   ];
 }
 const mimeTypes: Record<string, string> = {
@@ -50,7 +57,6 @@ export interface SyndicationEntry {
   url: string;
   title: string;
   publishedOn: string | null;
-  publishedAt?: string;
   updatedAt: string;
   contentStatus: SourceEntryQueryResult["contentStatus"];
   acquisitionKind?: NonNullable<SourceEntryQueryResult["acquisitionKind"]>;
@@ -88,7 +94,6 @@ export function syndicationFeed(source: PersistedSourceSummary, sourceEntries: S
       url: sourceEntry.url,
       title: sourceEntry.title,
       publishedOn: sourceEntry.publishedOn,
-      ...(sourceEntry.publishedOn === null ? {} : { publishedAt: `${sourceEntry.publishedOn}T00:00:00+08:00` }),
       updatedAt: rfc3339(sourceEntry.provenance.fetchedAt),
       fetchedAt: sourceEntry.provenance.fetchedAt,
       contentStatus: sourceEntry.contentStatus,

@@ -80,7 +80,7 @@ export function buildAtomBundle(
   const feedId = context.selfUrl ?? "urn:nju-info-hub:bundle:" + set.id;
   const lines = [
     xmlDeclaration,
-    `<feed xmlns="http://www.w3.org/2005/Atom"${entries.some((entry) => entry.contentStatus === "link-only") ? ` xmlns:nju="${feedMetadataNamespace}"` : ""}>`,
+    `<feed xmlns="http://www.w3.org/2005/Atom" xmlns:nju="${feedMetadataNamespace}">`,
     "  <id>" + xmlEscape(feedId) + "</id>",
     "  <title>" + xmlEscape(set.title) + "</title>",
     ...(context.selfUrl ? ['  <link rel="self" type="application/atom+xml" href="' + xmlEscape(context.selfUrl) + '"/>'] : []),
@@ -104,7 +104,7 @@ export function buildRssBundle(
   const channelLink = context.selfUrl ?? "urn:nju-info-hub:bundle:" + set.id;
   const lines = [
     xmlDeclaration,
-    `<rss version="2.0"${entries.some((entry) => entry.contentStatus === "link-only") ? ` xmlns:nju="${feedMetadataNamespace}"` : ""}>`,
+    `<rss version="2.0" xmlns:nju="${feedMetadataNamespace}">`,
     "  <channel>",
     "    <title>" + xmlEscape(set.title) + "</title>",
     "    <link>" + xmlEscape(channelLink) + "</link>",

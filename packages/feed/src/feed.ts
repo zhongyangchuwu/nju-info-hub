@@ -2,7 +2,7 @@ import type { PersistedSourceSummary, SourceEntryQueryResult } from "@nju-info/d
 import { jsonFeedItem } from "./entry-renderers.js";
 import { syndicationFeed, type SyndicationContext } from "./syndication.js";
 
-/** Serialize source observations in database order; day-only timestamps are transport encodings, not source times. */
+/** Serialize source observations in database order without inventing timestamp precision. */
 export function buildJsonFeed(source: PersistedSourceSummary, sourceEntries: SourceEntryQueryResult[], context: SyndicationContext = {}) {
   const feed = syndicationFeed(source, sourceEntries, context.generatedAt);
   return {

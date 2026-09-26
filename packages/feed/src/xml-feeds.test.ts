@@ -82,14 +82,18 @@ const linkOnly: SourceEntryQueryResult = {
 };
 
 describe("standard XML feeds", () => {
-  it("publishes Atom observation time, day transport, stable identity and all enclosures", () => {
+  it("publishes Atom observation time, day metadata, stable identity and all enclosures", () => {
     const atom = buildAtomFeed(source, [notice], { selfUrl: "https://example.org/feeds/nju-cs-graduate.atom" });
-    expect(atom).toContain('<feed xmlns="http://www.w3.org/2005/Atom">');
+    expect(atom).toContain(
+      '<feed xmlns="http://www.w3.org/2005/Atom" xmlns:nju="https://zhongyangchuwu.github.io/nju-info-hub/ns/feed">',
+    );
     expect(atom).toContain('<id>nju-cs-graduate:news%2F123%3A4</id>');
     expect(atom).toContain('<title>计算机 &amp; &lt;学院&gt; &quot;乙&quot; — 通告 &amp; &lt;课程&gt; &quot;甲&quot;</title>');
     expect(atom).toContain('<link rel="alternate" href="https://cs.nju.edu.cn/page.htm?x=1&amp;y=2"/>');
     expect(atom).toContain('<link rel="self" type="application/atom+xml" href="https://example.org/feeds/nju-cs-graduate.atom"/>');
-    expect(atom).toContain('<published>2026-09-23T00:00:00+08:00</published>');
+    expect(atom).not.toContain("<published>");
+    expect(atom).toContain("<nju:published_on>2026-09-23</nju:published_on>");
+    expect(atom).toContain("<nju:date_precision>day</nju:date_precision>");
     expect(atom.match(/<updated>2026-09-24T11:30:00.000Z<\/updated>/g)).toHaveLength(2);
     expect(atom).toContain('<content type="html">&lt;p&gt;中文 &amp;amp; &amp;lt;tag&amp;gt; &quot;引号&quot;&lt;/p&gt;</content>');
     expect(atom).toContain('href="https://cs.nju.edu.cn/a.pdf?x=1&amp;y=2" type="application/pdf" title="文件 &amp; &lt;甲&gt; &quot;一&quot;.pdf"');
@@ -106,16 +110,22 @@ describe("standard XML feeds", () => {
     expect(empty).toContain('<updated>2026-09-25T00:00:00.000Z</updated>');
     expect(empty).not.toContain('<entry>');
     const undated = buildAtomFeed(source, [{ ...notice, publishedOn: null, bodyHtml: "" }]);
-    expect(undated).not.toContain('<published>');
+    expect(undated).not.toContain("<published>");
+    expect(undated).not.toContain("<nju:published_on>");
+    expect(undated).not.toContain("<nju:date_precision>");
     expect(undated).toContain('<content type="text">正文 &amp; &lt;tag&gt; &quot;引用&quot;</content>');
   });
 
-  it("publishes RSS original links, stable nonpermalink GUID, day transport, and every attachment without enclosures", () => {
+  it("publishes RSS original links, stable nonpermalink GUID, day metadata, and every attachment without enclosures", () => {
     const rss = buildRssFeed(source, [notice]);
-    expect(rss).toContain('<rss version="2.0">');
+    expect(rss).toContain(
+      '<rss version="2.0" xmlns:nju="https://zhongyangchuwu.github.io/nju-info-hub/ns/feed">',
+    );
     expect(rss).toContain('<guid isPermaLink="false">nju-cs-graduate:news%2F123%3A4</guid>');
     expect(rss).toContain('<link>https://cs.nju.edu.cn/page.htm?x=1&amp;y=2</link>');
-    expect(rss).toContain('<pubDate>Tue, 22 Sep 2026 16:00:00 GMT</pubDate>');
+    expect(rss).not.toContain("<pubDate>");
+    expect(rss).toContain("<nju:published_on>2026-09-23</nju:published_on>");
+    expect(rss).toContain("<nju:date_precision>day</nju:date_precision>");
     expect(rss).toContain('<lastBuildDate>Thu, 24 Sep 2026 11:30:00 GMT</lastBuildDate>');
     expect(rss).toContain('&lt;p&gt;Attachments:&lt;/p&gt;&lt;ul&gt;');
     expect(rss).toContain('href=&quot;https://cs.nju.edu.cn/a.pdf?x=1&amp;amp;y=2&quot;');
@@ -137,6 +147,8 @@ describe("standard XML feeds", () => {
       .toBe("Full text is unavailable from the public collector; open the original item.");
     expect(atomEntry.children.filter((child) => child.name.startsWith("nju:"))
       .map((child) => [child.name, child.text])).toEqual([
+      ["nju:published_on", "2026-09-23"],
+      ["nju:date_precision", "day"],
       ["nju:content_status", "link-only"],
       ["nju:acquisition_kind", "public-wechat"],
       ["nju:fetched_at", linkOnly.provenance.fetchedAt],
@@ -157,6 +169,8 @@ describe("standard XML feeds", () => {
       .toBe("Full text is unavailable from the public collector; open the original item.");
     expect(item.children.filter((child) => child.name.startsWith("nju:"))
       .map((child) => [child.name, child.text])).toEqual([
+      ["nju:published_on", "2026-09-23"],
+      ["nju:date_precision", "day"],
       ["nju:content_status", "link-only"],
       ["nju:acquisition_kind", "public-wechat"],
       ["nju:fetched_at", linkOnly.provenance.fetchedAt],

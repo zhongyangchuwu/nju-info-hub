@@ -9,7 +9,7 @@ export function buildAtomFeed(source: PersistedSourceSummary, sourceEntries: Sou
   const feed = syndicationFeed(source, sourceEntries, context.generatedAt);
   const lines = [
     xmlDeclaration,
-    `<feed xmlns="http://www.w3.org/2005/Atom"${feed.entries.some((entry) => entry.contentStatus === "link-only") ? ` xmlns:nju="${feedMetadataNamespace}"` : ""}>`,
+    `<feed xmlns="http://www.w3.org/2005/Atom" xmlns:nju="${feedMetadataNamespace}">`,
     `  <id>${xmlEscape(source.url)}</id>`,
     `  <title>${xmlEscape(feed.title)}</title>`,
     `  <link rel="alternate" href="${xmlEscape(source.url)}"/>`,
@@ -26,7 +26,7 @@ export function buildRssFeed(source: PersistedSourceSummary, sourceEntries: Sour
   const feed = syndicationFeed(source, sourceEntries, context.generatedAt);
   const lines = [
     xmlDeclaration,
-    `<rss version="2.0"${feed.entries.some((entry) => entry.contentStatus === "link-only") ? ` xmlns:nju="${feedMetadataNamespace}"` : ""}>`,
+    `<rss version="2.0" xmlns:nju="${feedMetadataNamespace}">`,
     '  <channel>',
     `    <title>${xmlEscape(feed.title)}</title>`,
     `    <link>${xmlEscape(source.url)}</link>`,
