@@ -139,16 +139,16 @@ describe("read-only API", () => {
     }
   });
 
-  it("uses the database default limit when omitted", async () => {
+  it("keeps the REST default limit separate from the feed producer window", async () => {
     const { path, writer } = database();
-    for (let index = 0; index < 51; index++) {
+    for (let index = 0; index < 125; index++) {
       notice(writer, source, `item-${index}`, `revision-${index}`, "2026-09-23");
     }
     const base = await serving(path);
     const recent = (await response(base, "/v1/notices/recent")).body;
     expect(recent.data).toHaveLength(50);
-    expect((await response(base, "/v1/notices/recent?limit=100")).body.data).toHaveLength(51);
-    expect((await response(base, "/feeds/notices-a.json")).body.items).toHaveLength(51);
+    expect((await response(base, "/v1/notices/recent?limit=100")).body.data).toHaveLength(100);
+    expect((await response(base, "/feeds/notices-a.json")).body.items).toHaveLength(100);
   });
 
   it("serves up to 100 current persisted items as JSON Feed", async () => {
@@ -176,6 +176,62 @@ describe("read-only API", () => {
       }],
     });
     expect(result.body.items[0]).not.toHaveProperty("date_published");
+  });
+
+  it("supports conditional GET caching for JSON, Atom, and RSS feeds", async () => {
+    const { path, writer } = database();
+    notice(writer, source, "cached", "first revision", "2026-09-23");
+    const base = await serving(path);
+
+    for (const format of ["json", "atom", "rss"]) {
+      const url = `${base}/feeds/notices-a.${format}`;
+      const initial = await fetch(url);
+      expect(initial.status).toBe(200);
+      const etag = initial.headers.get("etag");
+      const lastModified = initial.headers.get("last-modified");
+      expect(etag).toMatch(/^"sha256-[A-Za-z0-9_-]+"$/);
+      expect(lastModified).toBe(new Date("2026-09-23T10:00:00.000Z").toUTCString());
+      expect(initial.headers.get("cache-control")).toBe(
+        "public, max-age=0, must-revalidate",
+      );
+      await initial.arrayBuffer();
+
+      for (const ifNoneMatch of [etag!, `W/${etag}`]) {
+        const cached = await fetch(url, {
+          headers: { "If-None-Match": ifNoneMatch },
+        });
+        expect(cached.status).toBe(304);
+        expect(cached.headers.get("etag")).toBe(etag);
+        expect(await cached.text()).toBe("");
+      }
+
+      const dateCached = await fetch(url, {
+        headers: { "If-Modified-Since": lastModified! },
+      });
+      expect(dateCached.status).toBe(304);
+      expect(await dateCached.text()).toBe("");
+
+      const stale = await fetch(url, {
+        headers: {
+          "If-None-Match": '"different"',
+          "If-Modified-Since": "Wed, 31 Dec 2099 23:59:59 GMT",
+        },
+      });
+      expect(stale.status).toBe(200);
+      await stale.arrayBuffer();
+    }
+
+    const first = await fetch(`${base}/feeds/notices-a.json`);
+    const previousEtag = first.headers.get("etag")!;
+    await first.arrayBuffer();
+    notice(writer, source, "cached", "second revision", "2026-09-23");
+
+    const changed = await fetch(`${base}/feeds/notices-a.json`, {
+      headers: { "If-None-Match": previousEtag },
+    });
+    expect(changed.status).toBe(200);
+    expect(changed.headers.get("etag")).not.toBe(previousEtag);
+    expect((await changed.json()).items[0].title).toBe("second revision");
   });
 
   it("serves a pre-observation v2 full notice after writer migration", async () => {

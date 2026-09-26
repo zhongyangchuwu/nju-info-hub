@@ -12,6 +12,7 @@ import {
 import { buildJsonFeed } from "./feed.js";
 import { buildOpml } from "./opml.js";
 import { publishFiles, type PublicationFile } from "./publication-transaction.js";
+import { feedRecentItemLimit } from "./policy.js";
 import {
   buildSetCatalog,
   buildSourceCatalog,
@@ -139,7 +140,10 @@ export async function exportFeeds(
   for (const source of selectedSources) {
     sourceEntriesBySource.set(
       source.id,
-      reader.listRecentSourceEntries({ sourceId: source.id }),
+      reader.listRecentSourceEntries({
+        sourceId: source.id,
+        limit: feedRecentItemLimit,
+      }),
     );
   }
 

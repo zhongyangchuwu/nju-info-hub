@@ -51,7 +51,7 @@ Current instance files use schema version 4:
 }
 ```
 
-Collection and publication policy are intentionally separate. `collection.sources[].recentLimit` caps the initial bootstrap and later controls how many recent known items are refreshed for revision detection; incremental runs collect every unseen item until a fully-known list page establishes the history boundary. Full-detail acquisition is best-effort and does not refill from older items. `publication.sources` controls which persisted sources are exposed. Feed publication itself does not impose an item-count limit: every persisted current source entry is emitted. Published sources must also be collected by the same instance.
+Collection and publication policy are intentionally separate. `collection.sources[].recentLimit` caps the initial bootstrap and later controls how many recent known items are refreshed for revision detection; incremental runs collect every unseen item until a fully-known list page establishes the history boundary. Full-detail acquisition is best-effort and does not refill from older items. `publication.sources` controls which persisted sources are exposed. SQLite keeps the complete history, while Feed publication exposes the shared producer recent window (currently 100 entries per source). Published sources must also be collected by the same instance.
 
 Collection cadence is runtime-neutral. The same schedule metadata is consumed by the resident Docker scheduler and checked against the static GitHub Actions cron for the official reference deployment.
 
@@ -195,7 +195,7 @@ A failure from one source is logged without blocking later sources in the same r
 
 - no credentials are baked into the image;
 - collection writes only to the local named volume;
-- API/MCP remain read-only application paths;
+- the optional API remains a read-only application path;
 - the current official config collects public sources only;
 - SQLite is not placed on WebDAV/FUSE/network mounts;
 - private authentication/session support remains out of scope for this milestone.

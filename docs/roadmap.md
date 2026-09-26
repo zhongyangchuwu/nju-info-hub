@@ -11,7 +11,7 @@ GitHub is the source of truth for NJU Info Hub implementation status.
 
 NJU Info Hub is an unofficial, read-only information aggregation layer for Nanjing University.
 
-The core goal is to turn fragmented public campus information into a normalized, traceable dataset that can be consumed by search tools, feeds, agents, and MCP clients.
+The core goal is to turn fragmented public campus information into normalized, traceable standard feeds for external readers, with complete canonical history retained locally.
 
 The public core should remain independent from personal NJU, QQ, or WeChat credentials. Private chat sources, if added later, belong in local sidecars.
 
@@ -34,10 +34,9 @@ canonical records
       |
       +--> query / REST
       +--> RSS / Atom
-      +--> read-only MCP
 ```
 
-Collectors must remain independent from MCP/UI. New WebPlus/Sudy sources should normally be configuration-only additions.
+Collectors must remain independent from downstream UI/AI adapters. New WebPlus/Sudy sources should normally be configuration-only additions.
 
 ## Current status
 
@@ -62,7 +61,7 @@ Issue #5 is complete via PR #7.
 
 It corrected the stale Science & Technology source, added Graduate School coverage, supported split/month-first list dates, separated source/DOM order from publication-recency ordering, and added regression coverage for pinned old notices.
 
-P1 persisted queries and read-only REST/JSON and local stdio MCP output adapters are implemented. GitHub Issues remain authoritative for current work; other delivery formats are not implied by this milestone.
+P1 persisted queries, standard Feed publication, and the optional read-only REST adapter are implemented. GitHub Issues remain authoritative for current work; AI/MCP integration is deferred.
 
 ## Phase roadmap
 
@@ -88,7 +87,7 @@ Deferred from the early P0 collector:
 
 - canonical cross-source semantic deduplication;
 - deadline/audience enrichment beyond reliable deterministic extraction;
-- REST/MCP interfaces;
+- REST/feed interfaces;
 - browser automation unless a concrete source requires it.
 
 ### P1 — Query and read-only delivery
@@ -100,9 +99,7 @@ After P0 ingestion correctness is stable:
 - add search as justified by actual data and query needs;
 - expose read-only REST/JSON interfaces;
 - expose RSS/Atom where useful;
-- add a small read-only MCP adapter over the query layer.
-
-MCP remains an output adapter, not the core data model.
+- revisit AI/MCP integration only when a concrete downstream consumer requires it.
 
 ### P2 — Public feed adapters
 
