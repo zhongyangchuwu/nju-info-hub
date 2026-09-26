@@ -1,4 +1,4 @@
-import { linkOnlyXmlMetadata, xmlEscape, type SyndicationEntry } from "./syndication.js";
+import { entryXmlMetadata, xmlEscape, type SyndicationEntry } from "./syndication.js";
 
 export interface EntrySourceAttribution {
   url: string;
@@ -10,7 +10,6 @@ export function jsonFeedItem(entry: SyndicationEntry) {
     id: entry.id,
     url: entry.url,
     title: entry.title,
-    ...(entry.publishedAt ? { date_published: entry.publishedAt } : {}),
     ...(entry.bodyHtml ? { content_html: entry.bodyHtml } : {}),
     content_text: entry.bodyText,
     ...(entry.attachments.length ? {
@@ -50,11 +49,10 @@ export function atomEntryLines(
     `    <title>${xmlEscape(entry.title)}</title>`,
     `    <link rel="alternate" href="${xmlEscape(entry.url)}"/>`,
     `    <updated>${xmlEscape(entry.updatedAt)}</updated>`,
-    ...(entry.publishedAt ? [`    <published>${xmlEscape(entry.publishedAt)}</published>`] : []),
     ...(entry.bodyHtml
       ? [`    <content type="html">${xmlEscape(entry.bodyHtml)}</content>`]
       : [`    <content type="text">${xmlEscape(entry.bodyText)}</content>`]),
-    ...linkOnlyXmlMetadata(entry, "    "),
+    ...entryXmlMetadata(entry, "    "),
     ...(source ? [
       "    <source>",
       `      <id>${xmlEscape(source.url)}</id>`,
@@ -85,12 +83,11 @@ export function rssItemLines(
     `      <guid isPermaLink="false">${xmlEscape(entry.id)}</guid>`,
     `      <title>${xmlEscape(entry.title)}</title>`,
     `      <link>${xmlEscape(entry.url)}</link>`,
-    ...(entry.publishedAt ? [`      <pubDate>${new Date(entry.publishedAt).toUTCString()}</pubDate>`] : []),
     ...(source ? [
       `      <source url="${xmlEscape(source.url)}">${xmlEscape(source.title)}</source>`,
     ] : []),
     `      <description>${xmlEscape(rssDescription(entry))}</description>`,
-    ...linkOnlyXmlMetadata(entry, "      "),
+    ...entryXmlMetadata(entry, "      "),
     "    </item>",
   ];
 }
