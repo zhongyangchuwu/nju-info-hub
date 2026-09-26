@@ -108,7 +108,7 @@ describe("worker restricted details", () => {
     ]);
   });
 
-  it("observes only the two candidates attempted after recency lookahead", async () => {
+  it("observes every lookahead row while enriching only the recent candidates", async () => {
     const directory = mkdtempSync(join(tmpdir(), "nju-lookahead-worker-"));
     const path = join(directory, "notices.sqlite");
     try {
@@ -133,9 +133,9 @@ describe("worker restricted details", () => {
       const result = await run("ingest", path, "2");
       expect(JSON.parse(result.output)).toMatchObject({
         pagesVisited: 2,
-        itemsObserved: 2,
+        itemsObserved: 4,
         noticesIngested: 2,
-        stats: { sourceItems: 2, sourceItemObservations: 2, noticeRevisions: 2 },
+        stats: { sourceItems: 4, sourceItemObservations: 4, noticeRevisions: 2 },
       });
       expect(requested).toEqual([
         sourceUrl, secondListUrl, detail("lookahead-newest"), detail("newer"),
@@ -149,8 +149,10 @@ describe("worker restricted details", () => {
           JOIN raw_documents ON raw_documents.id = source_item_observations.raw_document_id
           ORDER BY source_items.url
         `).all()).toEqual([
+          { url: detail("lookahead-extra"), list_url: secondListUrl },
           { url: detail("lookahead-newest"), list_url: secondListUrl },
           { url: detail("newer"), list_url: sourceUrl },
+          { url: detail("older"), list_url: sourceUrl },
         ]);
       } finally {
         database.close();
@@ -189,7 +191,7 @@ describe("worker restricted details", () => {
       const summary = JSON.parse(result.output);
       expect(summary).toMatchObject({
         pagesVisited: 2,
-        itemsObserved: 2,
+        itemsObserved: 3,
         noticesIngested: 0,
         insertedRevisions: 0,
       });
@@ -206,10 +208,11 @@ describe("worker restricted details", () => {
       try {
         expect(database.prepare("SELECT url FROM source_items ORDER BY url").all()).toEqual([
           { url: detail("auth-blocked") },
+          { url: detail("ip-blocked-two") },
           { url: detail("ip-blocked") },
         ]);
         expect(database.prepare("SELECT count(*) AS count FROM source_item_observations").get())
-          .toEqual({ count: 2 });
+          .toEqual({ count: 3 });
         expect(database.prepare("SELECT count(*) AS count FROM notice_revisions").get())
           .toEqual({ count: 0 });
       } finally {
@@ -267,7 +270,7 @@ describe("worker restricted details", () => {
       });
       const result = await runSource("nju-student-affairs-notices", "ingest", path, "2");
       expect(JSON.parse(result.output)).toMatchObject({
-        itemsObserved: 2,
+        itemsObserved: 3,
         noticesIngested: 1,
         insertedRevisions: 1,
       });
@@ -278,14 +281,81 @@ describe("worker restricted details", () => {
         expect(database.prepare("SELECT url FROM source_items ORDER BY url").all()).toEqual([
           { url: wechatUrl },
           { url: first },
+          { url: second },
         ]);
         expect(database.prepare("SELECT count(*) AS count FROM source_item_observations").get())
-          .toEqual({ count: 2 });
+          .toEqual({ count: 3 });
         expect(database.prepare("SELECT count(*) AS count FROM notice_revisions").get())
           .toEqual({ count: 1 });
       } finally {
         database.close();
       }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("collects every unseen item beyond the refresh limit until the known-history boundary", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "nju-incremental-worker-"));
+    const path = join(directory, "notices.sqlite");
+    const secondListUrl = `${baseUrl}/2539/list2.htm`;
+    try {
+      mockPages({
+        [sourceUrl]: {
+          body: list([
+            { name: "known-newer", date: "2026-09-20" },
+            { name: "known-older", date: "2026-09-19" },
+          ]),
+        },
+        [detail("known-newer")]: { body: publicDetail("known-newer") },
+        [detail("known-older")]: { body: publicDetail("known-older") },
+      });
+      const bootstrap = await run("ingest", path, "2");
+      expect(JSON.parse(bootstrap.output)).toMatchObject({
+        itemsObserved: 2,
+        noticesIngested: 2,
+        insertedRevisions: 2,
+      });
+      vi.restoreAllMocks();
+
+      const requested = mockPages({
+        [sourceUrl]: {
+          body: list([
+            { name: "new-one", date: "2026-09-25" },
+            { name: "new-two", date: "2026-09-24" },
+            { name: "new-three", date: "2026-09-23" },
+          ], "/2539/list2.htm"),
+        },
+        [secondListUrl]: {
+          body: list([
+            { name: "known-newer", date: "2026-09-20" },
+            { name: "known-older", date: "2026-09-19" },
+          ], "/2539/list3.htm"),
+        },
+        [detail("new-one")]: { body: publicDetail("new-one") },
+        [detail("new-two")]: { body: publicDetail("new-two") },
+        [detail("new-three")]: { body: publicDetail("new-three") },
+        [detail("known-newer")]: { body: publicDetail("known-newer") },
+        [detail("known-older")]: { body: publicDetail("known-older") },
+      });
+      const incremental = await run("ingest", path, "2");
+      expect(JSON.parse(incremental.output)).toMatchObject({
+        pagesVisited: 2,
+        itemsObserved: 5,
+        noticesIngested: 5,
+        insertedRevisions: 3,
+        unchangedRevisions: 2,
+        stats: { sourceItems: 5, noticeRevisions: 5 },
+      });
+      expect(requested).toEqual([
+        sourceUrl,
+        secondListUrl,
+        detail("new-one"),
+        detail("new-two"),
+        detail("new-three"),
+        detail("known-newer"),
+        detail("known-older"),
+      ]);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

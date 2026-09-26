@@ -51,7 +51,7 @@ Current instance files use schema version 4:
 }
 ```
 
-Collection and publication policy are intentionally separate. `collection.sources[].recentLimit` controls the recent source-item window examined on each run; full-detail acquisition is best-effort within that window and does not refill from older items. `publication.sources` controls which persisted sources are exposed. Feed publication itself does not impose an item-count limit: every persisted current source entry is emitted. Published sources must also be collected by the same instance.
+Collection and publication policy are intentionally separate. `collection.sources[].recentLimit` caps the initial bootstrap and later controls how many recent known items are refreshed for revision detection; incremental runs collect every unseen item until a fully-known list page establishes the history boundary. Full-detail acquisition is best-effort and does not refill from older items. `publication.sources` controls which persisted sources are exposed. Feed publication itself does not impose an item-count limit: every persisted current source entry is emitted. Published sources must also be collected by the same instance.
 
 Collection cadence is runtime-neutral. The same schedule metadata is consumed by the resident Docker scheduler and checked against the static GitHub Actions cron for the official reference deployment.
 
