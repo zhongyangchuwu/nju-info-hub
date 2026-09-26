@@ -822,6 +822,8 @@ describe("InfoHubDatabase", () => {
         .map((entry) => entry.sourceItemId)).toEqual(["list-only", "other"]);
       expect(temporary.database.listRecentSourceEntries({ sourceId: SOURCE.id })
         .map((entry) => entry.sourceItemId)).toEqual(["list-only", "full"]);
+      expect(temporary.database.listKnownSourceItemIds(SOURCE.id))
+        .toEqual(["list-only", "full"]);
       expect(temporary.database.listRecentSourceEntries({ organizationId: SOURCE.organization.id })
         .map((entry) => entry.sourceItemId)).toEqual(["list-only", "full", "sibling"]);
       expect(temporary.database.listRecentSourceEntries({ sourceId: "unknown" })).toEqual([]);

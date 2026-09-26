@@ -435,6 +435,19 @@ export class InfoHubDatabase implements Disposable {
     return this.#queries.listRecentSourceEntries(options);
   }
 
+  listKnownSourceItemIds(sourceId: string): string[] {
+    return (
+      this.#database
+        .prepare(
+          `SELECT source_item_id
+             FROM source_items
+            WHERE source_id = ?
+            ORDER BY id`,
+        )
+        .all(sourceId) as Array<{ source_item_id: string }>
+    ).map((row) => row.source_item_id);
+  }
+
   stats(): DatabaseStats {
     return this.#queries.stats();
   }
