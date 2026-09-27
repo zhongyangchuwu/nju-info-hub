@@ -299,6 +299,7 @@ describe("worker restricted details", () => {
     const directory = mkdtempSync(join(tmpdir(), "nju-incremental-worker-"));
     const path = join(directory, "notices.sqlite");
     const secondListUrl = `${baseUrl}/2539/list2.htm`;
+    const thirdListUrl = `${baseUrl}/2539/list3.htm`;
     try {
       mockPages({
         [sourceUrl]: {
@@ -332,6 +333,9 @@ describe("worker restricted details", () => {
             { name: "known-older", date: "2026-09-19" },
           ], "/2539/list3.htm"),
         },
+        [thirdListUrl]: {
+          body: list([{ name: "lookahead-new", date: "2026-09-18" }], "/2539/list4.htm"),
+        },
         [detail("new-one")]: { body: publicDetail("new-one") },
         [detail("new-two")]: { body: publicDetail("new-two") },
         [detail("new-three")]: { body: publicDetail("new-three") },
@@ -340,22 +344,212 @@ describe("worker restricted details", () => {
       });
       const incremental = await run("ingest", path, "2");
       expect(JSON.parse(incremental.output)).toMatchObject({
-        pagesVisited: 2,
-        itemsObserved: 5,
+        pagesVisited: 3,
+        itemsObserved: 6,
         noticesIngested: 5,
         insertedRevisions: 3,
         unchangedRevisions: 2,
-        stats: { sourceItems: 5, noticeRevisions: 5 },
+        stats: { sourceItems: 6, noticeRevisions: 5 },
       });
       expect(requested).toEqual([
         sourceUrl,
         secondListUrl,
+        thirdListUrl,
         detail("new-one"),
         detail("new-two"),
         detail("new-three"),
         detail("known-newer"),
         detail("known-older"),
       ]);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("stops legacy sparse history after mixed overlap and one older lookahead", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "nju-sparse-frontier-"));
+    const path = join(directory, "notices.sqlite");
+    const second = `${baseUrl}/2539/list2.htm`;
+    const third = `${baseUrl}/2539/list3.htm`;
+    try {
+      mockPages({
+        [sourceUrl]: { body: list([{ name: "known", date: "2026-09-20" }]) },
+        [detail("known")]: { body: publicDetail("known") },
+      });
+      await run("ingest", path, "1");
+      vi.restoreAllMocks();
+
+      const requested = mockPages({
+        [sourceUrl]: { body: list([{ name: "new", date: "2026-09-27" }], "/2539/list2.htm") },
+        [second]: { body: list([
+          { name: "known", date: "2026-09-20" },
+          { name: "legacy-unknown", date: "2026-09-19" },
+        ], "/2539/list3.htm") },
+        [third]: { body: list([{ name: "lookahead-old", date: "2026-09-18" }], "/2539/list4.htm") },
+        [detail("new")]: { body: publicDetail("new") },
+        [detail("legacy-unknown")]: { body: publicDetail("legacy-unknown") },
+        [detail("known")]: { body: publicDetail("known") },
+      });
+      const result = await run("ingest", path, "1");
+      expect(JSON.parse(result.output)).toMatchObject({
+        pagesVisited: 3,
+        itemsObserved: 4,
+        noticesIngested: 3,
+        insertedRevisions: 2,
+        unchangedRevisions: 1,
+      });
+      expect(requested).toEqual([
+        sourceUrl, second, third,
+        detail("new"), detail("known"), detail("legacy-unknown"),
+      ]);
+      const database = new DatabaseSync(path);
+      try {
+        expect(database.prepare("SELECT count(*) AS count FROM source_item_observations").get())
+          .toEqual({ count: 4 });
+      } finally {
+        database.close();
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("collects burst updates across fully-unseen pages before overlap", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "nju-burst-frontier-"));
+    const path = join(directory, "notices.sqlite");
+    const second = `${baseUrl}/2539/list2.htm`;
+    const third = `${baseUrl}/2539/list3.htm`;
+    const fourth = `${baseUrl}/2539/list4.htm`;
+    try {
+      mockPages({
+        [sourceUrl]: { body: list([{ name: "known", date: "2026-09-20" }]) },
+        [detail("known")]: { body: publicDetail("known") },
+      });
+      await run("ingest", path, "1");
+      vi.restoreAllMocks();
+
+      const requested = mockPages({
+        [sourceUrl]: { body: list([{ name: "burst-one", date: "2026-09-27" }], "/2539/list2.htm") },
+        [second]: { body: list([{ name: "burst-two", date: "2026-09-26" }], "/2539/list3.htm") },
+        [third]: { body: list([{ name: "known", date: "2026-09-20" }], "/2539/list4.htm") },
+        [fourth]: { body: list([{ name: "lookahead", date: "2026-09-19" }], "/2539/list5.htm") },
+        [detail("burst-one")]: { body: publicDetail("burst-one") },
+        [detail("burst-two")]: { body: publicDetail("burst-two") },
+        [detail("known")]: { body: publicDetail("known") },
+      });
+      const result = await run("ingest", path, "1");
+      expect(JSON.parse(result.output)).toMatchObject({
+        pagesVisited: 4, itemsObserved: 4, noticesIngested: 3,
+        insertedRevisions: 2, unchangedRevisions: 1,
+      });
+      expect(requested).toEqual([
+        sourceUrl, second, third, fourth,
+        detail("burst-one"), detail("burst-two"), detail("known"),
+      ]);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("scans one lookahead page when overlap is already on page one", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "nju-normal-frontier-"));
+    const path = join(directory, "notices.sqlite");
+    const second = `${baseUrl}/2539/list2.htm`;
+    try {
+      mockPages({
+        [sourceUrl]: { body: list([{ name: "known", date: "2026-09-20" }]) },
+        [detail("known")]: { body: publicDetail("known") },
+      });
+      await run("ingest", path, "1");
+      vi.restoreAllMocks();
+
+      const requested = mockPages({
+        [sourceUrl]: { body: list([
+          { name: "new", date: "2026-09-27" },
+          { name: "known", date: "2026-09-20" },
+        ], "/2539/list2.htm") },
+        [second]: { body: list([{ name: "lookahead", date: "2026-09-19" }], "/2539/list3.htm") },
+        [detail("new")]: { body: publicDetail("new") },
+        [detail("known")]: { body: publicDetail("known") },
+      });
+      const result = await run("ingest", path, "1");
+      expect(JSON.parse(result.output)).toMatchObject({
+        pagesVisited: 2, itemsObserved: 3, noticesIngested: 2,
+        insertedRevisions: 1, unchangedRevisions: 1,
+      });
+      expect(requested).toEqual([
+        sourceUrl, second, detail("new"), detail("known"),
+      ]);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("fails without observing or enriching when no overlap is found in ten pages", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "nju-capped-frontier-"));
+    const path = join(directory, "notices.sqlite");
+    try {
+      mockPages({
+        [sourceUrl]: { body: list([{ name: "known", date: "2026-09-20" }]) },
+        [detail("known")]: { body: publicDetail("known") },
+      });
+      await run("ingest", path, "1");
+      vi.restoreAllMocks();
+
+      const urls = [sourceUrl, ...Array.from({ length: 10 }, (_, index) =>
+        `${baseUrl}/2539/list${index + 2}.htm`)];
+      const requested = mockPages(Object.fromEntries(urls.map((url, index) => [url, {
+        body: list([{ name: `historical-${index}`, date: "2026-09-19" }],
+          `/2539/list${index + 2}.htm`),
+      }])));
+      const result = await run("ingest", path, "1");
+      expect(result.output).toBe("");
+      expect(result.errors).toContain("nju-student-exchange: no known source-item overlap after 10 list pages");
+      expect(result.errors).toContain("overlap-search cap 10");
+      expect(process.exitCode).toBe(1);
+      expect(requested).toEqual(urls.slice(0, 10));
+      const database = new DatabaseSync(path);
+      try {
+        expect(database.prepare("SELECT count(*) AS count FROM source_item_observations").get())
+          .toEqual({ count: 1 });
+        expect(database.prepare("SELECT count(*) AS count FROM notice_revisions").get())
+          .toEqual({ count: 1 });
+      } finally {
+        database.close();
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("allows lookahead beyond the tenth-page overlap search", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "nju-overlap-limit-"));
+    const path = join(directory, "notices.sqlite");
+    try {
+      mockPages({
+        [sourceUrl]: { body: list([{ name: "known", date: "2026-09-20" }]) },
+        [detail("known")]: { body: publicDetail("known") },
+      });
+      await run("ingest", path, "1");
+      vi.restoreAllMocks();
+
+      const urls = [sourceUrl, ...Array.from({ length: 10 }, (_, index) =>
+        `${baseUrl}/2539/list${index + 2}.htm`)];
+      const pages = Object.fromEntries(urls.map((url, index) => [url, {
+        body: list([{ name: index === 9 ? "known" : `item-${index}`, date: "2026-09-20" }],
+          `/2539/list${index + 2}.htm`),
+      }]));
+      const details = Object.fromEntries(Array.from({ length: 9 }, (_, index) => [
+        detail(`item-${index}`), { body: publicDetail(`item-${index}`) },
+      ]));
+      details[detail("known")] = { body: publicDetail("known") };
+      const requested = mockPages({ ...pages, ...details });
+      const result = await run("ingest", path, "1");
+      expect(JSON.parse(result.output)).toMatchObject({
+        pagesVisited: 11, itemsObserved: 11, noticesIngested: 10,
+        insertedRevisions: 9, unchangedRevisions: 1,
+      });
+      expect(requested.slice(0, 11)).toEqual(urls);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

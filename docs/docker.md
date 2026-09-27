@@ -51,7 +51,7 @@ Current instance files use schema version 4:
 }
 ```
 
-Collection and publication policy are intentionally separate. `collection.sources[].recentLimit` caps the initial bootstrap and later controls how many recent known items are refreshed for revision detection; incremental runs collect every unseen item until a fully-known list page establishes the history boundary. Full-detail acquisition is best-effort and does not refill from older items. `publication.sources` controls which persisted sources are exposed. SQLite keeps the complete history, while Feed publication exposes the shared producer recent window (currently 100 entries per source). Published sources must also be collected by the same instance.
+Collection and publication policy are intentionally separate. `collection.sources[].recentLimit` caps the initial bootstrap and later controls how many recent known items are refreshed for revision detection; incremental runs scan until the first page containing any known item plus one observation-only lookahead page, then enrich unseen items only through the overlap page. No known overlap in 10 search pages fails that source before item observation or detail acquisition; the 100-page hard cap still applies. Full-detail acquisition is best-effort and does not refill from older items. `publication.sources` controls which persisted sources are exposed. SQLite keeps the complete history, while Feed publication exposes the shared producer recent window (currently 100 entries per source). Published sources must also be collected by the same instance.
 
 Collection cadence is runtime-neutral. The same schedule metadata is consumed by the resident Docker scheduler and checked against the static GitHub Actions cron for the official reference deployment.
 

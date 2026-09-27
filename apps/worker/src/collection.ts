@@ -31,6 +31,7 @@ export interface IngestSummary {
 
 export interface DiscoverPagesOptions {
   maxPages: number;
+  maxOverlapSearchPages?: number;
   recentLimit?: number;
   knownSourceItemIds?: ReadonlySet<string>;
   onPage?: (rawDocument: RawDocument) => void;
@@ -42,10 +43,12 @@ export interface DiscoverPagesOptions {
  * Discover the source's current update frontier.
  *
  * Bootstrap runs keep a bounded recent window plus one lookahead page. Once the
- * database has history, discovery continues through every page containing an
- * unseen source item and stops at the first page made entirely of known items.
- * All unseen items are selected, while `recentLimit` also refreshes that many of
- * the newest known items so edits can still create new revisions.
+ * database has history, discovery stops after the first page containing any
+ * known source item and one additional observation-only lookahead page. If no
+ * overlap is found within the overlap-search cap, fail before observing or
+ * enriching items. Unseen items through the overlap page are selected, while
+ * `recentLimit` also refreshes that many of the newest known items so edits can
+ * still create new revisions.
  */
 export async function discoverPages(
   source: WebPlusSourceConfig,
@@ -56,29 +59,38 @@ export async function discoverPages(
 }> {
   const firstListRawByUrl = new Map<string, RawDocument>();
   const items = new Map<string, DiscoveredItem>();
+  const incrementalCandidateUrls = new Set<string>();
   const seenPages = new Set<string>();
   const knownSourceItemIds = options.knownSourceItemIds ?? new Set<string>();
   const incremental = knownSourceItemIds.size > 0;
+  const maxOverlapSearchPages = options.maxOverlapSearchPages ?? 10;
   let pageUrl: string | undefined = source.url;
   let pagesVisited = 0;
   let reachedBootstrapLimit = false;
-
+  let foundOverlap = false;
   while (pageUrl && pagesVisited < options.maxPages && !seenPages.has(pageUrl)) {
     seenPages.add(pageUrl);
     const raw = await fetchRawDocument(source.id, pageUrl);
     options.onPage?.(raw);
     const page = discoverWebPlusPage(raw, source);
-    let pageHasUnknownItem = false;
+    let pageHasKnownItem = false;
+    const isIncrementalLookahead = incremental && foundOverlap;
     for (const item of page.items) {
       if (!items.has(item.url)) firstListRawByUrl.set(item.url, raw);
       items.set(item.url, item);
-      if (!knownSourceItemIds.has(item.sourceItemId)) pageHasUnknownItem = true;
+      if (incremental && !isIncrementalLookahead) incrementalCandidateUrls.add(item.url);
+      if (knownSourceItemIds.has(item.sourceItemId)) pageHasKnownItem = true;
     }
     pagesVisited += 1;
     pageUrl = page.nextPageUrl;
 
     if (incremental) {
-      if (page.items.length > 0 && !pageHasUnknownItem) break;
+      if (foundOverlap) break;
+      if (pageHasKnownItem) {
+        foundOverlap = true;
+        continue;
+      }
+      if (pagesVisited >= maxOverlapSearchPages) break;
       continue;
     }
 
@@ -86,6 +98,12 @@ export async function discoverPages(
       if (reachedBootstrapLimit || !pageUrl) break;
       reachedBootstrapLimit = true;
     }
+  }
+
+  if (incremental && !foundOverlap) {
+    throw new Error(
+      `${source.id}: no known source-item overlap after ${pagesVisited} list pages (overlap-search cap ${maxOverlapSearchPages}, maxPages ${options.maxPages}); refusing to observe or enrich without a history boundary`,
+    );
   }
 
   const sourceOrderedItems = [...items.values()];
@@ -98,10 +116,13 @@ export async function discoverPages(
   }
 
   let selectedItems: DiscoveredItem[];
+  const candidateItems = incremental
+    ? sourceOrderedItems.filter((item) => incrementalCandidateUrls.has(item.url))
+    : sourceOrderedItems;
   if (options.recentLimit === undefined) {
-    selectedItems = sourceOrderedItems;
+    selectedItems = candidateItems;
   } else {
-    const ordered = orderDiscoveredItemsByPublicationRecency(sourceOrderedItems);
+    const ordered = orderDiscoveredItemsByPublicationRecency(candidateItems);
     if (!incremental) {
       selectedItems = ordered.slice(0, options.recentLimit);
     } else {
