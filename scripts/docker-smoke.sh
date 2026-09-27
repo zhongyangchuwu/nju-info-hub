@@ -10,19 +10,19 @@ scheduler="nju-info-scheduler-${suffix}"
 api="nju-info-api-${suffix}"
 tmpdir="$(mktemp -d)"
 backup_dir="$tmpdir/backup"
-export_dir="$tmpdir/export"
+export_volume="nju-info-export-${suffix}"
 
 cleanup() {
   docker rm -f "$api" "$scheduler" "$fixture" >/dev/null 2>&1 || true
   docker network rm "$network" >/dev/null 2>&1 || true
-  docker volume rm "$volume" >/dev/null 2>&1 || true
+  docker volume rm "$volume" "$export_volume" >/dev/null 2>&1 || true
   rm -rf "$tmpdir"
 }
 trap cleanup EXIT
 
-mkdir -p "$tmpdir/sources" "$tmpdir/site" "$backup_dir" "$export_dir"
+mkdir -p "$tmpdir/sources" "$tmpdir/site" "$backup_dir"
 chmod 755 "$tmpdir" "$tmpdir/sources" "$tmpdir/site"
-chmod 777 "$backup_dir" "$export_dir"
+chmod 777 "$backup_dir"
 
 cat > "$tmpdir/sources/smoke-source.yaml" <<'YAML'
 schemaVersion: 1
@@ -88,6 +88,10 @@ docker run --rm --entrypoint sh "$image" -c '
 
 docker network create "$network" >/dev/null
 docker volume create "$volume" >/dev/null
+docker volume create "$export_volume" >/dev/null
+docker run --rm --user 0:0 --entrypoint chown \
+  -v "$export_volume:/output" \
+  "$image" node:node /output
 
 docker run -d --name "$fixture" --network "$network" \
   --network-alias fixture \
@@ -154,18 +158,22 @@ verify_database() {
 }
 
 verify_export() {
-  rm -rf "$export_dir"/*
   docker run --rm \
     -v "$volume:/data" \
     -v "$tmpdir:/config:ro" \
-    -v "$export_dir:/output" \
+    -v "$export_volume:/output" \
     -e NJU_INFO_CONFIG=/config/instance.json \
     -e NJU_INFO_SOURCE_DIR=/config/sources \
     "$image" export >/dev/null
-  test -s "$export_dir/feeds/smoke-source.json"
-  test -s "$export_dir/feeds/smoke-source.atom"
-  test -s "$export_dir/feeds/smoke-source.rss"
-  test -s "$export_dir/catalog/sources.json"
+  docker run --rm \
+    --entrypoint sh \
+    -v "$export_volume:/output:ro" \
+    "$image" -c '
+      test -s /output/feeds/smoke-source.json
+      test -s /output/feeds/smoke-source.atom
+      test -s /output/feeds/smoke-source.rss
+      test -s /output/catalog/sources.json
+    '
 }
 
 start_scheduler
