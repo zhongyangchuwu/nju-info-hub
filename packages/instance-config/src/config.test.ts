@@ -1,4 +1,3 @@
-import { spawnSync } from "node:child_process";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -28,69 +27,87 @@ async function withConfig(mutator: (value: any) => void): Promise<string> {
 }
 
 describe("instance config", () => {
-  it("accepts the pnpm argument separator on the root CLI", () => {
-    const result = spawnSync(
-      "pnpm",
-      ["instance", "--", "validate", "instances/official.json", "sources/nju"],
-      { cwd: repoRoot, encoding: "utf8" },
-    );
-    expect(result.status, result.stderr || result.stdout).toBe(0);
-  });
-
-  it("loads the official v2 config without changing publication behavior", async () => {
+  it("loads the official v4 collection and publication policy", async () => {
     const config = await loadInstanceConfig(officialPath, sourceDir);
-    expect(config.schemaVersion).toBe(2);
+    expect(config.schemaVersion).toBe(4);
     expect(config.publication.sources).toHaveLength(9);
-    expect(config.publication.publicBaseUrl).toBe("https://zhongyangchuwu.github.io/nju-info-hub/");
+    expect(config.publication.publicBaseUrl)
+      .toBe("https://zhongyangchuwu.github.io/nju-info-hub/");
     expect(config.publication.sets[0]?.sources).toEqual([
       "nju-cs-graduate",
       "nju-cs-internal-notices",
       "nju-cs-seminars",
     ]);
-    expect(config.collection).toEqual({ schedule: "17 */2 * * *", timeZone: "UTC" });
-    expect(config.storage.mode).toBe("optional-webdav");
+    expect(config.collection.schedule).toBe("17 */2 * * *");
+    expect(config.collection.timeZone).toBe("UTC");
+    expect(config.collection.sources).toHaveLength(9);
+    expect(config.collection.sources[0]).toEqual({
+      id: "nju-cs-graduate",
+      recentLimit: 10,
+    });
   });
 
-  it("normalizes a v1 config to v2 with UTC schedule semantics", async () => {
+  it("rejects the obsolete v3 instance shape", async () => {
     const current = await official();
     const file = await writeConfig({
-      schemaVersion: 1,
-      instance: current.instance,
+      ...current,
+      schemaVersion: 3,
       publication: {
-        sources: current.publication.sources,
-        sets: current.publication.sets,
+        ...current.publication,
+        itemLimit: 100,
       },
-      deployment: {
-        publicBaseUrl: current.publication.publicBaseUrl,
-        schedule: current.collection.schedule,
-      },
-      storage: current.storage,
     });
-    const config = await loadInstanceConfig(file, sourceDir);
-    expect(config.schemaVersion).toBe(2);
-    expect(config.publication.publicBaseUrl).toBe(current.publication.publicBaseUrl);
-    expect(config.collection).toEqual({ schedule: current.collection.schedule, timeZone: "UTC" });
-  });
-
-  it("rejects invalid cron schedules and time zones", async () => {
-    const badSchedule = await withConfig((value) => { value.collection.schedule = "not a cron"; });
-    await expect(loadInstanceConfig(badSchedule, sourceDir)).rejects.toThrow("invalid cron schedule");
-
-    const badZone = await withConfig((value) => { value.collection.timeZone = "Moon/SeaOfTranquility"; });
-    await expect(loadInstanceConfig(badZone, sourceDir)).rejects.toThrow("invalid IANA time zone");
-  });
-
-  it("rejects an unsupported storage mode", async () => {
-    const file = await withConfig((value) => { value.storage.mode = "inline-sqlite-over-webdav"; });
     await expect(loadInstanceConfig(file, sourceDir)).rejects.toThrow();
   });
 
-  it("rejects unknown or duplicate published sources", async () => {
-    const unknown = await withConfig((value) => value.publication.sources.push({ id: "missing-source", limit: 1 }));
-    await expect(loadInstanceConfig(unknown, sourceDir)).rejects.toThrow("unknown published source id: missing-source");
+  it("rejects invalid cron schedules and time zones", async () => {
+    const badSchedule = await withConfig((value) => {
+      value.collection.schedule = "not a cron";
+    });
+    await expect(loadInstanceConfig(badSchedule, sourceDir))
+      .rejects.toThrow("invalid cron schedule");
 
-    const duplicate = await withConfig((value) => value.publication.sources.push(value.publication.sources[0]));
-    await expect(loadInstanceConfig(duplicate, sourceDir)).rejects.toThrow("duplicate published source id");
+    const badZone = await withConfig((value) => {
+      value.collection.timeZone = "Moon/SeaOfTranquility";
+    });
+    await expect(loadInstanceConfig(badZone, sourceDir))
+      .rejects.toThrow("invalid IANA time zone");
+  });
+
+  it("rejects unknown and duplicate collection sources", async () => {
+    const unknown = await withConfig((value) => {
+      value.collection.sources.push({ id: "missing-source", recentLimit: 1 });
+    });
+    await expect(loadInstanceConfig(unknown, sourceDir))
+      .rejects.toThrow("unknown collection source id: missing-source");
+
+    const duplicate = await withConfig((value) => {
+      value.collection.sources.push(value.collection.sources[0]);
+    });
+    await expect(loadInstanceConfig(duplicate, sourceDir))
+      .rejects.toThrow("duplicate collection source id");
+  });
+
+  it("rejects unknown, duplicate, and uncollected published sources", async () => {
+    const unknown = await withConfig((value) => {
+      value.publication.sources.push("missing-source");
+    });
+    await expect(loadInstanceConfig(unknown, sourceDir))
+      .rejects.toThrow("unknown published source id: missing-source");
+
+    const duplicate = await withConfig((value) => {
+      value.publication.sources.push(value.publication.sources[0]);
+    });
+    await expect(loadInstanceConfig(duplicate, sourceDir))
+      .rejects.toThrow("duplicate published source id");
+
+    const uncollected = await withConfig((value) => {
+      value.publication.sources.push("nju-student-exchange");
+    });
+    await expect(loadInstanceConfig(uncollected, sourceDir))
+      .rejects.toThrow(
+        "published source id is not collected by this instance: nju-student-exchange",
+      );
   });
 
   it("rejects multiple, duplicate, and unpublished curated-set members", async () => {
@@ -100,12 +117,16 @@ describe("instance config", () => {
       sources: ["nju-cs-graduate"],
       opml: "subscriptions/second.opml",
     }));
-    await expect(loadInstanceConfig(multiple, sourceDir)).rejects.toThrow("at most one curated source set");
+    await expect(loadInstanceConfig(multiple, sourceDir))
+      .rejects.toThrow("at most one curated source set");
 
-    const duplicate = await withConfig((value) => value.publication.sets[0].sources.push("nju-cs-graduate"));
-    await expect(loadInstanceConfig(duplicate, sourceDir)).rejects.toThrow("duplicate source id in set cs");
+    const duplicate = await withConfig((value) =>
+      value.publication.sets[0].sources.push("nju-cs-graduate"));
+    await expect(loadInstanceConfig(duplicate, sourceDir))
+      .rejects.toThrow("duplicate source id in set cs");
 
-    const unpublished = await withConfig((value) => value.publication.sets[0].sources.push("nju-student-exchange"));
+    const unpublished = await withConfig((value) =>
+      value.publication.sets[0].sources.push("nju-student-exchange"));
     await expect(loadInstanceConfig(unpublished, sourceDir)).rejects.toThrow(
       "source set cs references unpublished source id: nju-student-exchange",
     );

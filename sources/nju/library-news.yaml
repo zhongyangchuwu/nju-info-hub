@@ -13,10 +13,3 @@ adapter:
     title: .title h3
     publishedAt: .title .time
     content: '#vsb_content'
-audience:
-  - all
-categories:
-  - library
-crawl:
-  intervalMinutes: 60
-enabled: true

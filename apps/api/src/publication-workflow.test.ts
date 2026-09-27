@@ -9,15 +9,15 @@ const officialConfig = JSON.parse(readFileSync(officialConfigPath, "utf8"));
 
 describe("public Pages workflow", () => {
   it("uses the checked-in official instance config for validation, collection, and export", () => {
-    expect(workflow).toContain("pnpm instance -- validate instances/official.json sources/nju");
-    expect(workflow).toContain('pnpm instance -- collect instances/official.json sources/nju "$NJU_INFO_DB"');
+    expect(workflow).toContain("pnpm nju-info -- validate instances/official.json sources/nju");
+    expect(workflow).toContain('pnpm nju-info -- collect instances/official.json sources/nju "$NJU_INFO_DB"');
     expect(workflow).toContain(
-      'pnpm instance -- export instances/official.json sources/nju "$NJU_INFO_DB" "$NJU_INFO_PAGES_DIR"',
+      'pnpm nju-info -- export instances/official.json sources/nju "$NJU_INFO_DB" "$NJU_INFO_PAGES_DIR"',
     );
     expect(workflow).not.toContain("pnpm worker -- ingest nju-");
     expect(workflow).not.toContain("export-feeds --");
-    expect(workflow).toContain("name: Read instance storage mode");
-    expect(workflow).toContain("if: steps.instance_config.outputs.storage_mode == 'optional-webdav'");
+    expect(workflow).not.toContain("storage.mode");
+    expect(workflow).not.toContain("instance_config.outputs.storage_mode");
   });
 
   it("keeps the GitHub schedule synchronized with official instance metadata", () => {

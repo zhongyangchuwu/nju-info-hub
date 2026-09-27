@@ -3,5 +3,5 @@ node = "26.10.0"
 pnpm = "12.5.1"
 
 [tasks.verify]
-description = "Run check, test, and build"
-run = "pnpm check && pnpm test && pnpm build"
+description = "Run checks, tests, release build, and packaged CLI smoke"
+run = "pnpm check && pnpm test && pnpm build && pnpm test:release"

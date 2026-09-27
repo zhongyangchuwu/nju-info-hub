@@ -38,8 +38,6 @@ describe("NJU Library news and notices source", () => {
       name: "图书馆新闻、活动与通知",
       url: "https://lib.nju.edu.cn/xw/xwtz.htm",
       adapter: { type: "webplus" },
-      audience: ["all"],
-      categories: ["library"],
     });
     expect(
       page.items.map(({ title, url, publishedAtRaw }) => ({

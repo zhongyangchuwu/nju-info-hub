@@ -10,11 +10,12 @@ scheduler="nju-info-scheduler-${suffix}"
 api="nju-info-api-${suffix}"
 tmpdir="$(mktemp -d)"
 backup_dir="$tmpdir/backup"
+export_volume="nju-info-export-${suffix}"
 
 cleanup() {
   docker rm -f "$api" "$scheduler" "$fixture" >/dev/null 2>&1 || true
   docker network rm "$network" >/dev/null 2>&1 || true
-  docker volume rm "$volume" >/dev/null 2>&1 || true
+  docker volume rm "$volume" "$export_volume" >/dev/null 2>&1 || true
   rm -rf "$tmpdir"
 }
 trap cleanup EXIT
@@ -33,23 +34,22 @@ organization:
 url: http://fixture:8080/list.htm
 adapter:
   type: webplus
-enabled: true
 YAML
 
 cat > "$tmpdir/instance.json" <<'JSON'
 {
-  "schemaVersion": 2,
+  "schemaVersion": 4,
   "instance": { "id": "smoke", "name": "Smoke Instance" },
   "publication": {
     "publicBaseUrl": "http://localhost:3000/",
-    "sources": [{ "id": "smoke-source", "limit": 1 }],
+    "sources": ["smoke-source"],
     "sets": []
   },
   "collection": {
     "schedule": "0 0 1 1 *",
-    "timeZone": "UTC"
-  },
-  "storage": { "mode": "cache-only" }
+    "timeZone": "UTC",
+    "sources": [{ "id": "smoke-source", "recentLimit": 1 }]
+  }
 }
 JSON
 
@@ -81,8 +81,18 @@ docker run --rm \
   -e NJU_INFO_IMAGE_REF=ghcr.io/zhongyangchuwu/nju-info-hub:sha-1234567 \
   "$image" validate >/dev/null
 
+docker run --rm --entrypoint sh "$image" -c '
+  ! command -v pnpm >/dev/null 2>&1
+  test ! -e /app/pnpm-workspace.yaml
+  test ! -e /app/node_modules/.pnpm-workspace-state-v1.json
+'
+
 docker network create "$network" >/dev/null
 docker volume create "$volume" >/dev/null
+docker volume create "$export_volume" >/dev/null
+docker run --rm --user 0:0 --entrypoint chown \
+  -v "$export_volume:/output" \
+  "$image" node:node /output
 
 docker run -d --name "$fixture" --network "$network" \
   --network-alias fixture \
@@ -143,9 +153,29 @@ verify_api() {
 
 verify_database() {
   docker run --rm -v "$volume:/data" \
-    --entrypoint /app/apps/worker/node_modules/.bin/tsx \
+    --entrypoint node \
     "$image" \
-    -e 'import { InfoHubDatabaseReader } from "/app/packages/db/src/index.ts"; const db=new InfoHubDatabaseReader("/data/feeds.sqlite"); const sources=db.listSources(); if(!sources.some(source=>source.id==="smoke-source")) throw new Error("smoke source missing"); db.close();'
+    --input-type=module \
+    -e 'import { DatabaseSync } from "node:sqlite"; const db=new DatabaseSync("/data/feeds.sqlite",{readOnly:true}); const source=db.prepare("SELECT id FROM sources WHERE id = ?").get("smoke-source"); db.close(); if(!source) throw new Error("smoke source missing");'
+}
+
+verify_export() {
+  docker run --rm \
+    -v "$volume:/data" \
+    -v "$tmpdir:/config:ro" \
+    -v "$export_volume:/output" \
+    -e NJU_INFO_CONFIG=/config/instance.json \
+    -e NJU_INFO_SOURCE_DIR=/config/sources \
+    "$image" export >/dev/null
+  docker run --rm \
+    --entrypoint sh \
+    -v "$export_volume:/output:ro" \
+    "$image" -c '
+      test -s /output/feeds/smoke-source.json
+      test -s /output/feeds/smoke-source.atom
+      test -s /output/feeds/smoke-source.rss
+      test -s /output/catalog/sources.json
+    '
 }
 
 start_scheduler
@@ -153,6 +183,7 @@ start_api
 wait_healthy
 verify_api
 verify_database
+verify_export
 
 docker run --rm \
   -v "$volume:/data" \

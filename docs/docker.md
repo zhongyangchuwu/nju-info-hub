@@ -12,7 +12,7 @@ ghcr.io/zhongyangchuwu/nju-info-hub
 
 The container workflow publishes immutable revision tags in the form `sha-<short-sha>`. A Git tag such as `v1.2.3` also publishes the matching version tag. The workflow deliberately does not publish an implicit `latest` tag.
 
-The image uses Node 26 and the repository-pinned pnpm/tsx versions. It runs as the unprivileged `node` user. The Dockerfile supports Linux amd64 and arm64; GHCR publishing produces both architectures under the same tag.
+The image uses Node 26 and runs the compiled release artifact. pnpm, TypeScript, esbuild, `tsx`, workspace source packages, and workspace metadata exist only in the builder stage and are absent from the final runtime image. It runs as the unprivileged `node` user. The Dockerfile supports Linux amd64 and arm64; GHCR publishing produces both architectures under the same tag.
 
 ## Runtime model
 
@@ -23,42 +23,39 @@ One image exposes a stable `nju-info` entrypoint:
 - `collect`: run one configured public collection;
 - `schedule`: run one collection at startup, then collect on the configured cron/timezone;
 - `export`: generate static syndication output;
-- `worker`: access lower-level public collector commands;
-- `mcp`: run the existing read-only stdio MCP server against the same persistent database.
+- `source`: access lower-level public source discovery/fetch/ingest commands;
 
-All commands use the same image and local SQLite volume. The scheduler owns recurring collection; API and MCP remain read-only consumers.
-
-For stdio MCP clients:
-
-```bash
-docker run --rm -i -v nju-info-data:/data \
-  ghcr.io/zhongyangchuwu/nju-info-hub:<version> mcp
-```
+All commands use the same image and local SQLite volume. The scheduler owns recurring collection; the optional HTTP API remains a read-only consumer.
 
 SQLite remains local to the active runtime. The API opens an existing current-schema database read-only and does not create or migrate state.
 
 ## Instance configuration
 
-Current instance files use schema version 2:
+Current instance files use schema version 4:
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 4,
   "publication": {
     "publicBaseUrl": "https://example.invalid/",
-    "sources": [],
+    "sources": ["nju-example"],
     "sets": []
   },
   "collection": {
     "schedule": "17 */2 * * *",
-    "timeZone": "UTC"
+    "timeZone": "UTC",
+    "sources": [
+      { "id": "nju-example", "recentLimit": 10 }
+    ]
   }
 }
 ```
 
-Collection cadence is runtime-neutral. The same metadata is consumed by the resident Docker scheduler and checked against the static GitHub Actions cron for the official reference deployment.
+Collection and publication policy are intentionally separate. `collection.sources[].recentLimit` caps the initial bootstrap and later controls how many recent known items are refreshed for revision detection; incremental runs collect every unseen item until a fully-known list page establishes the history boundary. Full-detail acquisition is best-effort and does not refill from older items. `publication.sources` controls which persisted sources are exposed. SQLite keeps the complete history, while Feed publication exposes the shared producer recent window (currently 100 entries per source). Published sources must also be collected by the same instance.
 
-`timeZone` must be a valid IANA timezone. Existing v1 configs remain readable: their former `deployment.schedule` is normalized as UTC because GitHub Actions cron semantics are UTC, and `deployment.publicBaseUrl` becomes `publication.publicBaseUrl`.
+Collection cadence is runtime-neutral. The same schedule metadata is consumed by the resident Docker scheduler and checked against the static GitHub Actions cron for the official reference deployment.
+
+`timeZone` must be a valid IANA timezone. The current instance contract is schema v4; older pre-release shapes are rejected instead of normalized at runtime.
 
 ## Canonical Compose deployment
 
@@ -101,7 +98,7 @@ Override only the host port when needed:
 NJU_INFO_PORT=3100 docker compose up -d
 ```
 
-A fresh volume does not need a manual database bootstrap. The scheduler creates/updates state through the normal collector. After its first successful run it writes a readiness marker into the data volume; the API does not start serving until that marker exists.
+A fresh volume does not need a manual database bootstrap. The scheduler creates/updates state through the normal collector. After its first usable run (at least one configured source succeeds) it writes a readiness marker into the data volume; the API does not start serving until that marker exists.
 
 The API wait timeout defaults to 900 seconds and can be changed with `NJU_INFO_READY_TIMEOUT_SECONDS`.
 
@@ -192,13 +189,13 @@ Compose readiness is state-based:
 4. API proceeds to open the existing database read-only;
 5. HTTP healthcheck becomes healthy.
 
-If startup collection fails because an upstream is transiently unavailable, the scheduler logs the failure and remains alive for the next configured run. It does not publish readiness until a collection succeeds.
+A failure from one source is logged without blocking later sources in the same run; that source keeps its previously persisted entries until a later run succeeds. If every configured source fails, the run fails and the scheduler remains alive for the next configured run. On a fresh volume it does not publish readiness until at least one source succeeds.
 
 ## Security boundary
 
 - no credentials are baked into the image;
 - collection writes only to the local named volume;
-- API/MCP remain read-only application paths;
+- the optional API remains a read-only application path;
 - the current official config collects public sources only;
 - SQLite is not placed on WebDAV/FUSE/network mounts;
 - private authentication/session support remains out of scope for this milestone.

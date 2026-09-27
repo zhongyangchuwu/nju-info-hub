@@ -7,11 +7,3 @@ organization:
 url: https://jw.nju.edu.cn/24809/list.htm
 adapter:
   type: webplus
-audience:
-  - all
-categories:
-  - academic-calendar
-  - teaching
-crawl:
-  intervalMinutes: 720
-enabled: true

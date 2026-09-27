@@ -4,7 +4,7 @@ An unofficial, read-only information aggregation layer for Nanjing University.
 
 > This is a community project and is not affiliated with or endorsed by Nanjing University.
 
-NJU Info Hub aims to turn fragmented public campus information into a normalized, traceable dataset that can be consumed by search tools, feeds, agents, and MCP clients.
+NJU Info Hub aims to turn fragmented public campus information into normalized, traceable standard feeds for readers such as Folo and Zotero, backed by a canonical local data store.
 
 ## Status
 
@@ -15,14 +15,13 @@ The public ingestion foundation and two read-only delivery adapters are in place
 - a local-facing REST/JSON API serves persisted sources, organizations, and recent **full** notices without collecting or modifying data;
 - per-source JSON Feed 1.1, Atom 1.0, and RSS 2.0 publish both full notices and explicit link-only official-list events without contacting upstreams;
 - static publication can expose a machine-readable published-source catalog plus reusable source sets as OPML or combined JSON/Atom/RSS timelines;
-- a local stdio MCP adapter exposes three read-only tools, with recent notices remaining full-only;
 - Node.js 26 is the default repository runtime and Node.js 24 remains the compatibility floor.
 
 Limited ingest records each Student Affairs official-list candidate it actually considers, including unsupported public-WeChat links, as a source-item observation before detail acquisition. Unsupported details require no WeChat request and remain `link-only` in local feeds; full public WebPlus details attach as notice revisions. `fetch` writes no database state. The six-source Pages publication allow-list is unchanged; these new sources are **not** publicly deployed. See [#46](https://github.com/zhongyangchuwu/nju-info-hub/issues/46), [#39](https://github.com/zhongyangchuwu/nju-info-hub/issues/39), and [#49](https://github.com/zhongyangchuwu/nju-info-hub/issues/49).
 
 Mixed-feed acceptance in this milestone is local JSON/XML parsing, not a public Folo check: Folo cannot fetch a local URL. Public Folo admission and any new-source Pages publication remain deferred to the subsequent #40 publication expansion; no temporary public feed endpoint is introduced.
 
-Use GitHub Issues for the current work queue; Issue #18 tracks the local MCP adapter.
+Use GitHub Issues for the current work queue. AI/MCP integration is deferred until a concrete consumer requires it.
 
 GitHub is the source of truth for implementation status:
 
@@ -30,11 +29,7 @@ GitHub is the source of truth for implementation status:
 - [Issues](https://github.com/zhongyangchuwu/nju-info-hub/issues) — active/planned work;
 - [Pull requests](https://github.com/zhongyangchuwu/nju-info-hub/pulls) — implementation and review history.
 
-Planned source families include:
-
-- public NJU websites and existing RSSHub routes where useful;
-- public WeChat-account articles through replaceable adapters;
-- optional local sidecars for private QQ/WeChat groups in a later phase.
+Current collection targets public NJU WebPlus/Sudy sites. Future public acquisition providers, including public WeChat article sources, should be added only when they have a concrete consumer and tested adapter boundary. Optional local sidecars for private QQ/WeChat groups remain a later phase.
 
 The public core will not log into NJU SSO, personal QQ accounts, or personal WeChat accounts.
 
@@ -46,8 +41,6 @@ source registry (YAML)
         v
 source adapters
   - webplus
-  - rsshub       [planned]
-  - generic html [planned]
         |
         v
 official list raw + provenance
@@ -58,22 +51,23 @@ official list raw + provenance
 public detail raw + provenance (when available)
         |
         v
-parsed full notice revision --> full feed entry / REST notices / MCP
+parsed full notice revision --> full feed entry / optional REST notices
 ```
 
-The source adapter boundary is intentionally independent of MCP. Future WeChat/QQ support should add new adapters or a local sidecar without changing the canonical data model.
+The source adapter boundary is intentionally independent of output protocols. Future WeChat/QQ support should add new adapters or a local sidecar without changing the canonical data model.
 
 ## Repository layout
 
 ```text
 apps/
-  worker/        development CLI for discovery, parsing, and ingestion
-  api/           read-only HTTP adapter over persisted queries
-  mcp/           read-only local stdio MCP adapter over persisted queries
+  nju-info/      product CLI and runtime orchestration
+  worker/        collection and ingestion application logic
+  api/           optional read-only HTTP adapter
 packages/
   core/          shared schemas and canonical types
   collector/     source registry loader and source adapters
   db/            SQLite schema, migrations, and read/write database APIs
+  feed/          JSON Feed / Atom / RSS / OPML publication engine
 sources/
   nju/           declarative source definitions
 ```
@@ -104,28 +98,26 @@ mise --env node24 run verify
 
 # with mise shell integration active, project commands are available directly
 # list configured sources
-pnpm worker -- sources
+pnpm nju-info -- source sources
 
 # discover notices from a live WebPlus list page
-pnpm worker -- discover nju-cs-graduate
+pnpm nju-info -- source discover nju-cs-graduate
 
 # fetch and parse the most recent dated detail page
-pnpm worker -- fetch nju-cs-graduate 1
+pnpm nju-info -- source fetch nju-cs-graduate 1
 
-# ingest the most recent dated notices and raw documents into SQLite
-pnpm worker -- ingest nju-cs-graduate /tmp/nju-info.sqlite 10
+# ingest one source into SQLite for source-level debugging
+pnpm nju-info -- source ingest nju-cs-graduate /tmp/nju-info.sqlite 10
 
-# serve an existing current-schema database on 127.0.0.1:3000
-pnpm api -- /tmp/nju-info.sqlite
-
-# choose an explicit host and port if local defaults do not fit
-pnpm api -- /tmp/nju-info.sqlite --host 127.0.0.1 --port 3001
-
-# serve an existing current-schema database to a local MCP host over stdio
-pnpm mcp -- /tmp/nju-info.sqlite
+# serve an existing current-schema database
+pnpm nju-info -- serve /tmp/nju-info.sqlite --host 127.0.0.1 --port 3001
 ```
 
-Worker fetch and ingest commands access public NJU websites. Unit tests use local fixtures instead.
+Source-level fetch and ingest commands access public NJU websites. Unit tests use local fixtures instead.
+
+### Release artifacts
+
+`pnpm build` creates the actual product artifact under `dist/release`: one compiled JavaScript CLI bundle, embedded default source/instance resources, and a minimal package manifest containing only third-party runtime dependencies. `pnpm test:release` packs that directory, installs the tarball into a fresh temporary prefix, and runs the packaged CLI; both Node 24 and Node 26 CI execute this smoke. `pnpm pack:release` produces an installable `.tgz` under `dist/`. The artifact is currently marked `private` so registry publication remains disabled until package naming/version policy is decided. The Docker image is built from the same compiled artifact rather than from workspace TypeScript source.
 
 The API requires an existing current-schema SQLite database; it does not create or migrate one. It binds only to localhost by default. Stop it with SIGINT or SIGTERM; active requests finish before the reader closes. Live WAL reads require the database and SQLite sidecar files to be accessible (see [`docs/database.md`](docs/database.md)).
 
@@ -143,11 +135,11 @@ curl http://127.0.0.1:3000/feeds/nju-cs-graduate.rss
 
 Only the recent-notices route accepts `sourceId`, `organizationId`, and `limit`; filters combine, and the default limit is 50 (maximum 100). Unknown IDs return an empty `data` array. Invalid queries return `400`, unknown paths `404`, non-GET methods on known paths `405` (`Allow: GET`), and internal failures `500`, each as `{"error":{"code":"…","message":"…"}}`. Dates and provenance follow the persisted query contract; health is liveness only.
 
-`GET /feeds/{sourceId}.{json,atom,rss}` publishes up to 100 current source entries per persisted source in database recency order: a known full notice, or an observed official-list link with no acquired full text. JSON is JSON Feed 1.1 (`application/feed+json`), Atom is Atom 1.0 (`application/atom+xml`), and RSS is RSS 2.0 (`application/rss+xml`); all responses are UTF-8. Unknown sources return a JSON `404`; feed query parameters are rejected with `400`, and non-GET methods return `405`. All formats use the organization — source title, link to the original source list/home page, original item links, and stable IDs formed from percent-encoded source ID and source item ID separated by a colon. A later full acquisition upgrades the **same** feed ID. Local HTTP feeds omit self URLs because a reliable public origin is unknown. `/v1/notices/recent` and the MCP recent-notices tool remain full-notice-only.
+`GET /feeds/{sourceId}.{json,atom,rss}` publishes the shared producer recent window (currently up to 100 current source entries) per persisted source in database recency order: a known full notice, or an observed official-list link with no acquired full text. JSON is JSON Feed 1.1 (`application/feed+json`), Atom is Atom 1.0 (`application/atom+xml`), and RSS is RSS 2.0 (`application/rss+xml`); all responses are UTF-8. HTTP Feed responses include a content-derived `ETag`, observation-derived `Last-Modified`, and `Cache-Control: public, max-age=0, must-revalidate`; `If-None-Match` and `If-Modified-Since` are honored with `304`. Unknown sources return a JSON `404`; feed query parameters are rejected with `400`, and non-GET methods return `405`. All formats use the organization — source title, link to the original source list/home page, original item links, and stable IDs formed from percent-encoded source ID and source item ID separated by a colon. A later full acquisition upgrades the **same** feed ID. Local HTTP feeds omit self URLs because a reliable public origin is unknown. `/v1/notices/recent` remains full-notice-only.
 
-The JSON `_nju` extension retains feed-level `source_id` and `organization: { id, name }`; item-level `source_id`, `source_name`, `organization`, `content_status` (`full` or `link-only`), known `acquisition_kind`, optional `observation_revision_number`, and full-only `revision_number` preserve identity and revision status. `fetched_at` and `content_sha256` describe the **detail raw** for full entries, or the **official list raw** for link-only entries; these are response hashes, not revision hashes. Legacy full notices without an observation have no acquisition kind. A link-only item's required feed content is a short, hub-generated unavailability note, **not** an article excerpt or evidence of restricted access; it has no attachments. Once full content exists, a later failed acquisition does not downgrade it. When the source supplies a calendar day, JSON also includes `published_on` and `date_precision: "day"`. Across formats, that source **day** is encoded for transport as `YYYY-MM-DDT00:00:00+08:00` (Asia/Shanghai); it is **not** an exact upstream publication time. JSON `date_published` and Atom `published` use the timestamp directly; RSS `pubDate` carries the equivalent instant in RFC 822/1123 GMT notation. Unknown days omit publication dates. The canonical database and `/v1` API retain day-only precision. Atom entry `updated` is the emitted raw fetch time, **not** an upstream-authored modification time. Atom feed `updated` is the latest emitted entry fetch time, or generation time for an empty feed; RSS channel `lastBuildDate` has the same hub observation/generation meaning.
+The JSON `_nju` extension retains feed-level `source_id` and `organization: { id, name }`; item-level `source_id`, `source_name`, `organization`, `content_status` (`full` or `link-only`), known `acquisition_kind`, optional `observation_revision_number`, and full-only `revision_number` preserve identity and revision status. `fetched_at` and `content_sha256` describe the **detail raw** for full entries, or the **official list raw** for link-only entries; these are response hashes, not revision hashes. Legacy full notices without an observation have no acquisition kind. A link-only item's required feed content is a short, hub-generated unavailability note, **not** an article excerpt or evidence of restricted access; it has no attachments. Once full content exists, a later failed acquisition does not downgrade it. When the source supplies only a calendar day, JSON keeps `published_on` and `date_precision: "day"` under `_nju`; Atom and RSS expose the same information as `nju:published_on` and `nju:date_precision`. For consumer compatibility, a known day is also transported through the standard publication-time fields using a fixed **UTC-noon anchor** (`YYYY-MM-DDT12:00:00Z`). This anchor is not an upstream-authored time; `_nju.date_precision = "day"` / `nju:date_precision` remains authoritative about precision. Unknown days still omit the standard publication-time fields and the day metadata. The canonical database and `/v1` API retain the original day-only value without the transport anchor. Atom entry `updated` is the emitted raw fetch time, **not** an upstream-authored modification time. Atom feed `updated` is the latest emitted entry fetch time, or generation time for an empty feed; RSS channel `lastBuildDate` has the same hub observation/generation meaning.
 
-Full entries preserve original HTML/text and every ordered attachment with inferred MIME type. Atom uses HTML content when available (otherwise text) and one standard `rel="enclosure"` link per full attachment. RSS embeds full attachment links in its item description. Link-only Atom/RSS content carries the same hub-generated availability note, never fabricated article text. Mixed XML feeds additionally declare `xmlns:nju="https://zhongyangchuwu.github.io/nju-info-hub/ns/feed"` and expose link-only `nju:content_status`, `nju:acquisition_kind` (when known), `nju:fetched_at`, and `nju:content_sha256`; full-only feeds retain their existing XML shape. RSS **does not** emit `<enclosure>`: RSS 2.0 requires a reliable byte length, which the canonical attachment model does not store.
+Full entries preserve original HTML/text and every ordered attachment with inferred MIME type. Atom uses HTML content when available (otherwise text) and one standard `rel="enclosure"` link per full attachment. RSS embeds full attachment links in its item description. Link-only Atom/RSS content carries the same hub-generated availability note, never fabricated article text. Atom and RSS always declare `xmlns:nju="https://zhongyangchuwu.github.io/nju-info-hub/ns/feed"` so day-only `nju:published_on` / `nju:date_precision` metadata is available on dated entries. Link-only entries additionally expose `nju:content_status`, `nju:acquisition_kind` (when known), `nju:fetched_at`, and `nju:content_sha256`. RSS **does not** emit `<enclosure>`: RSS 2.0 requires a reliable byte length, which the canonical attachment model does not store.
 
 | Publication | Paths | Readers |
 | --- | --- | --- |
@@ -177,31 +169,21 @@ Public per-source URL patterns (for the nine IDs above):
 
 The published-source catalog lists only the sources included in the current publication, with their original NJU home pages and absolute JSON/Atom/RSS URLs. It is not the complete audited NJU source map from Issue #21 and does not invent channel/authority metadata that is not persisted. The pilot selector reads only static `sources.json` and `sets.json`. It defaults to all published sources when `sources` is absent; `?sources=id1,id2` selects known IDs only, in catalog order. Select all and Clear update the URL without reloading. Arbitrary selections download client-generated OPML (one independent RSS subscription per source) or copy per-source feed URLs; they do **not** acquire a stable combined-feed URL. Only the named `cs` set has a server-published OPML and combined JSON/Atom/RSS timeline, linked through `sets.json`. The page has no account, read state, notification settings, or collector/backend role; this is an engineering pilot, not a polished product.
 
-Static export accepts an optional `--base-url` for canonical URLs. Positional source IDs form the publication allow-list: `catalog/sources.json` and the per-source feeds contain every selected source. A named curated set is separate: `--set-id`, `--set-title`, and one or more repeatable `--set-source <source-id>` flags are required together. The explicit set members must be in the publication allow-list; its OPML and combined feeds contain only those members, and its versioned `catalog/sets.json` entry records them. With a set, OPML uses set membership; without a set, OPML uses the published selection. The original invocation without flags still works.
+Static publication is driven by the reviewed instance configuration rather than a second set of export CLI flags. The instance selects the published source allow-list, optional curated set, OPML path under `subscriptions/`, and public base URL; the exporter consumes that contract directly. SQLite retains the complete persisted history, while each RSS/Atom/JSON Feed exposes the producer recent window (currently the latest 100 entries per source) for efficient polling by readers. Each export renders a complete next generation before replacing the publication-owned `feeds/`, `catalog/`, `bundles/`, and `subscriptions/` directories, so a render failure leaves the previous generation intact while unrelated files at the output root are preserved.
 
 To collect and export the same feeds locally, run from the repository root (package scripts use their own working directories):
 
 ```bash
 ROOT="$PWD"
 mkdir -p "$ROOT/.cache/nju-info" "$ROOT/_site"
-pnpm worker -- ingest nju-cs-graduate "$ROOT/.cache/nju-info/feeds.sqlite" 10
-pnpm worker -- ingest nju-cs-internal-notices "$ROOT/.cache/nju-info/feeds.sqlite" 10
-pnpm worker -- ingest nju-cs-seminars "$ROOT/.cache/nju-info/feeds.sqlite" 10
-pnpm worker -- ingest nju-itsc-notices "$ROOT/.cache/nju-info/feeds.sqlite" 10
-pnpm worker -- ingest nju-library-news-notices "$ROOT/.cache/nju-info/feeds.sqlite" 10
-pnpm worker -- ingest nju-graduate-school-notices "$ROOT/.cache/nju-info/feeds.sqlite" 10
-pnpm worker -- ingest nju-undergraduate-notices "$ROOT/.cache/nju-info/feeds.sqlite" 5
-pnpm worker -- ingest nju-youth-league-announcements "$ROOT/.cache/nju-info/feeds.sqlite" 5
-pnpm worker -- ingest nju-student-affairs-notices "$ROOT/.cache/nju-info/feeds.sqlite" 10
-pnpm --filter @nju-info/api export-feeds -- "$ROOT/.cache/nju-info/feeds.sqlite" "$ROOT/_site" nju-cs-graduate nju-cs-internal-notices nju-cs-seminars nju-itsc-notices nju-library-news-notices nju-graduate-school-notices nju-undergraduate-notices nju-youth-league-announcements nju-student-affairs-notices --base-url https://zhongyangchuwu.github.io/nju-info-hub/ --opml subscriptions/cs.opml --set-id cs --set-title "计算机学院公开信息" --set-source nju-cs-graduate --set-source nju-cs-internal-notices --set-source nju-cs-seminars
+pnpm nju-info -- collect instances/official.json sources/nju "$ROOT/.cache/nju-info/feeds.sqlite"
+pnpm nju-info -- export instances/official.json sources/nju "$ROOT/.cache/nju-info/feeds.sqlite" "$ROOT/_site"
 ```
 The GitHub Actions SQLite cache remains a best-effort warm-start layer and may be evicted. The Pages workflow can optionally restore and persist a verified durable state snapshot through a WebDAV-backed rclone remote; runtime SQLite still stays on the local runner filesystem. Snapshot format, restore/fallback behavior, WebDAV secrets, and generic self-host rclone usage are documented in [`docs/state-storage.md`](docs/state-storage.md).
 
-The MCP command requires an existing current-schema SQLite database. It exposes only `list_sources`, `list_organizations`, and `list_recent_notices` over stdio; the first two take `{}`, and the third accepts optional `sourceId`, `organizationId`, and `limit` (1–100). Results include matching JSON text and structured content. Configure an MCP host to launch the command as a subprocess; stdout is reserved for protocol messages and startup diagnostics go to stderr. Closing the connection releases the read-only database reader.
-
 WebPlus discovery preserves list-page source/DOM order. Limited `fetch` and `ingest` commands instead rank parseable publication dates newest-first, with stable source-order fallback for equal, missing, or unparseable dates. They inspect one page beyond the point where enough candidates were found; `discover-pages` keeps full source order and pinned items.
 
-Limited `fetch` and `ingest` skip unsupported public-WeChat/external candidates without requesting their details, and skip recognized campus-IP warning pages and NJU unified-identity redirects after a normal public detail request. Each diagnostic reports source ID, item URL, and class on stderr. They continue through later candidates for the requested number of usable public notices, within the existing 100-page discovery cap; unrelated parse/fetch errors still fail. `discover` and `discover-pages` show public list metadata and acquisition classification without fetching details. Ingest persists an official-list observation **immediately before** each considered candidate's acquisition attempt, including skipped and later malformed details; it does not observe every list row fetched for recency lookahead. Ingest summaries count candidates considered as `itemsDiscovered` and usable persisted **full** notices as `noticesIngested`. Direct `fetch` never writes the database.
+On an empty database, `ingest` bootstraps only the configured recent window plus one lookahead page. Once a source has history, it scans forward until it reaches a list page made entirely of already-known source items: every unseen item before that boundary is processed regardless of count, while `recentLimit` also refreshes that many of the newest known items so edits can produce new revisions. Unsupported public-WeChat/external items are kept as link-only observations without requesting their details; recognized campus-IP warning pages and NJU unified-identity redirects remain link-only after the ordinary public detail request. Link-only entries do not trigger refill from older history. Unrelated parse/fetch errors still fail. `discover` and `discover-pages` show public list metadata and acquisition classification without fetching details. Ingest persists official-list observations for every unique row discovered on fetched list pages before detail enrichment. Ingest summaries count those persisted list rows as `itemsObserved` and successfully persisted full notices as `noticesIngested`. Direct `fetch` never writes the database.
 
 ## Initial sources
 

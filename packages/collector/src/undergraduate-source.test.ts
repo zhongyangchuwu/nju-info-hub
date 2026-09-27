@@ -29,10 +29,6 @@ describe("NJU Undergraduate School announcements", () => {
       organization: { id: "nju-undergraduate-school", name: "本科生院" },
       url: "https://jw.nju.edu.cn/ggtz/list.htm",
       adapter: { type: "webplus" },
-      audience: ["undergraduate"],
-      categories: ["teaching", "notice"],
-      crawl: { intervalMinutes: 30 },
-      enabled: true,
     });
     expect(source.adapter.selectors).toBeUndefined();
 
