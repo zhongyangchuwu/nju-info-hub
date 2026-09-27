@@ -401,6 +401,46 @@ describe("WebPlus adapter", () => {
     expect(notice.publishedOn).toBeNull();
   });
 
+  it("absolutizes HTTP links and media inside canonical body HTML", () => {
+    const config = source(
+      "nju-cs-graduate",
+      "计算机学院研究生公告栏",
+      "https://cs.nju.edu.cn/1703/list.htm",
+      "计算机学院",
+    );
+    const detail = raw(
+      config.id,
+      "https://cs.nju.edu.cn/a/b/page.htm",
+      `<h1 class="arti_title">Notice</h1>
+       <div class="wp_articlecontent">
+         <a href="/docs/a.pdf">document</a>
+         <a href="/_upload/article/files/a/body.pdf" title="Body PDF">attachment</a>
+         <a href="#section">jump</a>
+         <img src="../images/photo.png" original-src="/images/original.png">
+         <video poster="//media.nju.edu.cn/poster.jpg"></video>
+         <span pdfsrc="/files/inline.pdf" swsrc="../videos/inline.swf"></span>
+         <a href="mailto:test@nju.edu.cn">mail</a>
+       </div>`,
+    );
+
+    const notice = parseWebPlusNotice(detail, config);
+    expect(notice.bodyHtml).toContain('href="https://cs.nju.edu.cn/docs/a.pdf"');
+    expect(notice.bodyHtml).toContain(
+      'href="https://cs.nju.edu.cn/_upload/article/files/a/body.pdf"',
+    );
+    expect(notice.bodyHtml).toContain('href="#section"');
+    expect(notice.bodyHtml).toContain('src="https://cs.nju.edu.cn/a/images/photo.png"');
+    expect(notice.bodyHtml).toContain('poster="https://media.nju.edu.cn/poster.jpg"');
+    expect(notice.bodyHtml).toContain('original-src="https://cs.nju.edu.cn/images/original.png"');
+    expect(notice.bodyHtml).toContain('pdfsrc="https://cs.nju.edu.cn/files/inline.pdf"');
+    expect(notice.bodyHtml).toContain('swsrc="https://cs.nju.edu.cn/a/videos/inline.swf"');
+    expect(notice.bodyHtml).toContain('href="mailto:test@nju.edu.cn"');
+    expect(notice.attachments).toContainEqual({
+      url: "https://cs.nju.edu.cn/_upload/article/files/a/body.pdf",
+      title: "Body PDF",
+    });
+  });
+
   it("ignores upload links outside the article content", () => {
     const config = source(
       "nju-cs-graduate",
