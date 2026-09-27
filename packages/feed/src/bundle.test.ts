@@ -8,7 +8,6 @@ const graduate: PersistedSourceSummary = {
   name: "Graduate notices",
   organization: { id: "nju-cs", name: "School of Computer Science" },
   url: "https://cs.nju.edu.cn/1703/list.htm",
-  enabled: true,
 };
 
 const seminars: PersistedSourceSummary = {
@@ -16,7 +15,6 @@ const seminars: PersistedSourceSummary = {
   name: "Seminars",
   organization: graduate.organization,
   url: "https://cs.nju.edu.cn/1706/list.htm",
-  enabled: true,
 };
 
 function notice(
@@ -113,6 +111,34 @@ describe("combined source-set feeds", () => {
     });
   });
 
+  it("caps the combined source-set feed at the producer recent window", () => {
+    const manyParts = [
+      {
+        source: graduate,
+        entries: Array.from({ length: 75 }, (_, index) =>
+          notice(
+            graduate,
+            `grad-${String(index).padStart(3, "0")}`,
+            "2026-09-25",
+            "2026-09-25T10:00:00Z",
+          )),
+      },
+      {
+        source: seminars,
+        entries: Array.from({ length: 75 }, (_, index) =>
+          notice(
+            seminars,
+            `seminar-${String(index).padStart(3, "0")}`,
+            "2026-09-25",
+            "2026-09-25T10:00:00Z",
+          )),
+      },
+    ];
+    expect(buildJsonBundle(set, manyParts).items).toHaveLength(100);
+    expect(buildAtomBundle(set, manyParts).match(/<entry>/g)).toHaveLength(100);
+    expect(buildRssBundle(set, manyParts).match(/<item>/g)).toHaveLength(100);
+  });
+
   it("uses standard Atom and RSS attribution while preserving link-only notes", () => {
     const atom = buildAtomBundle(set, parts, {
       selfUrl: "https://example.org/bundles/cs.atom",
@@ -134,6 +160,9 @@ describe("combined source-set feeds", () => {
       selfUrl: "https://example.org/bundles/cs.rss",
       generatedAt: "2026-09-24T05:00:00Z",
     });
+    expect(rss).toContain(
+      '<atom:link href="https://example.org/bundles/cs.rss" rel="self" type="application/rss+xml"/>',
+    );
     expect(rss).toContain('<source url="https://cs.nju.edu.cn/1703/list.htm">School of Computer Science — Graduate notices</source>');
     expect(rss).toContain('<source url="https://cs.nju.edu.cn/1706/list.htm">School of Computer Science — Seminars</source>');
     expect(rss).not.toContain("<enclosure");

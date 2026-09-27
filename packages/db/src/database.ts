@@ -53,7 +53,6 @@ export interface PersistedSourceSummary {
   name: string;
   organization: PersistedOrganizationSummary;
   url: string;
-  enabled: boolean;
 }
 
 export interface RecentNoticeOptions {
@@ -104,7 +103,6 @@ interface SourceSummaryRow {
   organization_id: string;
   organization_name: string;
   homepage_url: string;
-  enabled: number;
 }
 
 interface NoticeQueryRow {
@@ -437,6 +435,19 @@ export class InfoHubDatabase implements Disposable {
     return this.#queries.listRecentSourceEntries(options);
   }
 
+  listKnownSourceItemIds(sourceId: string): string[] {
+    return (
+      this.#database
+        .prepare(
+          `SELECT source_item_id
+             FROM source_items
+            WHERE source_id = ?
+            ORDER BY id`,
+        )
+        .all(sourceId) as Array<{ source_item_id: string }>
+    ).map((row) => row.source_item_id);
+  }
+
   stats(): DatabaseStats {
     return this.#queries.stats();
   }
@@ -546,7 +557,7 @@ export class InfoHubDatabase implements Disposable {
         source.url,
         source.adapter.type,
         configJson,
-        source.enabled ? 1 : 0,
+        1,
         now,
         now,
       );
@@ -699,7 +710,7 @@ class DatabaseQueries {
   listSources(): PersistedSourceSummary[] {
     const rows = this.#database
       .prepare(
-        `SELECT id, name, organization_id, organization_name, homepage_url, enabled
+        `SELECT id, name, organization_id, organization_name, homepage_url
            FROM sources
           ORDER BY id`,
       )
@@ -709,7 +720,6 @@ class DatabaseQueries {
       name: row.name,
       organization: { id: row.organization_id, name: row.organization_name },
       url: row.homepage_url,
-      enabled: row.enabled === 1,
     }));
   }
 
@@ -809,8 +819,11 @@ class DatabaseQueries {
   }
 
   listRecentSourceEntries(options: RecentNoticeOptions = {}): SourceEntryQueryResult[] {
-    const limit = options.limit ?? 50;
-    if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+    const limit = options.limit;
+    if (
+      limit !== undefined &&
+      (!Number.isInteger(limit) || limit < 1 || limit > 100)
+    ) {
       throw new Error("recent source entry limit must be an integer from 1 to 100");
     }
 
@@ -872,9 +885,9 @@ class DatabaseQueries {
           ORDER BY CASE WHEN n.id IS NOT NULL THEN n.published_on ELSE o.published_on END IS NULL,
                    CASE WHEN n.id IS NOT NULL THEN n.published_on ELSE o.published_on END DESC,
                    s.id, si.source_item_id
-          LIMIT ?`,
+          ${limit === undefined ? "" : "LIMIT ?"}`,
       )
-      .all(...parameters, limit) as unknown as SourceEntryQueryRow[];
+      .all(...parameters, ...(limit === undefined ? [] : [limit])) as unknown as SourceEntryQueryRow[];
     if (rows.length === 0) return [];
 
     const noticeRevisionIds = rows.flatMap((row) =>

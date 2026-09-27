@@ -96,6 +96,28 @@ function sameOriginUrl(baseUrl: string, href: string): string | undefined {
     : undefined;
 }
 
+function absolutizeContentUrls(
+  $: cheerio.CheerioAPI,
+  content: cheerio.Cheerio<AnyNode>,
+  baseUrl: string,
+): void {
+  for (const attribute of [
+    "href",
+    "src",
+    "poster",
+    "original-src",
+    "pdfsrc",
+    "swsrc",
+  ] as const) {
+    content.find(`[${attribute}]`).each((_, element) => {
+      const value = $(element).attr(attribute);
+      if (!value || value.startsWith("#")) return;
+      const absolute = resolveHttpUrl(baseUrl, value);
+      if (absolute) $(element).attr(attribute, absolute.toString());
+    });
+  }
+}
+
 function looksLikeArticleUrl(url: URL): boolean {
   return /\/page(?:m)?\.htm$/i.test(url.pathname);
 }
@@ -357,6 +379,7 @@ export function parseWebPlusNotice(
     throw new Error(`missing notice content for ${source.id}: ${raw.url}`);
   }
 
+  absolutizeContentUrls($, content, raw.url);
   const bodyHtml = content.html() ?? "";
   const bodyText = normalizeText(content.text());
   const url = discovered?.url ?? raw.url;

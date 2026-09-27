@@ -11,35 +11,30 @@ const sources: PersistedSourceSummary[] = [
     name: "Graduate notices",
     organization: { id: "nju-cs", name: "School of Computer Science" },
     url: "https://cs.nju.edu.cn/1703/list.htm",
-    enabled: true,
   },
   {
     id: "nju-cs-seminars",
     name: "Seminars",
     organization: { id: "nju-cs", name: "School of Computer Science" },
     url: "https://cs.nju.edu.cn/1706/list.htm",
-    enabled: true,
   },
   {
     id: "nju-cs-undergraduate",
     name: "Undergraduate notices",
     organization: { id: "nju-cs", name: "School of Computer Science" },
     url: "https://cs.nju.edu.cn/1704/list.htm",
-    enabled: true,
   },
   {
     id: "nju-library",
     name: "Library notices",
     organization: { id: "nju-library", name: "University Library" },
     url: "https://lib.nju.edu.cn/notices/list.htm",
-    enabled: true,
   },
   {
     id: "nju-math",
     name: "Mathematics notices",
     organization: { id: "nju-math", name: "School of Mathematics" },
     url: "https://math.nju.edu.cn/notices/list.htm",
-    enabled: true,
   },
 ];
 
@@ -92,7 +87,10 @@ describe("source catalog and source-set export", () => {
       });
       expect(listRecentSourceEntries).toHaveBeenCalledTimes(sources.length);
       for (const source of sources) {
-        expect(listRecentSourceEntries).toHaveBeenCalledWith({ sourceId: source.id, limit: 100 });
+        expect(listRecentSourceEntries).toHaveBeenCalledWith({
+          sourceId: source.id,
+          limit: 100,
+        });
       }
 
       const catalog = JSON.parse(readFileSync(join(directory, "catalog/sources.json"), "utf8"));
@@ -189,8 +187,13 @@ describe("source catalog and source-set export", () => {
         publicBaseUrl: "https://example.org/nju",
       });
       expect(readdirSync(join(directory, "catalog"))).toEqual(["sources.json"]);
+      expect(existsSync(join(directory, "bundles"))).toBe(false);
+      expect(existsSync(join(directory, "subscriptions"))).toBe(false);
+
       await exportFeeds(reader, directory, sources.map((source) => source.id));
       expect(existsSync(join(directory, "catalog"))).toBe(false);
+      expect(existsSync(join(directory, "bundles"))).toBe(false);
+      expect(existsSync(join(directory, "subscriptions"))).toBe(false);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
@@ -251,6 +254,24 @@ describe("source catalog and source-set export", () => {
       })).rejects.toThrow("unsafe OPML path");
       expect(readFileSync(join(directory, "catalog/sources.json"), "utf8")).toBe(previousCatalog);
       expect(readFileSync(join(directory, "feeds/previous.json"), "utf8")).toBe(previousFeed);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("uses the producer recent window instead of the full archive", async () => {
+    const listRecentSourceEntries = vi.fn(() => []);
+    const reader: FeedExportReader = {
+      listSources: () => sources.slice(0, 1),
+      listRecentSourceEntries,
+    };
+    const directory = mkdtempSync(join(tmpdir(), "nju-info-source-set-"));
+    try {
+      await exportFeeds(reader, directory, [sources[0]!.id]);
+      expect(listRecentSourceEntries).toHaveBeenCalledWith({
+        sourceId: sources[0]!.id,
+        limit: 100,
+      });
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

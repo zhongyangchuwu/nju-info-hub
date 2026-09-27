@@ -7,12 +7,3 @@ organization:
 url: https://cs.nju.edu.cn/1702/list.htm
 adapter:
   type: webplus
-audience:
-  - graduate
-  - faculty
-categories:
-  - graduate
-  - research
-crawl:
-  intervalMinutes: 60
-enabled: true

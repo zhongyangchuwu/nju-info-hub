@@ -1,16 +1,23 @@
 import type { PersistedSourceSummary, SourceEntryQueryResult } from "@nju-info/db";
 
 const linkOnlyContentText = "Full text is unavailable from the public collector; open the original item.";
-/** XML extension is emitted only when a feed contains link-only entries. */
+/** Namespace for metadata that standard feed formats cannot represent without fabricating precision. */
 export const feedMetadataNamespace = "https://zhongyangchuwu.github.io/nju-info-hub/ns/feed";
 
-export function linkOnlyXmlMetadata(entry: SyndicationEntry, indent: string): string[] {
-  if (entry.contentStatus !== "link-only") return [];
+export function entryXmlMetadata(entry: SyndicationEntry, indent: string): string[] {
   return [
-    `${indent}<nju:content_status>link-only</nju:content_status>`,
-    ...(entry.acquisitionKind ? [`${indent}<nju:acquisition_kind>${xmlEscape(entry.acquisitionKind)}</nju:acquisition_kind>`] : []),
-    `${indent}<nju:fetched_at>${xmlEscape(entry.fetchedAt)}</nju:fetched_at>`,
-    `${indent}<nju:content_sha256>${xmlEscape(entry.contentSha256)}</nju:content_sha256>`,
+    ...(entry.publishedOn === null ? [] : [
+      `${indent}<nju:published_on>${xmlEscape(entry.publishedOn)}</nju:published_on>`,
+      `${indent}<nju:date_precision>day</nju:date_precision>`,
+    ]),
+    ...(entry.contentStatus !== "link-only" ? [] : [
+      `${indent}<nju:content_status>link-only</nju:content_status>`,
+      ...(entry.acquisitionKind ? [
+        `${indent}<nju:acquisition_kind>${xmlEscape(entry.acquisitionKind)}</nju:acquisition_kind>`,
+      ] : []),
+      `${indent}<nju:fetched_at>${xmlEscape(entry.fetchedAt)}</nju:fetched_at>`,
+      `${indent}<nju:content_sha256>${xmlEscape(entry.contentSha256)}</nju:content_sha256>`,
+    ]),
   ];
 }
 const mimeTypes: Record<string, string> = {
@@ -50,6 +57,7 @@ export interface SyndicationEntry {
   url: string;
   title: string;
   publishedOn: string | null;
+  /** Compatibility transport for day-only source dates; UTC noon is not an exact upstream time. */
   publishedAt?: string;
   updatedAt: string;
   contentStatus: SourceEntryQueryResult["contentStatus"];
@@ -79,6 +87,16 @@ function rfc3339(value: string): string {
   if (!Number.isFinite(time.getTime())) throw new Error(`invalid feed timestamp: ${value}`);
   return time.toISOString();
 }
+
+export function dayPrecisionTimestamp(publishedOn: string): string {
+  const timestamp = `${publishedOn}T12:00:00Z`;
+  if (!/^\d{4}-\d{2}-\d{2}T12:00:00Z$/.test(timestamp) ||
+      !Number.isFinite(Date.parse(timestamp))) {
+    throw new Error(`invalid day-precision publication date: ${publishedOn}`);
+  }
+  return timestamp;
+}
+
 /** Project persisted source observations once, preserving database order and day precision. */
 export function syndicationFeed(source: PersistedSourceSummary, sourceEntries: SourceEntryQueryResult[], generatedAt?: string): SyndicationFeed {
   const entries = sourceEntries.map((sourceEntry): SyndicationEntry => {
@@ -88,7 +106,9 @@ export function syndicationFeed(source: PersistedSourceSummary, sourceEntries: S
       url: sourceEntry.url,
       title: sourceEntry.title,
       publishedOn: sourceEntry.publishedOn,
-      ...(sourceEntry.publishedOn === null ? {} : { publishedAt: `${sourceEntry.publishedOn}T00:00:00+08:00` }),
+      ...(sourceEntry.publishedOn === null ? {} : {
+        publishedAt: dayPrecisionTimestamp(sourceEntry.publishedOn),
+      }),
       updatedAt: rfc3339(sourceEntry.provenance.fetchedAt),
       fetchedAt: sourceEntry.provenance.fetchedAt,
       contentStatus: sourceEntry.contentStatus,

@@ -7,7 +7,6 @@ const source: PersistedSourceSummary = {
   name: "Graduate notices",
   organization: { id: "nju-cs", name: "School of Computer Science" },
   url: "https://cs.nju.edu.cn/graduate/list.htm",
-  enabled: true,
 };
 
 const notice: SourceEntryQueryResult = {
@@ -48,7 +47,7 @@ describe("JSON Feed builder", () => {
       id: "nju-cs-graduate:news%2F123%3A4",
       url: notice.url,
       title: notice.title,
-      date_published: "2026-09-23T00:00:00+08:00",
+      date_published: "2026-09-23T12:00:00Z",
       content_html: notice.bodyHtml,
       content_text: notice.bodyText,
       attachments: [
@@ -64,9 +63,15 @@ describe("JSON Feed builder", () => {
         fetched_at: notice.provenance.fetchedAt, content_sha256: notice.provenance.contentSha256,
       },
     });
-    expect(buildJsonFeed(source, [{ ...notice, provenance: { ...notice.provenance,
-      fetchedAt: "2026-09-24T11:00:00.000Z" } }]).items[0]?.date_published)
-      .toBe("2026-09-23T00:00:00+08:00");
+    const laterObservation = buildJsonFeed(source, [{ ...notice, provenance: {
+      ...notice.provenance,
+      fetchedAt: "2026-09-24T11:00:00.000Z",
+    } }]).items[0]!;
+    expect(laterObservation.date_published).toBe("2026-09-23T12:00:00Z");
+    expect(laterObservation._nju).toMatchObject({
+      published_on: "2026-09-23",
+      date_precision: "day",
+    });
     expect(buildJsonFeed(source, [{ ...notice, noticeRevisionNumber: 3, title: "Another revision" }]).items[0]?.id)
       .toBe(feed.items[0]?.id);
   });

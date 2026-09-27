@@ -23,9 +23,6 @@ const SOURCE: WebPlusSourceConfig = {
     name: "Test organization",
   },
   url: "https://example.edu/notices/list.htm",
-  audience: ["students"],
-  categories: ["notices"],
-  enabled: true,
   adapter: { type: "webplus" },
 };
 
@@ -825,6 +822,8 @@ describe("InfoHubDatabase", () => {
         .map((entry) => entry.sourceItemId)).toEqual(["list-only", "other"]);
       expect(temporary.database.listRecentSourceEntries({ sourceId: SOURCE.id })
         .map((entry) => entry.sourceItemId)).toEqual(["list-only", "full"]);
+      expect(temporary.database.listKnownSourceItemIds(SOURCE.id))
+        .toEqual(["list-only", "full"]);
       expect(temporary.database.listRecentSourceEntries({ organizationId: SOURCE.organization.id })
         .map((entry) => entry.sourceItemId)).toEqual(["list-only", "full", "sibling"]);
       expect(temporary.database.listRecentSourceEntries({ sourceId: "unknown" })).toEqual([]);
@@ -849,6 +848,34 @@ describe("InfoHubDatabase", () => {
       rmSync(temporary.directory, { recursive: true, force: true });
     }
   });
+  it("returns all source entries when no query limit is supplied", () => {
+    const temporary = temporaryDatabase();
+    try {
+      for (let index = 0; index < 125; index += 1) {
+        const id = `item-${String(index).padStart(3, "0")}`;
+        temporary.database.observeSourceItem(
+          SOURCE,
+          listRawDocument(
+            SOURCE,
+            `<li>${id}</li>`,
+            `2026-09-25T10:${String(index % 60).padStart(2, "0")}:00.000Z`,
+          ),
+          discoveredItem(SOURCE, id, {
+            publishedAtRaw: `2026-09-${String((index % 25) + 1).padStart(2, "0")}`,
+          }),
+        );
+      }
+
+      expect(temporary.database.listRecentSourceEntries({ sourceId: SOURCE.id }))
+        .toHaveLength(125);
+      expect(temporary.database.listRecentSourceEntries({ sourceId: SOURCE.id, limit: 100 }))
+        .toHaveLength(100);
+    } finally {
+      temporary.database.close();
+      rmSync(temporary.directory, { recursive: true, force: true });
+    }
+  });
+
   it("returns no metadata from an empty database", () => {
     const temporary = temporaryDatabase();
     try {
@@ -863,9 +890,9 @@ describe("InfoHubDatabase", () => {
   it("discovers persisted source and organization filters without requiring notices", () => {
     const temporary = temporaryDatabase();
     try {
-      const disabledSibling = { ...SIBLING_SOURCE, enabled: false };
+      const siblingWithoutNotices = SIBLING_SOURCE;
       temporary.database.upsertSource(SOURCE);
-      temporary.database.upsertSource(disabledSibling);
+      temporary.database.upsertSource(siblingWithoutNotices);
       temporary.database.upsertSource(OTHER_SOURCE);
       ingestItem(temporary.database, SOURCE, "notice", "2026-09-23");
 
@@ -874,15 +901,15 @@ describe("InfoHubDatabase", () => {
       expect(sources).toEqual([
         {
           id: OTHER_SOURCE.id, name: OTHER_SOURCE.name,
-          organization: OTHER_SOURCE.organization, url: OTHER_SOURCE.url, enabled: true,
+          organization: OTHER_SOURCE.organization, url: OTHER_SOURCE.url,
         },
         {
-          id: disabledSibling.id, name: disabledSibling.name,
-          organization: disabledSibling.organization, url: disabledSibling.url, enabled: false,
+          id: siblingWithoutNotices.id, name: siblingWithoutNotices.name,
+          organization: siblingWithoutNotices.organization, url: siblingWithoutNotices.url,
         },
         {
           id: SOURCE.id, name: SOURCE.name,
-          organization: SOURCE.organization, url: SOURCE.url, enabled: true,
+          organization: SOURCE.organization, url: SOURCE.url,
         },
       ]);
       expect(organizations).toEqual([
@@ -890,16 +917,16 @@ describe("InfoHubDatabase", () => {
         SOURCE.organization,
       ]);
       const noticeSource = sources[2];
-      const disabledSource = sources[1];
+      const sourceWithoutNotices = sources[1];
       const noticeOrganization = organizations[1];
-      if (!noticeSource || !disabledSource || !noticeOrganization) {
+      if (!noticeSource || !sourceWithoutNotices || !noticeOrganization) {
         throw new Error("expected persisted source and organization filters");
       }
       expect(temporary.database.listRecentNotices({ sourceId: noticeSource.id })
         .map((row) => row.sourceItemId)).toEqual(["notice"]);
       expect(temporary.database.listRecentNotices({ organizationId: noticeOrganization.id })
         .map((row) => row.sourceItemId)).toEqual(["notice"]);
-      expect(temporary.database.listRecentNotices({ sourceId: disabledSource.id })).toEqual([]);
+      expect(temporary.database.listRecentNotices({ sourceId: sourceWithoutNotices.id })).toEqual([]);
     } finally {
       temporary.database.close();
       rmSync(temporary.directory, { recursive: true, force: true });
@@ -922,11 +949,11 @@ describe("InfoHubDatabase", () => {
       expect(temporary.database.listSources()).toEqual([
         {
           id: updatedSibling.id, name: updatedSibling.name,
-          organization: updatedSibling.organization, url: updatedSibling.url, enabled: true,
+          organization: updatedSibling.organization, url: updatedSibling.url,
         },
         {
           id: SOURCE.id, name: SOURCE.name,
-          organization: SOURCE.organization, url: SOURCE.url, enabled: true,
+          organization: SOURCE.organization, url: SOURCE.url,
         },
       ]);
       expect(temporary.database.listOrganizations()).toEqual([updatedSibling.organization]);

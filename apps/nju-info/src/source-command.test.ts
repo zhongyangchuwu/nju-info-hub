@@ -3,7 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { runSourceCommand } from "./source-command.js";
 
 const sourceUrl = "https://stuex.nju.edu.cn/2539/list.htm";
 const baseUrl = "https://stuex.nju.edu.cn";
@@ -12,8 +14,8 @@ const restriction = readFileSync(
   new URL("../../../packages/collector/fixtures/webplus/campus-restricted.html", import.meta.url),
   "utf8",
 );
-const originalArgv = process.argv;
 const originalExitCode = process.exitCode;
+const sourceDirectory = fileURLToPath(new URL("../../../sources/nju/", import.meta.url));
 
 function list(
   items: { name: string; date: string }[],
@@ -52,14 +54,12 @@ function mockPages(pages: Record<string, { body: string; finalUrl?: string }>) {
 async function runSource(sourceId: string, command: string, ...args: string[]) {
   const stdout = vi.spyOn(console, "log").mockImplementation(() => {});
   const stderr = vi.spyOn(console, "error").mockImplementation(() => {});
-  process.argv = ["node", "cli.ts", command, sourceId, ...args];
-  vi.resetModules();
-  // CLI work begins on module evaluation; static import would run before argv/fetch are set.
-  await import("./cli.js");
-  await vi.waitFor(() =>
-    expect(stdout.mock.calls.length + (process.exitCode === 1 ? stderr.mock.calls.length : 0))
-      .toBeGreaterThan(0),
-  );
+  try {
+    await runSourceCommand([command, sourceId, ...args], sourceDirectory);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  }
   return {
     output: stdout.mock.calls.map(([value]) => String(value)).join("\n"),
     errors: stderr.mock.calls.map(([value]) => String(value)).join("\n"),
@@ -71,14 +71,13 @@ function run(command: string, ...args: string[]) {
 }
 
 afterEach(() => {
-  process.argv = originalArgv;
   process.exitCode = originalExitCode;
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
 describe("worker restricted details", () => {
-  it("skips the newest IP-restricted item, preserving dated recency and one-page-beyond ordering", async () => {
+  it("keeps the newest restricted item in the recent window without refilling from older items", async () => {
     const requested = mockPages({
       [sourceUrl]: {
         body: list(
@@ -94,13 +93,11 @@ describe("worker restricted details", () => {
       },
       [detail("blocked")]: { body: restriction },
       [detail("public-new")]: { body: publicDetail("public-new") },
-      [detail("public-old")]: { body: publicDetail("public-old") },
     });
 
     const result = await run("fetch", "2");
     expect(JSON.parse(result.output).map((notice: { title: string }) => notice.title)).toEqual([
       "public-new",
-      "public-old",
     ]);
     expect(result.errors).toContain(`nju-student-exchange ${detail("blocked")}: campus-network`);
     expect(requested).toEqual([
@@ -108,11 +105,10 @@ describe("worker restricted details", () => {
       `${baseUrl}/2539/list2.htm`,
       detail("blocked"),
       detail("public-new"),
-      detail("public-old"),
     ]);
   });
 
-  it("observes only the two candidates attempted after recency lookahead", async () => {
+  it("observes every lookahead row while enriching only the recent candidates", async () => {
     const directory = mkdtempSync(join(tmpdir(), "nju-lookahead-worker-"));
     const path = join(directory, "notices.sqlite");
     try {
@@ -137,9 +133,9 @@ describe("worker restricted details", () => {
       const result = await run("ingest", path, "2");
       expect(JSON.parse(result.output)).toMatchObject({
         pagesVisited: 2,
-        itemsDiscovered: 2,
+        itemsObserved: 4,
         noticesIngested: 2,
-        stats: { sourceItems: 2, sourceItemObservations: 2, noticeRevisions: 2 },
+        stats: { sourceItems: 4, sourceItemObservations: 4, noticeRevisions: 2 },
       });
       expect(requested).toEqual([
         sourceUrl, secondListUrl, detail("lookahead-newest"), detail("newer"),
@@ -153,8 +149,10 @@ describe("worker restricted details", () => {
           JOIN raw_documents ON raw_documents.id = source_item_observations.raw_document_id
           ORDER BY source_items.url
         `).all()).toEqual([
+          { url: detail("lookahead-extra"), list_url: secondListUrl },
           { url: detail("lookahead-newest"), list_url: secondListUrl },
           { url: detail("newer"), list_url: sourceUrl },
+          { url: detail("older"), list_url: sourceUrl },
         ]);
       } finally {
         database.close();
@@ -164,10 +162,11 @@ describe("worker restricted details", () => {
     }
   });
 
-  it("continues beyond the initial one-page window for multiple restrictions and persists only public details", async () => {
+  it("does not refill from older pages when the newest source items are restricted", async () => {
     const directory = mkdtempSync(join(tmpdir(), "nju-restricted-worker-"));
     const path = join(directory, "notices.sqlite");
     try {
+      const secondListUrl = `${baseUrl}/2539/list2.htm`;
       const requested = mockPages({
         [sourceUrl]: {
           body: list(
@@ -178,66 +177,44 @@ describe("worker restricted details", () => {
             "/2539/list2.htm",
           ),
         },
-        [`${baseUrl}/2539/list2.htm`]: {
+        [secondListUrl]: {
           body: list([{ name: "ip-blocked-two", date: "2026-09-22" }], "/2539/list3.htm"),
-        },
-        [`${baseUrl}/2539/list3.htm`]: {
-          body: list([
-            { name: "public-first", date: "2026-09-21" },
-            { name: "public-second", date: "2026-09-20" },
-          ]),
         },
         [detail("ip-blocked")]: { body: restriction },
         [detail("auth-blocked")]: {
           body: "<html>Sign in</html>",
           finalUrl: "https://authserver.nju.edu.cn/authserver/login?service=test",
         },
-        [detail("ip-blocked-two")]: { body: restriction },
-        [detail("public-first")]: { body: publicDetail("public-first") },
-        [detail("public-second")]: { body: publicDetail("public-second") },
       });
 
       const result = await run("ingest", path, "2");
       const summary = JSON.parse(result.output);
-      expect(summary.itemsDiscovered).toBe(5);
-      expect(summary.noticesIngested).toBe(2);
-      expect(summary.insertedRevisions).toBe(2);
+      expect(summary).toMatchObject({
+        pagesVisited: 2,
+        itemsObserved: 3,
+        noticesIngested: 0,
+        insertedRevisions: 0,
+      });
       expect(result.errors).toContain(`${detail("ip-blocked")}: campus-network`);
       expect(result.errors).toContain(`${detail("auth-blocked")}: authentication`);
-      expect(result.errors).toContain(`${detail("ip-blocked-two")}: campus-network`);
-      expect(requested).toContain(`${baseUrl}/2539/list3.htm`);
+      expect(requested).toEqual([
+        sourceUrl,
+        secondListUrl,
+        detail("ip-blocked"),
+        detail("auth-blocked"),
+      ]);
+
       const database = new DatabaseSync(path);
       try {
         expect(database.prepare("SELECT url FROM source_items ORDER BY url").all()).toEqual([
           { url: detail("auth-blocked") },
           { url: detail("ip-blocked-two") },
           { url: detail("ip-blocked") },
-          { url: detail("public-first") },
-          { url: detail("public-second") },
         ]);
-        expect(database.prepare("SELECT count(*) AS count FROM source_item_observations").get()).toEqual({ count: 5 });
-        expect(
-          database.prepare(`
-            SELECT source_items.url, raw_documents.final_url AS list_url
-            FROM source_item_observations
-            JOIN source_items ON source_items.id = source_item_observations.source_item_row_id
-            JOIN raw_documents ON raw_documents.id = source_item_observations.raw_document_id
-            ORDER BY source_items.url
-          `).all(),
-        ).toEqual([
-          { url: detail("auth-blocked"), list_url: sourceUrl },
-          { url: detail("ip-blocked-two"), list_url: `${baseUrl}/2539/list2.htm` },
-          { url: detail("ip-blocked"), list_url: sourceUrl },
-          { url: detail("public-first"), list_url: `${baseUrl}/2539/list3.htm` },
-          { url: detail("public-second"), list_url: `${baseUrl}/2539/list3.htm` },
-        ]);
-        expect(database.prepare("SELECT count(*) AS count FROM notice_revisions").get()).toEqual({ count: 2 });
-        expect(
-          database.prepare("SELECT final_url FROM raw_documents WHERE final_url LIKE '%/page.htm' ORDER BY final_url").all(),
-        ).toEqual([
-          { final_url: detail("public-first") },
-          { final_url: detail("public-second") },
-        ]);
+        expect(database.prepare("SELECT count(*) AS count FROM source_item_observations").get())
+          .toEqual({ count: 3 });
+        expect(database.prepare("SELECT count(*) AS count FROM notice_revisions").get())
+          .toEqual({ count: 0 });
       } finally {
         database.close();
       }
@@ -273,7 +250,7 @@ describe("worker restricted details", () => {
     expect(result.errors).toBe("");
   });
 
-  it("skips an official public-WeChat row without requesting it and refills from older WebPlus rows", async () => {
+  it("keeps public-WeChat link-only items inside the recent window without refilling", async () => {
     const directory = mkdtempSync(join(tmpdir(), "nju-mixed-worker-"));
     const path = join(directory, "notices.sqlite");
     const listUrl = "https://xgb.nju.edu.cn/gsgg/list.htm";
@@ -290,16 +267,15 @@ describe("worker restricted details", () => {
           </ul>`,
         },
         [first]: { body: publicDetail("First public") },
-        [second]: { body: publicDetail("Second public") },
       });
       const result = await runSource("nju-student-affairs-notices", "ingest", path, "2");
       expect(JSON.parse(result.output)).toMatchObject({
-        itemsDiscovered: 3,
-        noticesIngested: 2,
-        insertedRevisions: 2,
+        itemsObserved: 3,
+        noticesIngested: 1,
+        insertedRevisions: 1,
       });
       expect(result.errors).toContain(`nju-student-affairs-notices ${wechatUrl}: public-wechat`);
-      expect(requested).toEqual([listUrl, first, second]);
+      expect(requested).toEqual([listUrl, first]);
       const database = new DatabaseSync(path);
       try {
         expect(database.prepare("SELECT url FROM source_items ORDER BY url").all()).toEqual([
@@ -307,17 +283,79 @@ describe("worker restricted details", () => {
           { url: first },
           { url: second },
         ]);
-        expect(database.prepare("SELECT count(*) AS count FROM source_item_observations").get()).toEqual({ count: 3 });
-        expect(
-          database.prepare(`
-            SELECT DISTINCT raw_documents.final_url
-            FROM source_item_observations
-            JOIN raw_documents ON raw_documents.id = source_item_observations.raw_document_id
-          `).all(),
-        ).toEqual([{ final_url: listUrl }]);
+        expect(database.prepare("SELECT count(*) AS count FROM source_item_observations").get())
+          .toEqual({ count: 3 });
+        expect(database.prepare("SELECT count(*) AS count FROM notice_revisions").get())
+          .toEqual({ count: 1 });
       } finally {
         database.close();
       }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("collects every unseen item beyond the refresh limit until the known-history boundary", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "nju-incremental-worker-"));
+    const path = join(directory, "notices.sqlite");
+    const secondListUrl = `${baseUrl}/2539/list2.htm`;
+    try {
+      mockPages({
+        [sourceUrl]: {
+          body: list([
+            { name: "known-newer", date: "2026-09-20" },
+            { name: "known-older", date: "2026-09-19" },
+          ]),
+        },
+        [detail("known-newer")]: { body: publicDetail("known-newer") },
+        [detail("known-older")]: { body: publicDetail("known-older") },
+      });
+      const bootstrap = await run("ingest", path, "2");
+      expect(JSON.parse(bootstrap.output)).toMatchObject({
+        itemsObserved: 2,
+        noticesIngested: 2,
+        insertedRevisions: 2,
+      });
+      vi.restoreAllMocks();
+
+      const requested = mockPages({
+        [sourceUrl]: {
+          body: list([
+            { name: "new-one", date: "2026-09-25" },
+            { name: "new-two", date: "2026-09-24" },
+            { name: "new-three", date: "2026-09-23" },
+          ], "/2539/list2.htm"),
+        },
+        [secondListUrl]: {
+          body: list([
+            { name: "known-newer", date: "2026-09-20" },
+            { name: "known-older", date: "2026-09-19" },
+          ], "/2539/list3.htm"),
+        },
+        [detail("new-one")]: { body: publicDetail("new-one") },
+        [detail("new-two")]: { body: publicDetail("new-two") },
+        [detail("new-three")]: { body: publicDetail("new-three") },
+        [detail("known-newer")]: { body: publicDetail("known-newer") },
+        [detail("known-older")]: { body: publicDetail("known-older") },
+      });
+      const incremental = await run("ingest", path, "2");
+      expect(JSON.parse(incremental.output)).toMatchObject({
+        pagesVisited: 2,
+        itemsObserved: 5,
+        noticesIngested: 5,
+        insertedRevisions: 3,
+        unchangedRevisions: 2,
+        stats: { sourceItems: 5, noticeRevisions: 5 },
+      });
+      expect(requested).toEqual([
+        sourceUrl,
+        secondListUrl,
+        detail("new-one"),
+        detail("new-two"),
+        detail("new-three"),
+        detail("known-newer"),
+        detail("known-older"),
+      ]);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

@@ -7,11 +7,3 @@ organization:
 url: https://stuex.nju.edu.cn/2539/list.htm
 adapter:
   type: webplus
-audience:
-  - undergraduate
-  - graduate
-categories:
-  - international-exchange
-crawl:
-  intervalMinutes: 60
-enabled: true

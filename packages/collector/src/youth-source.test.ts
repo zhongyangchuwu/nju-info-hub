@@ -43,8 +43,6 @@ describe("NJU Youth League source", () => {
         name: "共青团南京大学委员会",
       },
       url: "https://tuanwei.nju.edu.cn/ggtz/list.htm",
-      audience: ["undergraduate", "graduate"],
-      enabled: true,
     });
 
     const page = discoverWebPlusPage(

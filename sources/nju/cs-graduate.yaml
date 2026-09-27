@@ -7,11 +7,3 @@ organization:
 url: https://cs.nju.edu.cn/1703/list.htm
 adapter:
   type: webplus
-audience:
-  - graduate
-categories:
-  - graduate
-  - student-affairs
-crawl:
-  intervalMinutes: 30
-enabled: true
