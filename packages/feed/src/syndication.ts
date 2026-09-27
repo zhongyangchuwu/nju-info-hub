@@ -57,6 +57,8 @@ export interface SyndicationEntry {
   url: string;
   title: string;
   publishedOn: string | null;
+  /** Compatibility transport for day-only source dates; UTC noon is not an exact upstream time. */
+  publishedAt?: string;
   updatedAt: string;
   contentStatus: SourceEntryQueryResult["contentStatus"];
   acquisitionKind?: NonNullable<SourceEntryQueryResult["acquisitionKind"]>;
@@ -85,6 +87,16 @@ function rfc3339(value: string): string {
   if (!Number.isFinite(time.getTime())) throw new Error(`invalid feed timestamp: ${value}`);
   return time.toISOString();
 }
+
+export function dayPrecisionTimestamp(publishedOn: string): string {
+  const timestamp = `${publishedOn}T12:00:00Z`;
+  if (!/^\d{4}-\d{2}-\d{2}T12:00:00Z$/.test(timestamp) ||
+      !Number.isFinite(Date.parse(timestamp))) {
+    throw new Error(`invalid day-precision publication date: ${publishedOn}`);
+  }
+  return timestamp;
+}
+
 /** Project persisted source observations once, preserving database order and day precision. */
 export function syndicationFeed(source: PersistedSourceSummary, sourceEntries: SourceEntryQueryResult[], generatedAt?: string): SyndicationFeed {
   const entries = sourceEntries.map((sourceEntry): SyndicationEntry => {
@@ -94,6 +106,9 @@ export function syndicationFeed(source: PersistedSourceSummary, sourceEntries: S
       url: sourceEntry.url,
       title: sourceEntry.title,
       publishedOn: sourceEntry.publishedOn,
+      ...(sourceEntry.publishedOn === null ? {} : {
+        publishedAt: dayPrecisionTimestamp(sourceEntry.publishedOn),
+      }),
       updatedAt: rfc3339(sourceEntry.provenance.fetchedAt),
       fetchedAt: sourceEntry.provenance.fetchedAt,
       contentStatus: sourceEntry.contentStatus,

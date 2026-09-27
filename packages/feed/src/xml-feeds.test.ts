@@ -91,8 +91,11 @@ describe("standard XML feeds", () => {
     expect(atom).toContain('<title>计算机 &amp; &lt;学院&gt; &quot;乙&quot; — 通告 &amp; &lt;课程&gt; &quot;甲&quot;</title>');
     expect(atom).toContain('<link rel="alternate" href="https://cs.nju.edu.cn/page.htm?x=1&amp;y=2"/>');
     expect(atom).toContain('<link rel="self" type="application/atom+xml" href="https://example.org/feeds/nju-cs-graduate.atom"/>');
-    expect(atom).not.toContain("<published>");
+    expect(atom).toContain("<published>2026-09-23T12:00:00Z</published>");
     expect(atom).toContain("<nju:published_on>2026-09-23</nju:published_on>");
+    expect(atom).toContain(
+      "    <author>\n      <name>计算机 &amp; &lt;学院&gt; &quot;乙&quot;</name>\n    </author>",
+    );
     expect(atom).toContain("<nju:date_precision>day</nju:date_precision>");
     expect(atom.match(/<updated>2026-09-24T11:30:00.000Z<\/updated>/g)).toHaveLength(2);
     expect(atom).toContain('<content type="html">&lt;p&gt;中文 &amp;amp; &amp;lt;tag&amp;gt; &quot;引号&quot;&lt;/p&gt;</content>');
@@ -117,13 +120,18 @@ describe("standard XML feeds", () => {
   });
 
   it("publishes RSS original links, stable nonpermalink GUID, day metadata, and every attachment without enclosures", () => {
-    const rss = buildRssFeed(source, [notice]);
+    const rss = buildRssFeed(source, [notice], {
+      selfUrl: "https://example.org/feeds/nju-cs-graduate.rss",
+    });
     expect(rss).toContain(
-      '<rss version="2.0" xmlns:nju="https://zhongyangchuwu.github.io/nju-info-hub/ns/feed">',
+      '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:nju="https://zhongyangchuwu.github.io/nju-info-hub/ns/feed">',
+    );
+    expect(rss).toContain(
+      '<atom:link href="https://example.org/feeds/nju-cs-graduate.rss" rel="self" type="application/rss+xml"/>',
     );
     expect(rss).toContain('<guid isPermaLink="false">nju-cs-graduate:news%2F123%3A4</guid>');
     expect(rss).toContain('<link>https://cs.nju.edu.cn/page.htm?x=1&amp;y=2</link>');
-    expect(rss).not.toContain("<pubDate>");
+    expect(rss).toContain("<pubDate>Wed, 23 Sep 2026 12:00:00 GMT</pubDate>");
     expect(rss).toContain("<nju:published_on>2026-09-23</nju:published_on>");
     expect(rss).toContain("<nju:date_precision>day</nju:date_precision>");
     expect(rss).toContain('<lastBuildDate>Thu, 24 Sep 2026 11:30:00 GMT</lastBuildDate>');

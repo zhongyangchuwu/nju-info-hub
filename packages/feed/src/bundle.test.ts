@@ -160,6 +160,9 @@ describe("combined source-set feeds", () => {
       selfUrl: "https://example.org/bundles/cs.rss",
       generatedAt: "2026-09-24T05:00:00Z",
     });
+    expect(rss).toContain(
+      '<atom:link href="https://example.org/bundles/cs.rss" rel="self" type="application/rss+xml"/>',
+    );
     expect(rss).toContain('<source url="https://cs.nju.edu.cn/1703/list.htm">School of Computer Science — Graduate notices</source>');
     expect(rss).toContain('<source url="https://cs.nju.edu.cn/1706/list.htm">School of Computer Science — Seminars</source>');
     expect(rss).not.toContain("<enclosure");

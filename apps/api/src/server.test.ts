@@ -167,7 +167,8 @@ describe("read-only API", () => {
       title: "First organization — First source",
       home_page_url: source.url,
       items: [{ id: "notices-a:item-a", url: "https://example.edu/item-a/page.htm",
-        title: "new", content_html: "<p>new</p>", content_text: "new",
+        title: "new", date_published: "2026-09-23T12:00:00Z",
+        content_html: "<p>new</p>", content_text: "new",
         attachments: [
           { mime_type: "application/pdf", title: "First" },
           { mime_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", title: "Second" },
@@ -175,7 +176,7 @@ describe("read-only API", () => {
         _nju: { published_on: "2026-09-23", date_precision: "day", revision_number: 2 },
       }],
     });
-    expect(result.body.items[0]).not.toHaveProperty("date_published");
+    expect(result.body.items[0].date_published).toBe("2026-09-23T12:00:00Z");
   });
 
   it("supports conditional GET caching for JSON, Atom, and RSS feeds", async () => {
@@ -335,7 +336,7 @@ describe("read-only API", () => {
       ["atom", "application/atom+xml; charset=utf-8",
         '<feed xmlns="http://www.w3.org/2005/Atom" xmlns:nju="https://zhongyangchuwu.github.io/nju-info-hub/ns/feed">'],
       ["rss", "application/rss+xml; charset=utf-8",
-        '<rss version="2.0" xmlns:nju="https://zhongyangchuwu.github.io/nju-info-hub/ns/feed">'],
+        '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:nju="https://zhongyangchuwu.github.io/nju-info-hub/ns/feed">'],
     ]) {
       const result = await fetch(`${base}/feeds/notices-a.${format}`);
       expect(result.status).toBe(200);

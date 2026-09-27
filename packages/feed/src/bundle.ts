@@ -105,11 +105,14 @@ export function buildRssBundle(
   const channelLink = context.selfUrl ?? "urn:nju-info-hub:bundle:" + set.id;
   const lines = [
     xmlDeclaration,
-    `<rss version="2.0" xmlns:nju="${feedMetadataNamespace}">`,
+    `<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:nju="${feedMetadataNamespace}">`,
     "  <channel>",
     "    <title>" + xmlEscape(set.title) + "</title>",
     "    <link>" + xmlEscape(channelLink) + "</link>",
     "    <description>" + xmlEscape(set.title) + "</description>",
+    ...(context.selfUrl ? [
+      `    <atom:link href="${xmlEscape(context.selfUrl)}" rel="self" type="application/rss+xml"/>`,
+    ] : []),
     "    <lastBuildDate>" + new Date(updatedAt).toUTCString() + "</lastBuildDate>",
     ...entries.flatMap((entry) => rssItemLines(entry, {
       url: entry.sourceUrl,

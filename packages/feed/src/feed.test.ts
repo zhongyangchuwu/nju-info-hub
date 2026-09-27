@@ -47,6 +47,7 @@ describe("JSON Feed builder", () => {
       id: "nju-cs-graduate:news%2F123%3A4",
       url: notice.url,
       title: notice.title,
+      date_published: "2026-09-23T12:00:00Z",
       content_html: notice.bodyHtml,
       content_text: notice.bodyText,
       attachments: [
@@ -66,7 +67,7 @@ describe("JSON Feed builder", () => {
       ...notice.provenance,
       fetchedAt: "2026-09-24T11:00:00.000Z",
     } }]).items[0]!;
-    expect(laterObservation).not.toHaveProperty("date_published");
+    expect(laterObservation.date_published).toBe("2026-09-23T12:00:00Z");
     expect(laterObservation._nju).toMatchObject({
       published_on: "2026-09-23",
       date_precision: "day",

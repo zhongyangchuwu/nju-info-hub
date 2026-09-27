@@ -94,6 +94,7 @@ describe("static JSON Feed exporter", () => {
       expect(feed.items[0]).toMatchObject({
         id: "nju-cs-graduate:grad-123",
         url: "https://cs.nju.edu.cn/notices/grad-123.htm",
+        date_published: "2026-09-23T12:00:00Z",
         attachments: [
           { url: "https://cs.nju.edu.cn/files/grad-123.pdf", mime_type: "application/pdf" },
           { url: "https://cs.nju.edu.cn/files/grad-123.bin", mime_type: "application/octet-stream" },
@@ -105,7 +106,7 @@ describe("static JSON Feed exporter", () => {
           date_precision: "day",
         },
       });
-      expect(feed.items[0]).not.toHaveProperty("date_published");
+      expect(feed.items[0]?.date_published).toBe("2026-09-23T12:00:00Z");
       expect(reader.listRecentSourceEntries({ sourceId: source.id })).toHaveLength(125);
       expect(feed.items).toHaveLength(feedRecentItemLimit);
       expect(readdirSync(join(outputDirectory, "feeds"))).toEqual([
@@ -281,7 +282,11 @@ describe("static JSON Feed exporter", () => {
       expect(json.feed_url).toBe("https://example.org/pilot/feeds/nju-cs-graduate.json");
       expect(readFileSync(join(outputDirectory, "feeds/nju-cs-graduate.atom"), "utf8"))
         .toContain('rel="self" type="application/atom+xml" href="https://example.org/pilot/feeds/nju-cs-graduate.atom"');
-      expect(readFileSync(join(outputDirectory, "feeds/nju-cs-graduate.rss"), "utf8")).not.toContain("<enclosure");
+      const rss = readFileSync(join(outputDirectory, "feeds/nju-cs-graduate.rss"), "utf8");
+      expect(rss).toContain(
+        '<atom:link href="https://example.org/pilot/feeds/nju-cs-graduate.rss" rel="self" type="application/rss+xml"/>',
+      );
+      expect(rss).not.toContain("<enclosure");
     } finally {
       reader.close();
       rmSync(directory, { recursive: true, force: true });

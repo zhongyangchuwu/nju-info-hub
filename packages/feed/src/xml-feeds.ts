@@ -26,11 +26,14 @@ export function buildRssFeed(source: PersistedSourceSummary, sourceEntries: Sour
   const feed = syndicationFeed(source, sourceEntries, context.generatedAt);
   const lines = [
     xmlDeclaration,
-    `<rss version="2.0" xmlns:nju="${feedMetadataNamespace}">`,
+    `<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:nju="${feedMetadataNamespace}">`,
     '  <channel>',
     `    <title>${xmlEscape(feed.title)}</title>`,
     `    <link>${xmlEscape(source.url)}</link>`,
     `    <description>${xmlEscape(feed.title)}</description>`,
+    ...(context.selfUrl ? [
+      `    <atom:link href="${xmlEscape(context.selfUrl)}" rel="self" type="application/rss+xml"/>`,
+    ] : []),
     `    <lastBuildDate>${new Date(feed.updatedAt).toUTCString()}</lastBuildDate>`,
     ...feed.entries.flatMap((entry) => rssItemLines(entry)),
     '  </channel>',

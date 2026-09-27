@@ -59,6 +59,10 @@ function renderSourceFiles(
     ...(base ? { selfUrl: feedSelfUrl(base, source.id, "atom") } : {}),
     generatedAt,
   };
+  const rssContext = {
+    ...(base ? { selfUrl: feedSelfUrl(base, source.id, "rss") } : {}),
+    generatedAt,
+  };
   return [
     {
       path: `feeds/${source.id}.json`,
@@ -74,7 +78,7 @@ function renderSourceFiles(
     },
     {
       path: `feeds/${source.id}.rss`,
-      content: buildRssFeed(source, sourceEntries, { generatedAt }),
+      content: buildRssFeed(source, sourceEntries, rssContext),
     },
   ];
 }
