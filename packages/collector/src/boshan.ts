@@ -202,5 +202,6 @@ export function parseBoshanNotice(
     ...(publishedAtRaw ? { publishedAtRaw } : {}),
     content: $(source.adapter.selectors.content).first(),
     attachmentLinkSelector: 'a[href*="/DFS/"][href*="/file/"]',
+    embeddedPdfSelector: '[pdfsrc], [data-pdf]',
   });
 }

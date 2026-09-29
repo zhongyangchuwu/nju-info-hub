@@ -187,7 +187,7 @@ On an empty database, `ingest` bootstraps only the configured recent window plus
 
 ## Initial sources
 
-The public-source registry and fixtures cover NJU WebPlus/Sudy, Boshan/NJDX, and public employment information/recruitment streams. The official instance now contains eighteen sources, including the three employment information streams and the recruitment-batch stream. The localhost Docker/Compose instance remains the current test publisher, while public deployment acceptance is still pending.
+The public-source registry and fixtures cover NJU WebPlus/Sudy, Boshan/NJDX, and public employment information/recruitment streams. The official instance now contains eighteen sources, including the three employment information streams and the recruitment-batch stream. Four additional representative college sources (AI, Software, Mathematics, and Physics) are registered and live-validated but not yet admitted. The localhost Docker/Compose instance remains the current test publisher, while public deployment acceptance is still pending.
 
 More sources should preferably be added by contributing YAML under `sources/nju/` rather than adding a new crawler.
 

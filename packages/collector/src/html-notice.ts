@@ -125,6 +125,7 @@ export function parseHtmlNotice(input: HtmlNoticeInput): ParsedNotice {
     "poster",
     "original-src",
     "pdfsrc",
+    "data-pdf",
     "swsrc",
   ] as const) {
     content.find(`[${attribute}]`).each((_, element) => {
@@ -150,14 +151,18 @@ export function parseHtmlNotice(input: HtmlNoticeInput): ParsedNotice {
   }
   if (embeddedPdfSelector) {
     content.find(embeddedPdfSelector).each((_, element) => {
-      const pdfsrc = $(element).attr("pdfsrc");
+      const pdfsrc =
+        $(element).attr("pdfsrc") ?? $(element).attr("data-pdf");
       if (!pdfsrc) return;
       const target = resolveHttpUrl(raw.url, pdfsrc);
       if (!target) return;
       const url = target.toString();
       const attachmentTitle =
-        normalizeText($(element).attr("id") ?? $(element).attr("title") ?? "") ||
-        url;
+        normalizeText(
+          $(element).attr("id") ??
+          $(element).attr("title") ??
+          $(element).text(),
+        ) || url;
       attachments.set(url, {
         url,
         title: attachmentTitle,

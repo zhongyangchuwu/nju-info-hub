@@ -1,0 +1,14 @@
+schemaVersion: 1
+id: nju-math-announcements
+name: 数学学院学院公告
+organization:
+  id: nju-math-school
+  name: 南京大学数学学院
+  kind: academic-unit
+url: https://math.nju.edu.cn/sy/yxgg/index.html
+adapter:
+  type: boshan
+  channelId: 16411
+  pageSize: 15
+  selectors:
+    content: .article_content

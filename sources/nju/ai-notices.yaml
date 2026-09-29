@@ -1,0 +1,10 @@
+schemaVersion: 1
+id: nju-ai-notices
+name: 人工智能学院通知公告
+organization:
+  id: nju-ai-school
+  name: 南京大学人工智能学院
+  kind: academic-unit
+url: https://ai.nju.edu.cn/17810/list.htm
+adapter:
+  type: webplus

@@ -69,8 +69,22 @@ Records without an introduction or position array remain valid: the full audit f
 
 M2H live admission reused the retained schema-v5 localhost database. The first 18-source startup run kept existing sources bounded and added the recruitment source at 2 pages / 40 observations / 5 full revisions, moving the database from 17 sources / 487 observations / 123 revisions to 18 sources / 527 observations / 128 revisions. The immediate second collection kept recruitment at 2 pages with 0 inserted / 5 unchanged revisions; an unrelated Youth League source produced one real new item/revision during that run, so final global totals became 528 observations / 129 revisions. Recruitment JSON/Atom/RSS endpoints all returned HTTP 200 with 40 entries and unique JSON Feed IDs; ETag revalidation returned HTTP 304 with an empty body.
 
+## M2I-validated representative college sources
+
+This batch tests the configuration-first goal across several college site families. All four sources are registered independently and remain outside `instances/official.json` until the separate admission step.
+
+| Source | URL | Organization | Audience relevance | Adapter/status | Live evidence and notes |
+| --- | --- | --- | --- | --- | --- |
+| Artificial Intelligence notices | https://ai.nju.edu.cn/17810/list.htm | 人工智能学院 | AI undergraduate/graduate students and faculty | WebPlus defaults; registered | Standard Sudy/WebPlus list with 14 items per page. Empty-database ingest with limit 5 visited 2 pages, observed 28 items, inserted 5 full revisions, and found 6 attachments. Immediate second ingest stayed at 2 pages with 0 inserted / 5 unchanged. |
+| Software School notices | https://software.nju.edu.cn/tzgg/index.html | 软件学院 | Software students and faculty | Boshan (`channelId=6439`); registered | Boshan list API exposes 15 items/page. Detail content uses `.content`; current notices commonly embed PDFs as `span.edui-pdf[data-pdf]`. The shared HTML parser now recognizes that generic editor representation. Empty-database ingest visited 2 pages, observed 30 items, inserted 5 full revisions, and preserved 5 PDF attachments; second ingest inserted 0. |
+| Mathematics announcements | https://math.nju.edu.cn/sy/yxgg/index.html | 数学学院 | Mathematics students and faculty | Boshan (`channelId=16411`); registered | Detail content uses `.article_content`. Empty-database ingest visited 2 pages, observed 30 items, inserted 5 full revisions, and found 9 attachments; second ingest inserted 0. Restricted same-site detail links remain subject to the existing restriction handling. |
+| Physics notices | https://physics.nju.edu.cn/xwdt/tzggxlycgzhd/index.html | 物理学院 | Physics students and faculty | Boshan (`channelId=16198`); registered | The list includes an older pinned row ahead of current notices, exercising date-ranked bootstrap rather than first-row stopping. Detail content uses `.mn-contentInfo`. Empty-database ingest visited 2 pages, observed 30 items, inserted 5 full revisions, and found 5 attachments; second ingest inserted 0. |
+
+The four sources required no college-specific TypeScript branches. AI reused the existing WebPlus adapter; the three Boshan colleges reuse the same Boshan list/detail boundary already used by Hospital and Asset Management. The only code change was generic support for Boshan editor PDFs stored in `data-pdf`, covered by fixture tests.
+
 ## Deferred
 
 | Source | URL | Organization | Audience relevance | Adapter/status | Live evidence and notes |
 | --- | --- | --- | --- | --- | --- |
 | Employment recruiting events | https://job.nju.edu.cn/career/specifics | 南京大学学生就业指导中心 | Students and graduates attending recruiting events | Public JSON APIs; audited, not registered | `/api/career/job/fair/specifics` and `/api/career/job/fair/mutual-selections` are anonymously readable and expose stable IDs plus structured start/end times. Public detail routes are `/career/specifics/<id>` and `/career/mutual-selections/<id>`. These are event entities rather than publication notices, so they should wait for an explicit event canonical model instead of treating event time as publication time. |
+| Electronic Science and Engineering announcements | https://ese.nju.edu.cn/22538/list.htm | 电子科学与工程学院 | Electronic-science students and faculty | Public-network restricted; not registered | The official “通知与公告” route redirects public-network requests to a prompt stating that the current IP is not a campus address and the content is campus-only. The public core does not bypass that restriction. |

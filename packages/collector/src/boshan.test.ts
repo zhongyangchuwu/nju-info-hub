@@ -30,6 +30,24 @@ const HOSPITAL: BoshanSourceConfig = {
   },
 };
 
+const SOFTWARE: BoshanSourceConfig = {
+  ...HOSPITAL,
+  id: "nju-software-notices",
+  name: "软件学院通知公告",
+  organization: {
+    id: "nju-software-school",
+    name: "南京大学软件学院",
+    kind: "academic-unit",
+  },
+  url: "https://software.nju.edu.cn/tzgg/index.html",
+  adapter: {
+    type: "boshan",
+    channelId: 6439,
+    pageSize: 15,
+    selectors: { content: ".content" },
+  },
+};
+
 const ASSET: BoshanSourceConfig = {
   ...HOSPITAL,
   id: "nju-asset-management-notices",
@@ -166,6 +184,42 @@ describe("Boshan source adapter", () => {
     expect(notice.attachments).toEqual([{
       url: "https://hospital.nju.edu.cn/DFS//file/2026/09/28/flu.pdf",
       title: "接种须知",
+    }]);
+  });
+
+  it("extracts Boshan editor PDFs stored in data-pdf", () => {
+    const item: DiscoveredItem = {
+      sourceId: SOFTWARE.id,
+      sourceItemId: "406944",
+      url: "https://software.nju.edu.cn/tzgg/20260803/i406944.html",
+      acquisitionKind: "boshan-detail",
+      title: "南京大学软件学院2027年接收推荐免试研究生预报名通知",
+      publishedAtRaw: "2026-08-03",
+    };
+    const detail = `
+      <html><head>
+        <meta name="ArticleTitle" content="南京大学软件学院2027年接收推荐免试研究生预报名通知">
+        <meta name="PubDate" content="2026-08-03 19:56">
+      </head><body>
+        <div class="content">
+          <span class="edui-pdf" data-pdf="/DFS//file/2026/08/03/notice.pdf">
+            南京大学软件学院2027年接收推荐免试研究生预报名通知
+          </span>
+        </div>
+      </body></html>
+    `;
+    const notice = parseBoshanNotice(
+      raw(SOFTWARE.id, item.url, detail),
+      SOFTWARE,
+      item,
+    );
+    expect(notice.bodyHtml).toContain(
+      'data-pdf="https://software.nju.edu.cn/DFS//file/2026/08/03/notice.pdf"',
+    );
+    expect(notice.attachments).toEqual([{
+      url: "https://software.nju.edu.cn/DFS//file/2026/08/03/notice.pdf",
+      title: "南京大学软件学院2027年接收推荐免试研究生预报名通知",
+      mediaType: "application/pdf",
     }]);
   });
 

@@ -1,0 +1,14 @@
+schemaVersion: 1
+id: nju-software-notices
+name: 软件学院通知公告
+organization:
+  id: nju-software-school
+  name: 南京大学软件学院
+  kind: academic-unit
+url: https://software.nju.edu.cn/tzgg/index.html
+adapter:
+  type: boshan
+  channelId: 6439
+  pageSize: 15
+  selectors:
+    content: .content

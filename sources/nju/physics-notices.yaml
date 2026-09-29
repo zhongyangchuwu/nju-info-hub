@@ -1,0 +1,14 @@
+schemaVersion: 1
+id: nju-physics-notices
+name: 物理学院通知公告
+organization:
+  id: nju-physics-school
+  name: 南京大学物理学院
+  kind: academic-unit
+url: https://physics.nju.edu.cn/xwdt/tzggxlycgzhd/index.html
+adapter:
+  type: boshan
+  channelId: 16198
+  pageSize: 15
+  selectors:
+    content: .mn-contentInfo
