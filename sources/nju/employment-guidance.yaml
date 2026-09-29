@@ -1,0 +1,12 @@
+schemaVersion: 1
+id: nju-employment-guidance
+name: 学生就业指导中心就业指导
+organization:
+  id: nju-career-center
+  name: 南京大学学生就业指导中心
+  kind: service-unit
+url: https://job.nju.edu.cn/career/info?type=GUIDE
+adapter:
+  type: job-portal-information
+  contentType: GUIDE
+  pageSize: 15

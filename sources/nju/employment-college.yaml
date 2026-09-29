@@ -1,0 +1,12 @@
+schemaVersion: 1
+id: nju-employment-college
+name: 学生就业指导中心学院动态
+organization:
+  id: nju-career-center
+  name: 南京大学学生就业指导中心
+  kind: service-unit
+url: https://job.nju.edu.cn/career/info?type=COLLEGE
+adapter:
+  type: job-portal-information
+  contentType: COLLEGE
+  pageSize: 15

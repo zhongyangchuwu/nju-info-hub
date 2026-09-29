@@ -6,6 +6,27 @@ afterEach(() => {
 });
 
 describe("fetchRawDocument", () => {
+  it("advertises both HTML and JSON response support", async () => {
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      expect(headers.get("accept")).toContain("text/html");
+      expect(headers.get("accept")).toContain("application/json");
+      return new Response('{"ok":true}', {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const document = await fetchRawDocument(
+      "nju-test",
+      "https://example.edu/api/items",
+    );
+
+    expect(document.body).toBe('{"ok":true}');
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
   it("captures ETag and Last-Modified response validators", async () => {
     vi.stubGlobal(
       "fetch",

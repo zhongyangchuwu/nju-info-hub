@@ -1321,14 +1321,142 @@ describe("InfoHubDatabase", () => {
       rmSync(directory, { recursive: true, force: true });
     }
   });
+  it("migrates populated v4 observations without keeping an adapter enum constraint", () => {
+    const temporary = temporaryDatabase();
+    try {
+      const observed = [
+        discoveredItem(SOURCE, "v4-webplus"),
+        discoveredItem(SOURCE, "v4-boshan", {
+          acquisitionKind: "boshan-detail",
+        }),
+        discoveredItem(SOURCE, "v4-wechat", {
+          acquisitionKind: "public-wechat",
+        }),
+        discoveredItem(SOURCE, "v4-external", {
+          acquisitionKind: "external-public",
+        }),
+      ];
+      observed.forEach((item, index) => {
+        temporary.database.observeSourceItem(
+          SOURCE,
+          listRawDocument(
+            SOURCE,
+            `<li>v4 ${index}</li>`,
+            `2026-09-29T0${index}:00:00.000Z`,
+          ),
+          item,
+        );
+      });
+      temporary.database.close();
+
+      const legacy = new DatabaseSync(temporary.path);
+      let before: Record<string, unknown>[] = [];
+      try {
+        legacy.exec("DROP INDEX source_item_observations_item_idx");
+        legacy.exec(
+          "ALTER TABLE source_item_observations RENAME TO source_item_observations_v5",
+        );
+        legacy.exec(`
+          CREATE TABLE source_item_observations (
+            id INTEGER PRIMARY KEY,
+            source_item_row_id INTEGER NOT NULL REFERENCES source_items(id),
+            revision_number INTEGER NOT NULL CHECK (revision_number > 0),
+            raw_document_id INTEGER NOT NULL REFERENCES raw_documents(id),
+            content_sha256 TEXT NOT NULL CHECK (length(content_sha256) = 64),
+            title TEXT NOT NULL,
+            published_at_raw TEXT,
+            published_on TEXT,
+            acquisition_kind TEXT NOT NULL CHECK (
+              acquisition_kind IN (
+                'webplus-detail', 'boshan-detail',
+                'public-wechat', 'external-public'
+              )
+            ),
+            created_at TEXT NOT NULL,
+            UNIQUE (source_item_row_id, revision_number)
+          ) STRICT;
+          CREATE INDEX source_item_observations_item_idx
+            ON source_item_observations (source_item_row_id, revision_number DESC);
+          INSERT INTO source_item_observations
+          SELECT * FROM source_item_observations_v5;
+          DROP TABLE source_item_observations_v5;
+          PRAGMA user_version = 4;
+        `);
+        before = legacy
+          .prepare("SELECT * FROM source_item_observations ORDER BY id")
+          .all();
+      } finally {
+        legacy.close();
+      }
+
+      const database = new InfoHubDatabase(temporary.path);
+      try {
+        const inspection = new DatabaseSync(temporary.path, { readOnly: true });
+        try {
+          expect(inspection.prepare("PRAGMA user_version").get())
+            .toEqual({ user_version: DATABASE_SCHEMA_VERSION });
+          expect(
+            inspection
+              .prepare("SELECT * FROM source_item_observations ORDER BY id")
+              .all(),
+          ).toEqual(before);
+          const schema = inspection
+            .prepare(
+              "SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = ?",
+            )
+            .get("source_item_observations") as { sql: string };
+          expect(schema.sql).not.toMatch(/acquisition_kind\s+IN/i);
+          expect(inspection.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+          expect(inspection.prepare("PRAGMA index_list(source_item_observations)").all())
+            .toContainEqual(
+              expect.objectContaining({
+                name: "source_item_observations_item_idx",
+              }),
+            );
+        } finally {
+          inspection.close();
+        }
+
+        const jobItem = discoveredItem(SOURCE, "v5-job-portal", {
+          acquisitionKind: "job-portal-information",
+        });
+        expect(
+          database.observeSourceItem(
+            SOURCE,
+            listRawDocument(
+              SOURCE,
+              "<li>job portal</li>",
+              "2026-09-29T05:00:00.000Z",
+            ),
+            jobItem,
+          ),
+        ).toMatchObject({ insertedRevision: true });
+        expect(database.listRecentSourceEntries()).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              sourceItemId: "v5-job-portal",
+              acquisitionKind: "job-portal-information",
+            }),
+          ]),
+        );
+      } finally {
+        database.close();
+      }
+    } finally {
+      rmSync(temporary.directory, { recursive: true, force: true });
+    }
+  });
+
   it("rejects unknown database schema versions without changing them", () => {
     const database = new DatabaseSync(":memory:");
+    const unsupportedVersion = DATABASE_SCHEMA_VERSION + 1;
     try {
-      database.exec("PRAGMA user_version = 5");
+      database.exec(`PRAGMA user_version = ${unsupportedVersion}`);
       expect(() => migrateDatabase(database)).toThrow(
-        "unsupported database schema version 5; expected 4",
+        `unsupported database schema version ${unsupportedVersion}; expected ${DATABASE_SCHEMA_VERSION}`,
       );
-      expect(database.prepare("PRAGMA user_version").get()).toEqual({ user_version: 5 });
+      expect(database.prepare("PRAGMA user_version").get())
+        .toEqual({ user_version: unsupportedVersion });
     } finally {
       database.close();
     }

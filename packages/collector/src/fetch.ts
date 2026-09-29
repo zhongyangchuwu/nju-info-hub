@@ -82,7 +82,7 @@ export async function fetchRawDocument(
   validators?: FetchValidators,
 ): Promise<RawDocument | null> {
   const headers = new Headers({
-    accept: "text/html,application/xhtml+xml",
+    accept: "text/html,application/xhtml+xml,application/json",
     "user-agent": USER_AGENT,
   });
 

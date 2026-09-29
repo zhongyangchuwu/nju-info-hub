@@ -173,7 +173,7 @@ export async function collectNotices(
     },
     onCandidate: async (item) => {
       try {
-        const detailRaw = await fetchSourceDetail(item);
+        const detailRaw = await fetchSourceDetail(source, item);
         const notice = parseSourceNotice(detailRaw, source, item);
         onNotice?.(detailRaw, notice);
         notices.push(notice);

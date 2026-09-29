@@ -1,7 +1,14 @@
-import { fetchRawDocument } from "@nju-info/collector";
-import type { DiscoveredItem, RawDocument } from "@nju-info/core";
+import { fetchRawDocument, sourceDetailUrl } from "@nju-info/collector";
+import type {
+  DiscoveredItem,
+  RawDocument,
+  SourceConfig,
+} from "@nju-info/core";
 
-type SupportedDetailAcquisitionKind = "webplus-detail" | "boshan-detail";
+type SupportedDetailAcquisitionKind =
+  | "webplus-detail"
+  | "boshan-detail"
+  | "job-portal-information";
 
 export class UnsupportedDetailAcquisitionError extends Error {
   constructor(
@@ -17,14 +24,20 @@ export class UnsupportedDetailAcquisitionError extends Error {
   }
 }
 
-export async function fetchSourceDetail(item: DiscoveredItem): Promise<RawDocument> {
+export async function fetchSourceDetail(
+  source: SourceConfig,
+  item: DiscoveredItem,
+): Promise<RawDocument> {
   if (
     item.acquisitionKind !== "webplus-detail" &&
-    item.acquisitionKind !== "boshan-detail"
+    item.acquisitionKind !== "boshan-detail" &&
+    item.acquisitionKind !== "job-portal-information"
   ) {
     throw new UnsupportedDetailAcquisitionError(item.acquisitionKind, item.sourceId, item.url);
   }
-  return fetchRawDocument(item.sourceId, item.url);
+  return fetchRawDocument(item.sourceId, sourceDetailUrl(source, item));
 }
 
-export const fetchWebPlusDetail = fetchSourceDetail;
+export async function fetchWebPlusDetail(item: DiscoveredItem): Promise<RawDocument> {
+  return fetchRawDocument(item.sourceId, item.url);
+}

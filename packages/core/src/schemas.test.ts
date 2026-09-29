@@ -58,6 +58,45 @@ describe('parseSourceConfig', () => {
     ).toThrow();
   });
 
+  it('parses an employment information source', () => {
+    const source = parseSourceConfig({
+      ...minimalSourceConfig,
+      id: 'nju-employment-news',
+      url: 'https://job.nju.edu.cn/career/info?type=NEWS',
+      adapter: {
+        type: 'job-portal-information',
+        contentType: 'NEWS',
+        pageSize: 15,
+      },
+    });
+
+    expect(source.adapter).toEqual({
+      type: 'job-portal-information',
+      contentType: 'NEWS',
+      pageSize: 15,
+    });
+  });
+
+  it.each([
+    { contentType: 'OTHER', pageSize: 15 },
+    { contentType: 'NEWS', pageSize: 0 },
+    { contentType: 'NEWS', pageSize: 101 },
+  ])(
+    'rejects invalid employment information adapter config: %o',
+    ({ contentType, pageSize }) => {
+      expect(() =>
+        parseSourceConfig({
+          ...minimalSourceConfig,
+          adapter: {
+            type: 'job-portal-information',
+            contentType,
+            pageSize,
+          },
+        }),
+      ).toThrow();
+    },
+  );
+
   it('parses optional source classification metadata', () => {
     const source = parseSourceConfig({
       ...minimalSourceConfig,

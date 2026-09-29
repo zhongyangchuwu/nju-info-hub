@@ -1,0 +1,32 @@
+{
+  "content": [
+    {
+      "id": "627558707399495681",
+      "title": "南京大学秋季招聘双选会邀请函",
+      "content": "<p>欢迎用人单位参加。</p>",
+      "type": "NEWS",
+      "status": "PUBLISHED",
+      "attachments": ["https://jobfile.nju.edu.cn/job3/notice.pdf"],
+      "externalLink": null,
+      "loginRequired": false,
+      "publishedAt": "2026-09-28 00:00:00"
+    },
+    {
+      "id": "627520720619966465",
+      "title": "江苏省高校毕业生公益供需洽谈会",
+      "content": "<p>外部招聘活动。</p>",
+      "type": "NEWS",
+      "status": "PUBLISHED",
+      "attachments": [],
+      "externalLink": "https://www.91job.org.cn/recruitment/meetingDetail?zphid=81042",
+      "loginRequired": false,
+      "publishedAt": "2026-09-27 00:00:00"
+    }
+  ],
+  "page": {
+    "size": 2,
+    "number": 0,
+    "totalElements": 3,
+    "totalPages": 2
+  }
+}

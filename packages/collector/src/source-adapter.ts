@@ -1,4 +1,7 @@
-import { isBoshanSourceConfig } from "@nju-info/core";
+import {
+  isBoshanSourceConfig,
+  isJobPortalInformationSourceConfig,
+} from "@nju-info/core";
 import type {
   DiscoveredItem,
   DiscoveryPage,
@@ -12,20 +15,30 @@ import {
   parseBoshanNotice,
 } from "./boshan.js";
 import { discoverWebPlusPage, parseWebPlusNotice } from "./webplus.js";
+import {
+  discoverJobPortalInformationPage,
+  jobPortalInformationDetailUrl,
+  jobPortalInformationPageUrl,
+  parseJobPortalInformationNotice,
+} from "./job-portal-information.js";
 
 export function initialSourcePageUrl(source: SourceConfig): string {
-  return isBoshanSourceConfig(source)
-    ? boshanPageUrl(source, 1)
-    : source.url;
+  if (isBoshanSourceConfig(source)) return boshanPageUrl(source, 1);
+  if (isJobPortalInformationSourceConfig(source)) {
+    return jobPortalInformationPageUrl(source, 1);
+  }
+  return source.url;
 }
 
 export function discoverSourcePage(
   raw: RawDocument,
   source: SourceConfig,
 ): DiscoveryPage {
-  return isBoshanSourceConfig(source)
-    ? discoverBoshanPage(raw, source)
-    : discoverWebPlusPage(raw, source);
+  if (isBoshanSourceConfig(source)) return discoverBoshanPage(raw, source);
+  if (isJobPortalInformationSourceConfig(source)) {
+    return discoverJobPortalInformationPage(raw, source);
+  }
+  return discoverWebPlusPage(raw, source);
 }
 
 export function parseSourceNotice(
@@ -33,7 +46,21 @@ export function parseSourceNotice(
   source: SourceConfig,
   discovered: DiscoveredItem,
 ): ParsedNotice {
-  return isBoshanSourceConfig(source)
-    ? parseBoshanNotice(raw, source, discovered)
-    : parseWebPlusNotice(raw, source, discovered);
+  if (isBoshanSourceConfig(source)) {
+    return parseBoshanNotice(raw, source, discovered);
+  }
+  if (isJobPortalInformationSourceConfig(source)) {
+    return parseJobPortalInformationNotice(raw, source, discovered);
+  }
+  return parseWebPlusNotice(raw, source, discovered);
+}
+
+export function sourceDetailUrl(
+  source: SourceConfig,
+  discovered: DiscoveredItem,
+): string {
+  if (isJobPortalInformationSourceConfig(source)) {
+    return jobPortalInformationDetailUrl(source, discovered.sourceItemId);
+  }
+  return discovered.url;
 }

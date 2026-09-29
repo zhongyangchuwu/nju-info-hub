@@ -67,6 +67,12 @@ const boshanSelectorsSchema = z.object({
   content: z.string().min(1),
 }).strict();
 
+const jobPortalInformationTypeSchema = z.enum([
+  'NEWS',
+  'COLLEGE',
+  'GUIDE',
+]);
+
 export const webPlusSourceConfigSchema = sourceBaseSchema.extend({
   adapter: z.object({
     type: z.literal('webplus'),
@@ -83,9 +89,18 @@ export const boshanSourceConfigSchema = sourceBaseSchema.extend({
   }).strict(),
 });
 
+export const jobPortalInformationSourceConfigSchema = sourceBaseSchema.extend({
+  adapter: z.object({
+    type: z.literal('job-portal-information'),
+    contentType: jobPortalInformationTypeSchema,
+    pageSize: z.number().int().positive().max(100),
+  }).strict(),
+});
+
 export const sourceConfigSchema = z.union([
   webPlusSourceConfigSchema,
   boshanSourceConfigSchema,
+  jobPortalInformationSourceConfigSchema,
 ]);
 
 export function parseSourceConfig(input: unknown): SourceConfig {
@@ -94,11 +109,20 @@ export function parseSourceConfig(input: unknown): SourceConfig {
 
 export type WebPlusSourceConfig = z.infer<typeof webPlusSourceConfigSchema>;
 export type BoshanSourceConfig = z.infer<typeof boshanSourceConfigSchema>;
+export type JobPortalInformationSourceConfig = z.infer<
+  typeof jobPortalInformationSourceConfigSchema
+>;
 export type SourceConfig = z.infer<typeof sourceConfigSchema>;
 
 export function isBoshanSourceConfig(
   source: SourceConfig,
 ): source is BoshanSourceConfig {
   return source.adapter.type === 'boshan';
+}
+
+export function isJobPortalInformationSourceConfig(
+  source: SourceConfig,
+): source is JobPortalInformationSourceConfig {
+  return source.adapter.type === 'job-portal-information';
 }
 

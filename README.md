@@ -10,7 +10,7 @@ NJU Info Hub aims to turn fragmented public campus information into normalized, 
 
 The public ingestion foundation and two read-only delivery adapters are in place:
 
-- the generic WebPlus/Sudy collector has multi-site fixture coverage, pagination, resilient fetching, and parser hardening;
+- configuration-driven source adapters cover WebPlus/Sudy, Boshan/NJDX, and public employment information APIs with fixture coverage, bounded pagination, resilient fetching, and parser hardening;
 - raw documents, considered source-item observations, full notice revisions, and attachments are persisted in SQLite;
 - a local-facing REST/JSON API serves persisted sources, organizations, and recent **full** notices without collecting or modifying data;
 - per-source JSON Feed 1.1, Atom 1.0, and RSS 2.0 publish both full notices and explicit link-only official-list events without contacting upstreams;
@@ -29,7 +29,7 @@ GitHub is the source of truth for implementation status:
 - [Issues](https://github.com/zhongyangchuwu/nju-info-hub/issues) — active/planned work;
 - [Pull requests](https://github.com/zhongyangchuwu/nju-info-hub/pulls) — implementation and review history.
 
-Current collection targets public NJU WebPlus/Sudy sites. Future public acquisition providers, including public WeChat article sources, should be added only when they have a concrete consumer and tested adapter boundary. Optional local sidecars for private QQ/WeChat groups remain a later phase.
+Current collection targets public NJU sources through explicit, tested adapters rather than one crawler shape. WebPlus/Sudy, Boshan/NJDX, and public employment information streams are supported; future providers, including public WeChat article discovery, should be added only behind the same replaceable adapter boundary. Optional local sidecars for private QQ/WeChat groups remain a later phase.
 
 The public core will not log into NJU SSO, personal QQ accounts, or personal WeChat accounts.
 
@@ -187,7 +187,7 @@ On an empty database, `ingest` bootstraps only the configured recent window plus
 
 ## Initial sources
 
-The public-source registry and fixtures cover NJU WebPlus/Sudy and Boshan/NJDX sites. The fourteen-source official instance policy includes Undergraduate School announcements, Youth League announcements, Student Affairs, Security Office, Psychology Center, Logistics, University Hospital, and Asset Management alongside the original six sources. The localhost Docker/Compose instance is the current test publisher; the GitHub Pages workflow has `state=disabled_manually`, and public deployment acceptance is pending. Restricted, authenticated, public-WeChat, and external-public official-list rows remain visible as link-only entries when full detail cannot be acquired. Student Exchange remains deferred for now. Its older 99-candidate/8-page admission result was measured under the retired full-notice refill behavior and is retained only as historical evidence; it should be re-evaluated separately under the current overlap-frontier semantics before admission.
+The public-source registry and fixtures cover NJU WebPlus/Sudy, Boshan/NJDX, and public employment information streams. The fourteen-source official instance policy includes Undergraduate School announcements, Youth League announcements, Student Affairs, Security Office, Psychology Center, Logistics, University Hospital, and Asset Management alongside the original six sources; the three employment information sources are registered and validated but not yet admitted to that policy. The localhost Docker/Compose instance is the current test publisher; the GitHub Pages workflow has `state=disabled_manually`, and public deployment acceptance is pending. Restricted, authenticated, public-WeChat, and external-public official-list rows remain visible as link-only entries when full detail cannot be acquired. Student Exchange remains deferred for now. Its older 99-candidate/8-page admission result was measured under the retired full-notice refill behavior and is retained only as historical evidence; it should be re-evaluated separately under the current overlap-frontier semantics before admission.
 
 More sources should preferably be added by contributing YAML under `sources/nju/` rather than adding a new crawler.
 

@@ -1,0 +1,21 @@
+{
+  "content": [
+    {
+      "id": "guide-1",
+      "title": "就业指导活动",
+      "content": "<p>活动内容。</p>",
+      "type": "GUIDE",
+      "status": "PUBLISHED",
+      "attachments": [],
+      "externalLink": null,
+      "loginRequired": false,
+      "publishedAt": "2026-09-16 12:15:00"
+    }
+  ],
+  "page": {
+    "size": 2,
+    "number": 1,
+    "totalElements": 3,
+    "totalPages": 2
+  }
+}

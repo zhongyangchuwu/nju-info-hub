@@ -46,8 +46,21 @@ These sources share the same public Boshan list API and are registered through o
 
 The adapter normalizes same-host API links to the source HTTPS origin before persistence, so legacy `http://host//path` values returned by the API do not leak into feeds. Fixture tests cover paging, channel mismatch failure, configured detail selectors, URL normalization, and DFS attachments. M2D live migration upgraded the retained localhost database from schema v3 to v4 without losing prior observations; the first 14-source startup run kept all existing sources bounded and added 5 full revisions from each Boshan source. JSON/Atom/RSS endpoints for both new sources returned HTTP 200, with unique JSON Feed item IDs and working ETag/304 revalidation.
 
+## M2E-validated employment information sources
+
+The employment portal is a Vue/Vite client, but its information streams are backed by a stable public JSON API. M2E registers three independent source streams through one `job-portal-information` adapter; none is selected by `instances/official.json` yet.
+
+| Source | URL | Organization | Audience relevance | Adapter/status | Live evidence and notes |
+| --- | --- | --- | --- | --- | --- |
+| Employment news | https://job.nju.edu.cn/career/info?type=NEWS | 南京大学学生就业指导中心 | Students and graduates; employment announcements and major recruiting events | Public JSON API; registered | Full audit found 104 public `PUBLISHED` records with unique IDs, content and publication dates. Empty-database ingest with limit 5 visited 2 pages, observed 30 items, inserted 4 full revisions, retained 1 explicit external link-only item, and found 6 attachments. |
+| Employment college updates | https://job.nju.edu.cn/career/info?type=COLLEGE | 南京大学学生就业指导中心 | Students; college-level employment activity and practice updates | Public JSON API; registered | Full audit found 19 public `PUBLISHED` records with unique IDs and no login requirement. Empty-database ingest with limit 5 visited 2 pages, observed all 19 items, and inserted 5 full revisions. |
+| Employment guidance | https://job.nju.edu.cn/career/info?type=GUIDE | 南京大学学生就业指导中心 | Students; career guidance and employability activities | Public JSON API; registered | Full audit found 18 public `PUBLISHED` records with unique IDs and no login requirement. Empty-database ingest with limit 5 visited 2 pages, observed all 18 items, and inserted 5 full revisions. |
+
+The portal returns full HTML, attachments, stable record IDs and publication dates from `/api/career/content/informations`. Feed items keep the human-facing `/career/info/<id>?type=...` URL while detail provenance is fetched from the corresponding API record. The API returned HTTP 401 only when the client incorrectly advertised HTML-only content; the shared fetcher now truthfully advertises both HTML and JSON support, with a regression test. No cookie, token or login session is used.
+
 ## Deferred
 
 | Source | URL | Organization | Audience relevance | Adapter/status | Live evidence and notes |
 | --- | --- | --- | --- | --- | --- |
-| Employment portal | http://job.nju.edu.cn/ | 就业指导中心 | Students and graduates seeking employment | Separate Vue/Vite application; deferred | The root document is an application shell loading `/_app.config.js` and a module bundle under `/jse/`; it contains no public notice list in server HTML. Generic WebPlus discovery returned `[]`. Do not assume WebPlus compatibility or design a one-off scraper; audit its public API/content model separately. |
+| Employment recruitments | https://job.nju.edu.cn/career/jobs-v2 | 南京大学学生就业指导中心 | Students and graduates seeking positions | Public JSON API; audited, not registered | `/api/career/job/recruitments` is anonymously readable and exposes structured companies, positions, deadlines and descriptions. Its schema is materially different from information articles, so it should get a dedicated source family rather than being forced into `job-portal-information`. |
+| Employment recruiting events | https://job.nju.edu.cn/career/specifics | 南京大学学生就业指导中心 | Students and graduates attending recruiting events | Public JSON APIs; audited, not registered | `/api/career/job/fair/specifics` and `/api/career/job/fair/mutual-selections` are anonymously readable and contain structured event times, venues and invitation content. Event semantics should be modeled separately from article streams. |

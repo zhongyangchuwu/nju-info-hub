@@ -494,6 +494,7 @@ export class InfoHubDatabase implements Disposable {
     }
     if (item.acquisitionKind !== "webplus-detail"
       && item.acquisitionKind !== "boshan-detail"
+      && item.acquisitionKind !== "job-portal-information"
       && item.acquisitionKind !== "public-wechat"
       && item.acquisitionKind !== "external-public") {
       throw new Error(`unsupported source item acquisition kind: ${item.acquisitionKind}`);
