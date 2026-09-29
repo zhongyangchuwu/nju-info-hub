@@ -31,7 +31,12 @@
       "nju-physics-notices",
       "nju-student-exchange",
       "nju-science-tech",
-      "nju-academic-calendar"
+      "nju-academic-calendar",
+      "nju-business-school-notices",
+      "nju-chemistry-student-notices",
+      "nju-environment-notices",
+      "nju-earth-sciences-notices",
+      "nju-modern-engineering-notices"
     ],
     "sets": [
       {
@@ -149,6 +154,26 @@
       {
         "id": "nju-academic-calendar",
         "recentLimit": 1
+      },
+      {
+        "id": "nju-business-school-notices",
+        "recentLimit": 5
+      },
+      {
+        "id": "nju-chemistry-student-notices",
+        "recentLimit": 5
+      },
+      {
+        "id": "nju-environment-notices",
+        "recentLimit": 5
+      },
+      {
+        "id": "nju-earth-sciences-notices",
+        "recentLimit": 5
+      },
+      {
+        "id": "nju-modern-engineering-notices",
+        "recentLimit": 5
       }
     ]
   }

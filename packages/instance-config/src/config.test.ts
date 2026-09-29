@@ -30,13 +30,15 @@ describe("instance config", () => {
   it("loads the official v4 collection and publication policy", async () => {
     const config = await loadInstanceConfig(officialPath, sourceDir);
     expect(config.schemaVersion).toBe(4);
-    expect(config.publication.sources).toHaveLength(25);
+    expect(config.publication.sources).toHaveLength(30);
     expect(config.publication.publicBaseUrl)
       .toBe("https://zhongyangchuwu.github.io/nju-info-hub/");
-    expect(config.publication.sources.slice(-3)).toEqual([
-      "nju-student-exchange",
-      "nju-science-tech",
-      "nju-academic-calendar",
+    expect(config.publication.sources.slice(-5)).toEqual([
+      "nju-business-school-notices",
+      "nju-chemistry-student-notices",
+      "nju-environment-notices",
+      "nju-earth-sciences-notices",
+      "nju-modern-engineering-notices",
     ]);
     expect(config.publication.sets).toEqual([{
       id: "cs",
@@ -50,15 +52,17 @@ describe("instance config", () => {
     }]);
     expect(config.collection.schedule).toBe("17 */2 * * *");
     expect(config.collection.timeZone).toBe("UTC");
-    expect(config.collection.sources).toHaveLength(25);
+    expect(config.collection.sources).toHaveLength(30);
     expect(config.collection.sources[0]).toEqual({
       id: "nju-cs-graduate",
       recentLimit: 10,
     });
-    expect(config.collection.sources.slice(-3)).toEqual([
-      { id: "nju-student-exchange", recentLimit: 5 },
-      { id: "nju-science-tech", recentLimit: 5 },
-      { id: "nju-academic-calendar", recentLimit: 1 },
+    expect(config.collection.sources.slice(-5)).toEqual([
+      { id: "nju-business-school-notices", recentLimit: 5 },
+      { id: "nju-chemistry-student-notices", recentLimit: 5 },
+      { id: "nju-environment-notices", recentLimit: 5 },
+      { id: "nju-earth-sciences-notices", recentLimit: 5 },
+      { id: "nju-modern-engineering-notices", recentLimit: 5 },
     ]);
   });
 
