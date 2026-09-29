@@ -24,7 +24,11 @@
       "nju-employment-news",
       "nju-employment-college",
       "nju-employment-guidance",
-      "nju-employment-recruitments"
+      "nju-employment-recruitments",
+      "nju-ai-notices",
+      "nju-software-notices",
+      "nju-math-announcements",
+      "nju-physics-notices"
     ],
     "sets": [
       {
@@ -113,6 +117,22 @@
       },
       {
         "id": "nju-employment-recruitments",
+        "recentLimit": 5
+      },
+      {
+        "id": "nju-ai-notices",
+        "recentLimit": 5
+      },
+      {
+        "id": "nju-software-notices",
+        "recentLimit": 5
+      },
+      {
+        "id": "nju-math-announcements",
+        "recentLimit": 5
+      },
+      {
+        "id": "nju-physics-notices",
         "recentLimit": 5
       }
     ]
