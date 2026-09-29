@@ -30,21 +30,36 @@ describe("instance config", () => {
   it("loads the official v4 collection and publication policy", async () => {
     const config = await loadInstanceConfig(officialPath, sourceDir);
     expect(config.schemaVersion).toBe(4);
-    expect(config.publication.sources).toHaveLength(9);
+    expect(config.publication.sources).toHaveLength(12);
     expect(config.publication.publicBaseUrl)
       .toBe("https://zhongyangchuwu.github.io/nju-info-hub/");
-    expect(config.publication.sets[0]?.sources).toEqual([
-      "nju-cs-graduate",
-      "nju-cs-internal-notices",
-      "nju-cs-seminars",
+    expect(config.publication.sources.slice(-3)).toEqual([
+      "nju-security-office-notices",
+      "nju-psychology-center-bulletin",
+      "nju-logistics-notices",
     ]);
+    expect(config.publication.sets).toEqual([{
+      id: "cs",
+      title: "计算机学院公开信息",
+      sources: [
+        "nju-cs-graduate",
+        "nju-cs-internal-notices",
+        "nju-cs-seminars",
+      ],
+      opml: "subscriptions/cs.opml",
+    }]);
     expect(config.collection.schedule).toBe("17 */2 * * *");
     expect(config.collection.timeZone).toBe("UTC");
-    expect(config.collection.sources).toHaveLength(9);
+    expect(config.collection.sources).toHaveLength(12);
     expect(config.collection.sources[0]).toEqual({
       id: "nju-cs-graduate",
       recentLimit: 10,
     });
+    expect(config.collection.sources.slice(-3)).toEqual([
+      { id: "nju-security-office-notices", recentLimit: 5 },
+      { id: "nju-psychology-center-bulletin", recentLimit: 5 },
+      { id: "nju-logistics-notices", recentLimit: 5 },
+    ]);
   });
 
   it("rejects the obsolete v3 instance shape", async () => {

@@ -15,7 +15,10 @@
       "nju-graduate-school-notices",
       "nju-undergraduate-notices",
       "nju-youth-league-announcements",
-      "nju-student-affairs-notices"
+      "nju-student-affairs-notices",
+      "nju-security-office-notices",
+      "nju-psychology-center-bulletin",
+      "nju-logistics-notices"
     ],
     "sets": [
       {
@@ -69,6 +72,18 @@
       {
         "id": "nju-student-affairs-notices",
         "recentLimit": 10
+      },
+      {
+        "id": "nju-security-office-notices",
+        "recentLimit": 5
+      },
+      {
+        "id": "nju-psychology-center-bulletin",
+        "recentLimit": 5
+      },
+      {
+        "id": "nju-logistics-notices",
+        "recentLimit": 5
       }
     ]
   }

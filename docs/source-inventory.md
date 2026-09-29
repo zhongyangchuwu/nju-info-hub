@@ -2,7 +2,7 @@
 
 Live audit date: 2026-09-29.
 
-This inventory records source-level coverage and adapter fit. It does not define publication membership, notice-level audience classification, bundles, or aggregation. Adding a registry YAML file does not add the source to `instances/official.json`.
+This inventory records source-level coverage, adapter fit, and official instance policy. Policy membership does not prove that a public deployment is active; adding a registry YAML file alone also does not add the source to `instances/official.json`.
 
 ## Registered before M2A
 
@@ -21,15 +21,19 @@ This inventory records source-level coverage and adapter fit. It does not define
 | Computer Science internal notices | https://cs.nju.edu.cn/1702/list.htm | 计算机学院 | CS students and staff | WebPlus; registered | College-wide internal-facing public notices. |
 | Computer Science seminars | https://cs.nju.edu.cn/1706/list.htm | 计算机学院 | CS and research community | WebPlus; registered | Seminar and lecture stream. |
 
-## Ready-to-add WebPlus sources
+## M2A-validated WebPlus sources selected by M2B policy
 
-These sources were proven compatible with the existing generic adapter and are registered by M2A. They remain absent from `instances/official.json`.
+These sources were proven compatible with the existing generic adapter in M2A and are selected in `instances/official.json` for collection and independent per-source publication. They are not members of the `cs` curated set. The localhost Docker/Compose instance is the current test publisher. The GitHub Pages workflow has `state=disabled_manually` and must remain disabled, so Pages is not currently publishing this policy and deployment acceptance remains pending.
 
 | Source | URL | Organization | Audience relevance | Adapter/status | Live evidence and notes |
 | --- | --- | --- | --- | --- | --- |
-| Security Office notices | https://bwc.nju.edu.cn/64525/list.htm | 南京大学保卫处 | All campus users; safety, traffic, office hours, and procurement | WebPlus defaults; YAML added | Sudy/WebPlus HTML exposes `.listcon .news_list`, 14 rows on page 1, 412 total records, `/page.htm` details, and standard paging. Generic discovery returned dated first-party items. The newest detail parsed successfully and exposed one PDF attachment. |
-| Psychology Center bulletin | https://njuxlzx.nju.edu.cn/47935/list.htm | 心理健康教育与研究中心 | Primarily students; counseling services, workshops, and mental-health activities | WebPlus with `listItem`; YAML added | Sudy/WebPlus HTML exposes 14 dated list rows and 308 total records, but most current rows link to public WeChat. `.news_list li.news` retains the full official list: live discovery classified the first four rows as `public-wechat` and the fifth as `webplus-detail`. Fetch skipped the four unsupported public-WeChat details and parsed the first-party duty-roster detail successfully. |
-| Logistics Group public notices | https://hqjt.nju.edu.cn/1214/list.htm | 后勤服务集团 | Students and staff using dining, housing, transport, and campus services | WebPlus with `listItem`; YAML added | The homepage's “公告通知” link identifies `/1214/list.htm` as the canonical list. It contains 14 rows on page 1, 79 total records, local WebPlus details, and external public procurement links. `.news_list li.news` preserves both: live discovery classified local rows as `webplus-detail` and cross-site rows as `external-public`. The newest local detail parsed successfully and exposed one PDF attachment. |
+| Security Office notices | https://bwc.nju.edu.cn/64525/list.htm | 南京大学保卫处 | All campus users; safety, traffic, office hours, and procurement | WebPlus defaults; configured in official instance | Sudy/WebPlus HTML exposes `.listcon .news_list`, 14 rows on page 1, 412 total records, `/page.htm` details, and standard paging. Generic discovery returned dated first-party items. The newest detail parsed successfully and exposed one PDF attachment. |
+| Psychology Center bulletin | https://njuxlzx.nju.edu.cn/47935/list.htm | 心理健康教育与研究中心 | Primarily students; counseling services, workshops, and mental-health activities | WebPlus with `listItem`; configured in official instance | Sudy/WebPlus HTML exposes 14 dated list rows and 308 total records, but most current rows link to public WeChat. `.news_list li.news` retains the full official list: live discovery classified the first four rows as `public-wechat` and the fifth as `webplus-detail`. Fetch skipped the four unsupported public-WeChat details and parsed the first-party duty-roster detail successfully. |
+| Logistics Group public notices | https://hqjt.nju.edu.cn/1214/list.htm | 后勤服务集团 | Students and staff using dining, housing, transport, and campus services | WebPlus with `listItem`; configured in official instance | The homepage's “公告通知” link identifies `/1214/list.htm` as the canonical list. It contains 14 rows on page 1, 79 total records, local WebPlus details, and external public procurement links. `.news_list li.news` preserves both: live discovery classified local rows as `webplus-detail` and cross-site rows as `external-public`. The newest local detail parsed successfully and exposed one PDF attachment. |
+
+All three use `recentLimit: 5`. Their first pages span months rather than days; five candidates bound initial detail traffic while retaining the newest source-item observations. Psychology's newest candidates are mostly public-WeChat links, and Logistics mixes external public links, so larger limits would mainly add unsupported detail attempts rather than more full notices.
+
+Before activation, isolated empty-database ingestion with limit 5 visited two pages and observed 28 items for each source. Security produced 5 full revisions and 23 link-only entries; Psychology produced 1 full revision and 27 public-WeChat link-only entries; Logistics produced 3 full revisions, 2 external-public observations, and 25 total link-only entries. No retained runtime database was used.
 
 ## Needs validation or a non-WebPlus adapter
 

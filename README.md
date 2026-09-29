@@ -17,9 +17,9 @@ The public ingestion foundation and two read-only delivery adapters are in place
 - static publication can expose a machine-readable published-source catalog plus reusable source sets as OPML or combined JSON/Atom/RSS timelines;
 - Node.js 26 is the default repository runtime and Node.js 24 remains the compatibility floor.
 
-Limited ingest records each Student Affairs official-list candidate it actually considers, including unsupported public-WeChat links, as a source-item observation before detail acquisition. Unsupported details require no WeChat request and remain `link-only` in local feeds; full public WebPlus details attach as notice revisions. `fetch` writes no database state. The six-source Pages publication allow-list is unchanged; these new sources are **not** publicly deployed. See [#46](https://github.com/zhongyangchuwu/nju-info-hub/issues/46), [#39](https://github.com/zhongyangchuwu/nju-info-hub/issues/39), and [#49](https://github.com/zhongyangchuwu/nju-info-hub/issues/49).
+The official instance policy selects twelve sources for collection and independent per-source publication. Unsupported public-WeChat and external-public details require no direct article request and remain `link-only`; recognized campus-network and authentication restrictions also remain visible through their official-list observations. Full public WebPlus details attach as notice revisions, and `fetch` writes no database state.
 
-Mixed-feed acceptance in this milestone is local JSON/XML parsing, not a public Folo check: Folo cannot fetch a local URL. Public Folo admission and any new-source Pages publication remain deferred to the subsequent #40 publication expansion; no temporary public feed endpoint is introduced.
+Public-reader acceptance remains a post-deployment check. Local JSON/XML parsing and packaged CLI smoke establish format and artifact correctness but cannot establish third-party reader admission.
 
 Use GitHub Issues for the current work queue. AI/MCP integration is deferred until a concrete consumer requires it.
 
@@ -152,22 +152,22 @@ Full entries preserve original HTML/text and every ordered attachment with infer
 | Curated source-set catalog | `catalog/sets.json` | Versioned metadata for server-published named sets and their absolute OPML/bundle URLs |
 | Static source selector | `catalog/` | Pilot browser client of the published catalogs; no account or dynamic feed generation |
 
-## Static published feeds and curated CS set
+## Static publication policy and curated CS set
 
-The `CS feed pilot` workflow runs every two hours or by manual dispatch. The current workflow collects nine explicit sources into one SQLite database. The existing six sources keep their current 10-full-item targets, while `nju-undergraduate-notices` and `nju-youth-league-announcements` target 5 full notices and `nju-student-affairs-notices` targets 10. All nine are exported to the published catalog, selector, and per-source JSON/Atom/RSS feeds. Official-list rows whose detail acquisition is unavailable remain visible as explicit link-only feed entries. The curated `cs` set remains exactly the three CS sources; only those members appear in its OPML and combined `bundles/cs.{json,atom,rss}` timeline. After export, the workflow stages static selector assets in `catalog/`. Readers never trigger collection. Pages is configured at https://zhongyangchuwu.github.io/nju-info-hub/; this nine-source workflow requires post-merge public acceptance before the three newly admitted sources are considered live.
+`instances/official.json` defines a twelve-source collection and publication policy. The original six sources and Student Affairs use `recentLimit: 10`; Undergraduate School, Youth League, Security Office, Psychology Center, and Logistics use `recentLimit: 5`. The policy keeps one independent JSON/Atom/RSS feed per source. Official-list rows whose detail acquisition is unavailable remain explicit link-only entries. The curated `cs` set remains exactly the three CS sources; only those members belong in its OPML and combined `bundles/cs.{json,atom,rss}` timeline. The current test publisher is the localhost Docker/Compose instance. `.github/workflows/publish-cs-feeds.yml` has `state=disabled_manually` and must remain disabled: Pages is not the current publisher, no schedule or `main` push is publishing these feeds, and deployment acceptance remains pending.
 
-Public per-source URL patterns (for the nine IDs above):
+Intended public URL patterns, if a public static publisher is enabled later:
 
 - `https://zhongyangchuwu.github.io/nju-info-hub/feeds/<sourceId>.json`
 - `https://zhongyangchuwu.github.io/nju-info-hub/feeds/<sourceId>.atom`
 - `https://zhongyangchuwu.github.io/nju-info-hub/feeds/<sourceId>.rss`
 - CS OPML: `https://zhongyangchuwu.github.io/nju-info-hub/subscriptions/cs.opml`
-- published-source catalog: `https://zhongyangchuwu.github.io/nju-info-hub/catalog/sources.json` (live)
+- published-source catalog: `https://zhongyangchuwu.github.io/nju-info-hub/catalog/sources.json`
 - combined CS timeline: `https://zhongyangchuwu.github.io/nju-info-hub/bundles/cs.{json,atom,rss}`
 - curated-set catalog: `https://zhongyangchuwu.github.io/nju-info-hub/catalog/sets.json`
 - pilot selector: `https://zhongyangchuwu.github.io/nju-info-hub/catalog/`
 
-The published-source catalog lists only the sources included in the current publication, with their original NJU home pages and absolute JSON/Atom/RSS URLs. It is not the complete audited NJU source map from Issue #21 and does not invent channel/authority metadata that is not persisted. The pilot selector reads only static `sources.json` and `sets.json`. It defaults to all published sources when `sources` is absent; `?sources=id1,id2` selects known IDs only, in catalog order. Select all and Clear update the URL without reloading. Arbitrary selections download client-generated OPML (one independent RSS subscription per source) or copy per-source feed URLs; they do **not** acquire a stable combined-feed URL. Only the named `cs` set has a server-published OPML and combined JSON/Atom/RSS timeline, linked through `sets.json`. The page has no account, read state, notification settings, or collector/backend role; this is an engineering pilot, not a polished product.
+When generated, the source catalog lists only the sources selected by the active instance policy, with their original NJU home pages and absolute JSON/Atom/RSS URLs. It is not the complete audited NJU source map from Issue #21 and does not invent channel/authority metadata that is not persisted. The pilot selector reads only static `sources.json` and `sets.json`. It defaults to all published sources when `sources` is absent; `?sources=id1,id2` selects known IDs only, in catalog order. Select all and Clear update the URL without reloading. Arbitrary selections download client-generated OPML (one independent RSS subscription per source) or copy per-source feed URLs; they do **not** acquire a stable combined-feed URL. Only the named `cs` set can have a generated OPML and combined JSON/Atom/RSS timeline, linked through `sets.json`. The page has no account, read state, notification settings, or collector/backend role; this is an engineering pilot, not a polished product.
 
 Static publication is driven by the reviewed instance configuration rather than a second set of export CLI flags. The instance selects the published source allow-list, optional curated set, OPML path under `subscriptions/`, and public base URL; the exporter consumes that contract directly. SQLite retains the complete persisted history, while each RSS/Atom/JSON Feed exposes the producer recent window (currently the latest 100 entries per source) for efficient polling by readers. Each export renders a complete next generation before replacing the publication-owned `feeds/`, `catalog/`, `bundles/`, and `subscriptions/` directories, so a render failure leaves the previous generation intact while unrelated files at the output root are preserved.
 
@@ -179,7 +179,7 @@ mkdir -p "$ROOT/.cache/nju-info" "$ROOT/_site"
 pnpm nju-info -- collect instances/official.json sources/nju "$ROOT/.cache/nju-info/feeds.sqlite"
 pnpm nju-info -- export instances/official.json sources/nju "$ROOT/.cache/nju-info/feeds.sqlite" "$ROOT/_site"
 ```
-The GitHub Actions SQLite cache remains a best-effort warm-start layer and may be evicted. The Pages workflow can optionally restore and persist a verified durable state snapshot through a WebDAV-backed rclone remote; runtime SQLite still stays on the local runner filesystem. Snapshot format, restore/fallback behavior, WebDAV secrets, and generic self-host rclone usage are documented in [`docs/state-storage.md`](docs/state-storage.md).
+The GitHub Pages reference workflow has `state=disabled_manually`; it contains optional cache/WebDAV snapshot handling but is not the current publisher and must not be enabled as part of M2B. Runtime SQLite remains local to the active localhost Docker host. Snapshot format, restore/fallback behavior, WebDAV secrets, and generic self-host rclone usage are documented in [`docs/state-storage.md`](docs/state-storage.md).
 
 WebPlus discovery preserves list-page source/DOM order. Limited `fetch` and `ingest` commands instead rank parseable publication dates newest-first, with stable source-order fallback for equal, missing, or unparseable dates. Limited `fetch` and first-run `ingest` inspect one page beyond the point where enough candidates were found; incremental `ingest` uses known-item overlap plus lookahead. `discover-pages` keeps full source order and pinned items.
 
@@ -187,7 +187,7 @@ On an empty database, `ingest` bootstraps only the configured recent window plus
 
 ## Initial sources
 
-The public-source registry and fixtures cover several NJU WebPlus/Sudy sites. The current Pages workflow admits Undergraduate School announcements, Youth League announcements, and Student Affairs alongside the original six published sources. Their restricted/authenticated/public-WeChat official-list rows remain visible as link-only entries when full detail cannot be acquired. Student Exchange remains deferred for now. Its older 99-candidate/8-page admission result was measured under the retired full-notice refill behavior and is retained only as historical evidence; it should be re-evaluated separately under the current overlap-frontier semantics before admission.
+The public-source registry and fixtures cover several NJU WebPlus/Sudy sites. The twelve-source official instance policy includes Undergraduate School announcements, Youth League announcements, Student Affairs, Security Office, Psychology Center, and Logistics alongside the original six sources. The localhost Docker/Compose instance is the current test publisher; the GitHub Pages workflow has `state=disabled_manually`, and public deployment acceptance is pending. Restricted, authenticated, public-WeChat, and external-public official-list rows remain visible as link-only entries when full detail cannot be acquired. Student Exchange remains deferred for now. Its older 99-candidate/8-page admission result was measured under the retired full-notice refill behavior and is retained only as historical evidence; it should be re-evaluated separately under the current overlap-frontier semantics before admission.
 
 More sources should preferably be added by contributing YAML under `sources/nju/` rather than adding a new crawler.
 
