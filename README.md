@@ -17,7 +17,7 @@ The public ingestion foundation and two read-only delivery adapters are in place
 - static publication can expose a machine-readable published-source catalog plus reusable source sets as OPML or combined JSON/Atom/RSS timelines;
 - Node.js 26 is the default repository runtime and Node.js 24 remains the compatibility floor.
 
-The official instance policy selects fourteen sources for collection and independent per-source publication. Unsupported public-WeChat and external-public details require no direct article request and remain `link-only`; recognized campus-network and authentication restrictions also remain visible through their official-list observations. Full supported public WebPlus/Boshan details attach as notice revisions, and `fetch` writes no database state.
+The official instance policy selects seventeen sources for collection and independent per-source publication. Unsupported public-WeChat and external-public details require no direct article request and remain `link-only`; recognized campus-network and authentication restrictions also remain visible through their official-list observations. Full supported public WebPlus, Boshan, and employment-information details attach as notice revisions, and `fetch` writes no database state.
 
 Public-reader acceptance remains a post-deployment check. Local JSON/XML parsing and packaged CLI smoke establish format and artifact correctness but cannot establish third-party reader admission.
 
@@ -154,7 +154,7 @@ Full entries preserve original HTML/text and every ordered attachment with infer
 
 ## Static publication policy and curated CS set
 
-`instances/official.json` defines a fourteen-source collection and publication policy. The original six sources and Student Affairs use `recentLimit: 10`; Undergraduate School, Youth League, Security Office, Psychology Center, Logistics, University Hospital, and Asset Management use `recentLimit: 5`. The policy keeps one independent JSON/Atom/RSS feed per source. Official-list rows whose detail acquisition is unavailable remain explicit link-only entries. The curated `cs` set remains exactly the three CS sources; only those members belong in its OPML and combined `bundles/cs.{json,atom,rss}` timeline. The current test publisher is the localhost Docker/Compose instance. `.github/workflows/publish-cs-feeds.yml` has `state=disabled_manually` and must remain disabled: Pages is not the current publisher, no schedule or `main` push is publishing these feeds, and deployment acceptance remains pending.
+`instances/official.json` defines a seventeen-source collection and publication policy. The original six sources and Student Affairs use `recentLimit: 10`; every other official source uses `recentLimit: 5`. The policy keeps one independent JSON/Atom/RSS feed per source. Official-list rows whose detail acquisition is unavailable remain explicit link-only entries. The curated `cs` set remains exactly the three CS sources; only those members belong in its OPML and combined `bundles/cs.{json,atom,rss}` timeline. The current test publisher is the localhost Docker/Compose instance. `.github/workflows/publish-cs-feeds.yml` has `state=disabled_manually` and must remain disabled: Pages is not the current publisher, no schedule or `main` push is publishing these feeds, and deployment acceptance remains pending.
 
 Intended public URL patterns, if a public static publisher is enabled later:
 
@@ -187,7 +187,7 @@ On an empty database, `ingest` bootstraps only the configured recent window plus
 
 ## Initial sources
 
-The public-source registry and fixtures cover NJU WebPlus/Sudy, Boshan/NJDX, and public employment information streams. The fourteen-source official instance policy includes Undergraduate School announcements, Youth League announcements, Student Affairs, Security Office, Psychology Center, Logistics, University Hospital, and Asset Management alongside the original six sources; the three employment information sources are registered and validated but not yet admitted to that policy. The localhost Docker/Compose instance is the current test publisher; the GitHub Pages workflow has `state=disabled_manually`, and public deployment acceptance is pending. Restricted, authenticated, public-WeChat, and external-public official-list rows remain visible as link-only entries when full detail cannot be acquired. Student Exchange remains deferred for now. Its older 99-candidate/8-page admission result was measured under the retired full-notice refill behavior and is retained only as historical evidence; it should be re-evaluated separately under the current overlap-frontier semantics before admission.
+The public-source registry and fixtures cover NJU WebPlus/Sudy, Boshan/NJDX, and public employment information streams. The official instance now contains seventeen sources, including all three validated employment information streams. The localhost Docker/Compose instance remains the current test publisher, while public deployment acceptance is still pending.
 
 More sources should preferably be added by contributing YAML under `sources/nju/` rather than adding a new crawler.
 

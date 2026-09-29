@@ -20,7 +20,10 @@
       "nju-psychology-center-bulletin",
       "nju-logistics-notices",
       "nju-hospital-announcements",
-      "nju-asset-management-notices"
+      "nju-asset-management-notices",
+      "nju-employment-news",
+      "nju-employment-college",
+      "nju-employment-guidance"
     ],
     "sets": [
       {
@@ -93,6 +96,18 @@
       },
       {
         "id": "nju-asset-management-notices",
+        "recentLimit": 5
+      },
+      {
+        "id": "nju-employment-news",
+        "recentLimit": 5
+      },
+      {
+        "id": "nju-employment-college",
+        "recentLimit": 5
+      },
+      {
+        "id": "nju-employment-guidance",
         "recentLimit": 5
       }
     ]
