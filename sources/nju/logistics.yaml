@@ -1,0 +1,12 @@
+schemaVersion: 1
+id: nju-logistics-notices
+name: 后勤服务集团公告通知
+organization:
+  id: nju-logistics-group
+  name: 后勤服务集团
+  kind: service-unit
+url: https://hqjt.nju.edu.cn/1214/list.htm
+adapter:
+  type: webplus
+  selectors:
+    listItem: '.news_list li.news'

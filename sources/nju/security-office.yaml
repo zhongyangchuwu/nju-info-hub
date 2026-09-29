@@ -1,0 +1,10 @@
+schemaVersion: 1
+id: nju-security-office-notices
+name: 保卫处通知公告
+organization:
+  id: nju-security-office
+  name: 南京大学保卫处
+  kind: administrative-unit
+url: https://bwc.nju.edu.cn/64525/list.htm
+adapter:
+  type: webplus

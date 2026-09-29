@@ -34,6 +34,8 @@ Source metadata lives in `sources/nju/*.yaml` and is validated with Zod before u
 
 Most new WebPlus/Sudy sources should require configuration only. Source-specific selectors are supported as escape hatches, but generic defaults should be preferred when they are reliable.
 
+Current registered coverage and live adapter-fit findings are tracked in [`source-inventory.md`](source-inventory.md).
+
 ### Optional source classification metadata
 
 Source schema version 1 accepts a small optional metadata extension; existing source files remain valid without it:

@@ -1,0 +1,12 @@
+schemaVersion: 1
+id: nju-psychology-center-bulletin
+name: 心理健康教育与研究中心公告栏
+organization:
+  id: nju-psychology-center
+  name: 心理健康教育与研究中心
+  kind: service-unit
+url: https://njuxlzx.nju.edu.cn/47935/list.htm
+adapter:
+  type: webplus
+  selectors:
+    listItem: '.news_list li.news'
