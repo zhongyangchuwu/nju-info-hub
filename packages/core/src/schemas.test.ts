@@ -1,18 +1,77 @@
 import { describe, expect, it } from 'vitest';
 import { parseSourceConfig } from './schemas.js';
 
+const minimalSourceConfig = {
+  schemaVersion: 1,
+  id: 'nju-cs-graduate',
+  name: 'Computer Science graduate notices',
+  organization: { id: 'nju-cs', name: '计算机学院' },
+  url: 'https://cs.nju.edu.cn/1703/list.htm',
+  adapter: { type: 'webplus' },
+};
+
 describe('parseSourceConfig', () => {
-  it('parses a WebPlus source', () => {
-    const source = parseSourceConfig({
-      schemaVersion: 1,
-      id: 'nju-cs-graduate',
-      name: 'Computer Science graduate notices',
-      organization: { id: 'nju-cs', name: '计算机学院' },
-      url: 'https://cs.nju.edu.cn/1703/list.htm',
-      adapter: { type: 'webplus' },
-    });
+  it('parses an existing minimal WebPlus source', () => {
+    const source = parseSourceConfig(minimalSourceConfig);
 
     expect(source.adapter.type).toBe('webplus');
+    expect(source.organization.kind).toBeUndefined();
+    expect(source.classification).toBeUndefined();
+  });
+
+  it('parses optional source classification metadata', () => {
+    const source = parseSourceConfig({
+      ...minimalSourceConfig,
+      organization: {
+        ...minimalSourceConfig.organization,
+        kind: 'academic-unit',
+      },
+      classification: {
+        audiences: ['graduate-students'],
+        topics: ['academics', 'research'],
+      },
+    });
+
+    expect(source.organization.kind).toBe('academic-unit');
+    expect(source.classification).toEqual({
+      audiences: ['graduate-students'],
+      topics: ['academics', 'research'],
+    });
+  });
+
+  it('rejects invalid source classification metadata', () => {
+    expect(() =>
+      parseSourceConfig({
+        ...minimalSourceConfig,
+        organization: {
+          ...minimalSourceConfig.organization,
+          kind: 'department',
+        },
+      }),
+    ).toThrow();
+
+    expect(() =>
+      parseSourceConfig({
+        ...minimalSourceConfig,
+        classification: {
+          audiences: ['graduate-students', 'graduate-students'],
+        },
+      }),
+    ).toThrow();
+
+    expect(() =>
+      parseSourceConfig({
+        ...minimalSourceConfig,
+        classification: { topics: ['Student Affairs'] },
+      }),
+    ).toThrow();
+
+    expect(() =>
+      parseSourceConfig({
+        ...minimalSourceConfig,
+        classification: {},
+      }),
+    ).toThrow();
   });
 
   it('rejects unsupported adapters and removed source-policy fields', () => {

@@ -34,6 +34,29 @@ Source metadata lives in `sources/nju/*.yaml` and is validated with Zod before u
 
 Most new WebPlus/Sudy sources should require configuration only. Source-specific selectors are supported as escape hatches, but generic defaults should be preferred when they are reliable.
 
+### Optional source classification metadata
+
+Source schema version 1 accepts a small optional metadata extension; existing source files remain valid without it:
+
+```yaml
+organization:
+  id: nju-cs
+  name: 计算机学院
+  kind: academic-unit
+classification:
+  audiences:
+    - graduate-students
+  topics:
+    - academics
+    - research
+```
+
+`organization.kind` is one of `university`, `academic-unit`, `administrative-unit`, `service-unit`, `student-organization`, or `other`. The broad values classify the organization, not its legal or internal administrative hierarchy.
+
+`classification.audiences` and `classification.topics` are optional non-empty arrays of unique lowercase kebab-case identifiers. At least one of the two arrays must be present when `classification` is provided. The identifiers are source-level discovery hints: they describe the stream as a whole and must not be treated as claims about every notice. A controlled audience/topic vocabulary can be introduced when real selection requirements are defined; the schema intentionally does not guess one now.
+
+This metadata does not add persistence columns, query/filter behavior, selectors, bundles, or aggregation. Each registry source still produces its own independent feed; instance publication policy remains separate.
+
 ## Instance configuration
 
 Instance publication policy is separate from both the source registry and the runtime. Checked-in instance files under `instances/` select already-registered sources without choosing whether the same instance runs under Docker, GitHub-hosted automation, or another runner.
