@@ -30,14 +30,13 @@ describe("instance config", () => {
   it("loads the official v4 collection and publication policy", async () => {
     const config = await loadInstanceConfig(officialPath, sourceDir);
     expect(config.schemaVersion).toBe(4);
-    expect(config.publication.sources).toHaveLength(22);
+    expect(config.publication.sources).toHaveLength(25);
     expect(config.publication.publicBaseUrl)
       .toBe("https://zhongyangchuwu.github.io/nju-info-hub/");
-    expect(config.publication.sources.slice(-4)).toEqual([
-      "nju-ai-notices",
-      "nju-software-notices",
-      "nju-math-announcements",
-      "nju-physics-notices",
+    expect(config.publication.sources.slice(-3)).toEqual([
+      "nju-student-exchange",
+      "nju-science-tech",
+      "nju-academic-calendar",
     ]);
     expect(config.publication.sets).toEqual([{
       id: "cs",
@@ -51,16 +50,15 @@ describe("instance config", () => {
     }]);
     expect(config.collection.schedule).toBe("17 */2 * * *");
     expect(config.collection.timeZone).toBe("UTC");
-    expect(config.collection.sources).toHaveLength(22);
+    expect(config.collection.sources).toHaveLength(25);
     expect(config.collection.sources[0]).toEqual({
       id: "nju-cs-graduate",
       recentLimit: 10,
     });
-    expect(config.collection.sources.slice(-4)).toEqual([
-      { id: "nju-ai-notices", recentLimit: 5 },
-      { id: "nju-software-notices", recentLimit: 5 },
-      { id: "nju-math-announcements", recentLimit: 5 },
-      { id: "nju-physics-notices", recentLimit: 5 },
+    expect(config.collection.sources.slice(-3)).toEqual([
+      { id: "nju-student-exchange", recentLimit: 5 },
+      { id: "nju-science-tech", recentLimit: 5 },
+      { id: "nju-academic-calendar", recentLimit: 1 },
     ]);
   });
 
@@ -118,12 +116,16 @@ describe("instance config", () => {
     await expect(loadInstanceConfig(duplicate, sourceDir))
       .rejects.toThrow("duplicate published source id");
 
+    let uncollectedId = "";
     const uncollected = await withConfig((value) => {
-      value.publication.sources.push("nju-student-exchange");
+      uncollectedId = value.publication.sources.at(-1);
+      value.collection.sources = value.collection.sources.filter(
+        ({ id }: { id: string }) => id !== uncollectedId,
+      );
     });
     await expect(loadInstanceConfig(uncollected, sourceDir))
       .rejects.toThrow(
-        "published source id is not collected by this instance: nju-student-exchange",
+        `published source id is not collected by this instance: ${uncollectedId}`,
       );
   });
 
@@ -142,10 +144,18 @@ describe("instance config", () => {
     await expect(loadInstanceConfig(duplicate, sourceDir))
       .rejects.toThrow("duplicate source id in set cs");
 
-    const unpublished = await withConfig((value) =>
-      value.publication.sets[0].sources.push("nju-student-exchange"));
+    let unpublishedId = "";
+    const unpublished = await withConfig((value) => {
+      unpublishedId = value.publication.sources.find(
+        (id: string) => !value.publication.sets[0].sources.includes(id),
+      );
+      value.publication.sources = value.publication.sources.filter(
+        (id: string) => id !== unpublishedId,
+      );
+      value.publication.sets[0].sources.push(unpublishedId);
+    });
     await expect(loadInstanceConfig(unpublished, sourceDir)).rejects.toThrow(
-      "source set cs references unpublished source id: nju-student-exchange",
+      `source set cs references unpublished source id: ${unpublishedId}`,
     );
   });
 });

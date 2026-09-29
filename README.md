@@ -17,7 +17,7 @@ The public ingestion foundation and two read-only delivery adapters are in place
 - static publication can expose a machine-readable published-source catalog plus reusable source sets as OPML or combined JSON/Atom/RSS timelines;
 - Node.js 26 is the default repository runtime and Node.js 24 remains the compatibility floor.
 
-The official instance policy selects twenty-two sources for collection and independent per-source publication. Unsupported public-WeChat and external-public details require no direct article request and remain `link-only`; recognized campus-network and authentication restrictions also remain visible through their official-list observations. Full supported public WebPlus, Boshan, and employment-portal details attach as notice revisions, and `fetch` writes no database state.
+The official instance policy selects twenty-five sources for collection and independent per-source publication. Unsupported public-WeChat and external-public details require no direct article request and remain `link-only`; recognized campus-network and authentication restrictions also remain visible through their official-list observations. Full supported public WebPlus, Boshan, and employment-portal details attach as notice revisions, and `fetch` writes no database state.
 
 Public-reader acceptance remains a post-deployment check. Local JSON/XML parsing and packaged CLI smoke establish format and artifact correctness but cannot establish third-party reader admission.
 
@@ -154,7 +154,7 @@ Full entries preserve original HTML/text and every ordered attachment with infer
 
 ## Static publication policy and curated CS set
 
-`instances/official.json` defines a twenty-two-source collection and publication policy. The original six sources and Student Affairs use `recentLimit: 10`; every other official source uses `recentLimit: 5`. The policy keeps one independent JSON/Atom/RSS feed per source. Official-list rows whose detail acquisition is unavailable remain explicit link-only entries. The curated `cs` set remains exactly the three CS sources; only those members belong in its OPML and combined `bundles/cs.{json,atom,rss}` timeline. The current test publisher is the localhost Docker/Compose instance. `.github/workflows/publish-cs-feeds.yml` has `state=disabled_manually` and must remain disabled: Pages is not the current publisher, no schedule or `main` push is publishing these feeds, and deployment acceptance remains pending.
+`instances/official.json` defines a twenty-five-source collection and publication policy. The original six sources and Student Affairs use `recentLimit: 10`; Academic Calendar uses `recentLimit: 1`; every other official source uses `recentLimit: 5`. The policy keeps one independent JSON/Atom/RSS feed per source. Official-list rows whose detail acquisition is unavailable remain explicit link-only entries. The curated `cs` set remains exactly the three CS sources; only those members belong in its OPML and combined `bundles/cs.{json,atom,rss}` timeline. The current test publisher is the localhost Docker/Compose instance. `.github/workflows/publish-cs-feeds.yml` has `state=disabled_manually` and must remain disabled: Pages is not the current publisher, no schedule or `main` push is publishing these feeds, and deployment acceptance remains pending.
 
 Intended public URL patterns, if a public static publisher is enabled later:
 
@@ -187,7 +187,7 @@ On an empty database, `ingest` bootstraps only the configured recent window plus
 
 ## Initial sources
 
-The public-source registry and fixtures cover NJU WebPlus/Sudy, Boshan/NJDX, and public employment information/recruitment streams. The official instance now contains twenty-two sources, including the three employment information streams, the recruitment-batch stream, and four representative college feeds for AI, Software, Mathematics, and Physics. The localhost Docker/Compose instance remains the current test publisher, while public deployment acceptance is still pending.
+The public-source registry and fixtures cover NJU WebPlus/Sudy, Boshan/NJDX, and public employment information/recruitment streams. The official instance now contains twenty-five sources, including the employment streams, four representative college feeds for AI, Software, Mathematics, and Physics, Student Exchange, Science and Technology Office notices, and the low-frequency Academic Calendar feed. The localhost Docker/Compose instance remains the current test publisher, while public deployment acceptance is still pending.
 
 More sources should preferably be added by contributing YAML under `sources/nju/` rather than adding a new crawler.
 

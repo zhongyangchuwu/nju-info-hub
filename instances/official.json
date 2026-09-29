@@ -28,7 +28,10 @@
       "nju-ai-notices",
       "nju-software-notices",
       "nju-math-announcements",
-      "nju-physics-notices"
+      "nju-physics-notices",
+      "nju-student-exchange",
+      "nju-science-tech",
+      "nju-academic-calendar"
     ],
     "sets": [
       {
@@ -134,6 +137,18 @@
       {
         "id": "nju-physics-notices",
         "recentLimit": 5
+      },
+      {
+        "id": "nju-student-exchange",
+        "recentLimit": 5
+      },
+      {
+        "id": "nju-science-tech",
+        "recentLimit": 5
+      },
+      {
+        "id": "nju-academic-calendar",
+        "recentLimit": 1
       }
     ]
   }

@@ -8,15 +8,15 @@ This inventory records source-level coverage, adapter fit, and official instance
 
 | Source | URL | Organization | Audience relevance | Adapter/status | Notes |
 | --- | --- | --- | --- | --- | --- |
-| Undergraduate School academic calendar | https://jw.nju.edu.cn/24809/list.htm | 本科生院 | Undergraduate students and teaching staff | WebPlus; registered | Calendar/resource stream rather than a general notice stream. |
+| Undergraduate School academic calendar | https://jw.nju.edu.cn/24809/list.htm | 本科生院 | Undergraduate students and teaching staff | WebPlus; official instance (`recentLimit=1`) | Calendar/resource stream rather than a general notice stream. |
 | Undergraduate School notices | https://jw.nju.edu.cn/ggtz/list.htm | 本科生院 | Undergraduate students and teaching staff | WebPlus; registered | Public list may include restricted details; current collector preserves those as link-only observations. |
 | Graduate School notices | https://grawww.nju.edu.cn/905/list.htm | 研究生院 | Graduate students, supervisors, and graduate administrators | WebPlus; registered | General graduate education notices. |
 | Student Affairs notices | https://xgb.nju.edu.cn/gsgg/list.htm | 党委学生工作部 | Students | WebPlus; registered | Mixed first-party, public-WeChat, and other public links are retained from the official list. |
 | Youth League announcements | https://tuanwei.nju.edu.cn/ggtz/list.htm | 共青团南京大学委员会 | Students and student organizations | WebPlus; registered | Some first-party details can be campus-network restricted. |
-| Student Exchange notices | https://stuex.nju.edu.cn/2539/list.htm | 国际化工作处学生交流办公室 | Students seeking exchange opportunities | WebPlus; registered | Some first-party details can be campus-network restricted. |
+| Student Exchange notices | https://stuex.nju.edu.cn/2539/list.htm | 国际化工作处学生交流办公室 | Students seeking exchange opportunities | WebPlus; official instance | Some first-party details can be campus-network restricted. |
 | ITSC notices | https://oi.nju.edu.cn/tzgg/listm.htm | 信息化建设管理服务中心 | All campus users | WebPlus; registered | Campus IT and service-operation notices. |
 | Library news, activities, and notices | https://lib.nju.edu.cn/xw/xwtz.htm | 南京大学图书馆 | Students, faculty, and researchers | WebPlus with selectors; registered | Intentionally a mixed stream, not notice-only. |
-| Science and Technology Office notices | https://scit.nju.edu.cn/10916/list.htm | 科学技术处 | Researchers, faculty, and research administrators | WebPlus; registered | Research administration and project notices. |
+| Science and Technology Office notices | https://scit.nju.edu.cn/10916/list.htm | 科学技术处 | Researchers, faculty, and research administrators | WebPlus; official instance | Research administration and project notices. |
 | Computer Science graduate notices | https://cs.nju.edu.cn/1703/list.htm | 计算机学院 | CS graduate students and supervisors | WebPlus; registered | College-level graduate stream. |
 | Computer Science internal notices | https://cs.nju.edu.cn/1702/list.htm | 计算机学院 | CS students and staff | WebPlus; registered | College-wide internal-facing public notices. |
 | Computer Science seminars | https://cs.nju.edu.cn/1706/list.htm | 计算机学院 | CS and research community | WebPlus; registered | Seminar and lecture stream. |
@@ -83,6 +83,18 @@ This batch tests the configuration-first goal across several college site famili
 The four sources required no college-specific TypeScript branches. AI reused the existing WebPlus adapter; the three Boshan colleges reuse the same Boshan list/detail boundary already used by Hospital and Asset Management. The only code change was generic support for Boshan editor PDFs stored in `data-pdf`, covered by fixture tests.
 
 M2J live admission started from the accepted 18-source snapshot (528 observations / 129 revisions / 95 attachments). The first 22-source startup run kept all existing sources bounded and admitted the four college streams at two pages each: AI added 28 observations / 5 full revisions / 6 attachments, while Software, Mathematics, and Physics each added 30 observations / 5 full revisions with 5, 9, and 5 attachments respectively. The resulting database was 22 sources / 646 observations / 149 revisions / 120 attachments. The immediate second collection again kept all 22 sources bounded; each new college source inserted 0 revisions and reported 5 unchanged, with global totals unchanged. Their JSON/Atom/RSS endpoints all returned HTTP 200 with consistent entry counts (28 for AI; 30 each for Software, Mathematics, and Physics), unique JSON Feed IDs, and working ETag revalidation (`304` with an empty body).
+
+## M2K-revalidated legacy WebPlus sources selected by M2L policy
+
+This batch revisits sources that were registered early but never admitted under the old collector behavior. The #82 overlap-frontier design removes the earlier deep-scan concern, so M2K re-ran each source from an empty database and immediately repeated the ingest before M2L admission.
+
+| Source | Policy | Revalidation evidence |
+| --- | --- | --- |
+| Student Exchange notices | official instance; `recentLimit=5` | The current list is active, with multiple September 2026 exchange announcements. Empty-database ingest visited 2 pages, observed 28 items, inserted 5 full revisions, and found 5 attachments; the immediate second ingest stayed at 2 pages with 0 inserted / 5 unchanged. |
+| Science and Technology Office notices | official instance; `recentLimit=5` | The list contains older pinned items ahead of September 2026 notices, exercising date-ranked bootstrap. Empty-database ingest visited 2 pages, observed 30 items, inserted 5 full revisions, and found 4 attachments; the second ingest inserted 0 / unchanged 5. |
+| Undergraduate School academic calendar | official instance; `recentLimit=1` | This is a low-frequency versioned resource stream rather than a normal notice stream. Empty-database ingest visited 2 pages, observed 16 yearly calendar items, enriched only the newest calendar, inserted 1 full revision, and found 3 attachments; the second ingest inserted 0 / unchanged 1. |
+
+M2L live admission started from the accepted 22-source snapshot (646 observations / 149 revisions / 120 attachments). The first 25-source startup run kept all existing sources bounded and added Student Exchange at 28 observations / 5 revisions / 5 attachments, Science and Technology Office at 30 / 5 / 4, and Academic Calendar at 16 / 1 / 3. The resulting database was 25 sources / 720 observations / 160 revisions / 132 attachments. The immediate second collection kept all 25 sources bounded and inserted no new revisions for these three sources. Their JSON/Atom/RSS endpoints all returned HTTP 200 with consistent entry counts (28, 30, and 16 respectively), unique JSON Feed IDs, and ETag revalidation returned HTTP 304 with an empty body.
 
 ## Deferred
 
