@@ -96,6 +96,20 @@ This batch revisits sources that were registered early but never admitted under 
 
 M2L live admission started from the accepted 22-source snapshot (646 observations / 149 revisions / 120 attachments). The first 25-source startup run kept all existing sources bounded and added Student Exchange at 28 observations / 5 revisions / 5 attachments, Science and Technology Office at 30 / 5 / 4, and Academic Calendar at 16 / 1 / 3. The resulting database was 25 sources / 720 observations / 160 revisions / 132 attachments. The immediate second collection kept all 25 sources bounded and inserted no new revisions for these three sources. Their JSON/Atom/RSS endpoints all returned HTTP 200 with consistent entry counts (28, 30, and 16 respectively), unique JSON Feed IDs, and ETag revalidation returned HTTP 304 with an empty body.
 
+## M2M-validated additional college sources
+
+This batch extends college coverage without adding a new adapter. All five sources are registered independently and remain outside `instances/official.json` until the separate admission step.
+
+| Source | URL | Organization | Adapter/status | Live evidence and notes |
+| --- | --- | --- | --- | --- |
+| Business School notices | https://nubs.nju.edu.cn/8896/list.htm | 商学院 | WebPlus defaults; registered | The list contains older pinned rows ahead of September 2026 notices, exercising date-ranked bootstrap. Empty-database ingest with limit 5 visited 2 pages, observed 28 items, inserted 5 full revisions, and found 7 attachments; the immediate second ingest stayed at 2 pages with 0 inserted / 5 unchanged. |
+| Chemistry and Chemical Engineering student notices | https://chemosa.nju.edu.cn/tzgg/index.html | 化学化工学院 | Boshan (`channelId=16854`, `.view-cnt`); registered | The public Boshan API exposes 15 items/page and active undergraduate/graduate student notices. Empty-database ingest visited 2 pages, observed 30 items, inserted 5 full revisions, and found 2 attachments; the second ingest inserted 0 / unchanged 5. |
+| Environment School notices | https://hjxy.nju.edu.cn/sy/tzgg/index.html | 环境学院 | Boshan (`channelId=12778`, `#content`); registered | The Boshan list mixes first-party details with cross-site public notices. Discovery correctly classifies cross-site rows as `external-public`. With limit 5, empty-database ingest visited 2 pages, observed 30 items, produced 2 full revisions plus 3 link-only candidates, and found 5 attachments; the second ingest inserted 0 / unchanged 2. The content selector was narrowed from `.wz` to `#content` after live QA showed `.wz` also included page JavaScript controls. |
+| Earth Sciences and Engineering notices | https://es.nju.edu.cn/4296/list.htm | 地球科学与工程学院 | WebPlus defaults; registered | The list has persistent pinned rows from 2019/2025/2026 ahead of current September 2026 notices. Empty-database ingest still stayed bounded to 2 pages, observed 27 items, inserted 5 full revisions, and found 7 attachments; second ingest inserted 0 / unchanged 5. |
+| Modern Engineering and Applied Sciences notices | https://eng.nju.edu.cn/4968/list.htm | 现代工程与应用科学学院 | WebPlus defaults; registered | Current postgraduate admission notices parse through the existing WebPlus adapter; embedded PDF attachments are already covered by the shared parser. Empty-database ingest visited 2 pages, observed 28 items, inserted 5 full revisions, and found 9 attachments; second ingest inserted 0 / unchanged 5. |
+
+No college-specific TypeScript branch was added. The only implementation changes in M2M are declarative source YAML plus registry/config coverage; all parsing behavior comes from the existing WebPlus and Boshan adapters.
+
 ## Deferred
 
 | Source | URL | Organization | Audience relevance | Adapter/status | Live evidence and notes |

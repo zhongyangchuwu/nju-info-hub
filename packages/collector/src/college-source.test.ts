@@ -42,6 +42,46 @@ const CASES = [
       selectors: { content: ".mn-contentInfo" },
     },
   },
+  {
+    file: "business-school-notices.yaml",
+    id: "nju-business-school-notices",
+    organizationId: "nju-business-school",
+    adapter: { type: "webplus" },
+  },
+  {
+    file: "chemistry-student-notices.yaml",
+    id: "nju-chemistry-student-notices",
+    organizationId: "nju-chemistry-school",
+    adapter: {
+      type: "boshan",
+      channelId: 16854,
+      pageSize: 15,
+      selectors: { content: ".view-cnt" },
+    },
+  },
+  {
+    file: "environment-notices.yaml",
+    id: "nju-environment-notices",
+    organizationId: "nju-environment-school",
+    adapter: {
+      type: "boshan",
+      channelId: 12778,
+      pageSize: 15,
+      selectors: { content: "#content" },
+    },
+  },
+  {
+    file: "earth-sciences-notices.yaml",
+    id: "nju-earth-sciences-notices",
+    organizationId: "nju-earth-sciences-school",
+    adapter: { type: "webplus" },
+  },
+  {
+    file: "modern-engineering-notices.yaml",
+    id: "nju-modern-engineering-notices",
+    organizationId: "nju-modern-engineering-school",
+    adapter: { type: "webplus" },
+  },
 ] as const;
 describe("representative college source configs", () => {
   it.each(CASES)("loads $file with the expected generic adapter", async ({

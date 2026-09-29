@@ -1,0 +1,14 @@
+schemaVersion: 1
+id: nju-environment-notices
+name: 环境学院通知公告
+organization:
+  id: nju-environment-school
+  name: 南京大学环境学院
+  kind: academic-unit
+url: https://hjxy.nju.edu.cn/sy/tzgg/index.html
+adapter:
+  type: boshan
+  channelId: 12778
+  pageSize: 15
+  selectors:
+    content: '#content'

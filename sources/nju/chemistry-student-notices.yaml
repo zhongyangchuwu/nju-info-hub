@@ -1,0 +1,14 @@
+schemaVersion: 1
+id: nju-chemistry-student-notices
+name: 化学化工学院学生园地通知公告
+organization:
+  id: nju-chemistry-school
+  name: 南京大学化学化工学院
+  kind: academic-unit
+url: https://chemosa.nju.edu.cn/tzgg/index.html
+adapter:
+  type: boshan
+  channelId: 16854
+  pageSize: 15
+  selectors:
+    content: .view-cnt

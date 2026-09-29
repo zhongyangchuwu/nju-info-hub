@@ -187,7 +187,7 @@ On an empty database, `ingest` bootstraps only the configured recent window plus
 
 ## Initial sources
 
-The public-source registry and fixtures cover NJU WebPlus/Sudy, Boshan/NJDX, and public employment information/recruitment streams. The official instance now contains twenty-five sources, including the employment streams, four representative college feeds for AI, Software, Mathematics, and Physics, Student Exchange, Science and Technology Office notices, and the low-frequency Academic Calendar feed. The localhost Docker/Compose instance remains the current test publisher, while public deployment acceptance is still pending.
+The public-source registry and fixtures cover NJU WebPlus/Sudy, Boshan/NJDX, and public employment information/recruitment streams. The official instance now contains twenty-five sources, including the employment streams, four representative college feeds for AI, Software, Mathematics, and Physics, Student Exchange, Science and Technology Office notices, and the low-frequency Academic Calendar feed. Five additional college feeds for Business, Chemistry/Chemical Engineering student notices, Environment, Earth Sciences/Engineering, and Modern Engineering/Applied Sciences are registered and live-validated but not yet admitted. The localhost Docker/Compose instance remains the current test publisher, while public deployment acceptance is still pending.
 
 More sources should preferably be added by contributing YAML under `sources/nju/` rather than adding a new crawler.
 

@@ -1,0 +1,10 @@
+schemaVersion: 1
+id: nju-modern-engineering-notices
+name: 现代工程与应用科学学院通知公告
+organization:
+  id: nju-modern-engineering-school
+  name: 南京大学现代工程与应用科学学院
+  kind: academic-unit
+url: https://eng.nju.edu.cn/4968/list.htm
+adapter:
+  type: webplus

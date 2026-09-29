@@ -1,0 +1,10 @@
+schemaVersion: 1
+id: nju-earth-sciences-notices
+name: 地球科学与工程学院通知公告
+organization:
+  id: nju-earth-sciences-school
+  name: 南京大学地球科学与工程学院
+  kind: academic-unit
+url: https://es.nju.edu.cn/4296/list.htm
+adapter:
+  type: webplus

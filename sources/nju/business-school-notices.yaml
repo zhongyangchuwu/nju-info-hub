@@ -1,0 +1,10 @@
+schemaVersion: 1
+id: nju-business-school-notices
+name: 商学院通知公告
+organization:
+  id: nju-business-school
+  name: 南京大学商学院
+  kind: academic-unit
+url: https://nubs.nju.edu.cn/8896/list.htm
+adapter:
+  type: webplus
