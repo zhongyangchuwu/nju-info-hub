@@ -19,6 +19,45 @@ describe('parseSourceConfig', () => {
     expect(source.classification).toBeUndefined();
   });
 
+  it('parses a Boshan source', () => {
+    const source = parseSourceConfig({
+      ...minimalSourceConfig,
+      id: 'nju-hospital-announcements',
+      url: 'https://hospital.nju.edu.cn/xwgg/ggtz/index.html',
+      adapter: {
+        type: 'boshan',
+        channelId: 18099,
+        pageSize: 15,
+        selectors: { content: '#zoom' },
+      },
+    });
+
+    expect(source.adapter).toEqual({
+      type: 'boshan',
+      channelId: 18099,
+      pageSize: 15,
+      selectors: { content: '#zoom' },
+    });
+  });
+
+  it.each([
+    { channelId: 0, pageSize: 15, content: '#zoom' },
+    { channelId: 18099, pageSize: 0, content: '#zoom' },
+    { channelId: 18099, pageSize: 15, content: '' },
+  ])('rejects invalid Boshan adapter config: %o', ({ channelId, pageSize, content }) => {
+    expect(() =>
+      parseSourceConfig({
+        ...minimalSourceConfig,
+        adapter: {
+          type: 'boshan',
+          channelId,
+          pageSize,
+          selectors: { content },
+        },
+      }),
+    ).toThrow();
+  });
+
   it('parses optional source classification metadata', () => {
     const source = parseSourceConfig({
       ...minimalSourceConfig,

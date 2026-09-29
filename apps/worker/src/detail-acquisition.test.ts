@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { fetchRawDocument } from "@nju-info/collector";
 import { sourceItemIdFromUrl, type DiscoveredItem, type RawDocument } from "@nju-info/core";
-import { UnsupportedDetailAcquisitionError, fetchWebPlusDetail } from "./detail-acquisition.js";
+import { UnsupportedDetailAcquisitionError, fetchSourceDetail } from "./detail-acquisition.js";
 
 vi.mock("@nju-info/collector", () => ({ fetchRawDocument: vi.fn() }));
 
@@ -19,7 +19,7 @@ describe("worker detail acquisition", () => {
   ] as const)("rejects %s before requesting detail", async (kind, url) => {
     fetchDetail.mockClear();
 
-    await expect(fetchWebPlusDetail(item(url, kind))).rejects.toMatchObject({
+    await expect(fetchSourceDetail(item(url, kind))).rejects.toMatchObject({
       name: "UnsupportedDetailAcquisitionError",
       acquisitionKind: kind,
       sourceId,
@@ -28,9 +28,11 @@ describe("worker detail acquisition", () => {
     expect(fetchDetail).not.toHaveBeenCalled();
   });
 
-  it("requests ordinary WebPlus detail without changing its response", async () => {
+  it.each([
+    ["webplus-detail", "https://grawww.nju.edu.cn/d8/32/c905a841778/page.htm"],
+    ["boshan-detail", "https://hospital.nju.edu.cn/xwgg/ggtz/20260928/i419633.html"],
+  ] as const)("requests supported %s detail without changing its response", async (kind, url) => {
     fetchDetail.mockClear();
-    const url = "https://grawww.nju.edu.cn/d8/32/c905a841778/page.htm";
     const raw: RawDocument = {
       sourceId,
       url,
@@ -41,7 +43,7 @@ describe("worker detail acquisition", () => {
     };
     fetchDetail.mockResolvedValueOnce(raw);
 
-    await expect(fetchWebPlusDetail(item(url, "webplus-detail"))).resolves.toBe(raw);
+    await expect(fetchSourceDetail(item(url, kind))).resolves.toBe(raw);
     expect(fetchDetail).toHaveBeenCalledExactlyOnceWith(sourceId, url);
   });
 });

@@ -1,9 +1,14 @@
 import { resolve } from "node:path";
-import { discoverWebPlusItems, fetchRawDocument, loadSourceDirectory } from "@nju-info/collector";
-import type { WebPlusSourceConfig } from "@nju-info/core";
+import {
+  discoverSourcePage,
+  fetchRawDocument,
+  initialSourcePageUrl,
+  loadSourceDirectory,
+} from "@nju-info/collector";
+import type { SourceConfig } from "@nju-info/core";
 import { collectNotices, discoverPages, ingestSource } from "@nju-info/worker/collection";
 
-function findSource(sources: WebPlusSourceConfig[], id: string): WebPlusSourceConfig {
+function findSource(sources: SourceConfig[], id: string): SourceConfig {
   const source = sources.find((item) => item.id === id);
   if (!source) throw new Error(`unknown source: ${id}`);
   return source;
@@ -56,9 +61,9 @@ export async function runSourceCommand(
   }
 
   if (command === "discover") {
-    const listRaw = await fetchRawDocument(source.id, source.url);
-    const items = discoverWebPlusItems(listRaw, source);
-    console.log(JSON.stringify(items.slice(0, positiveInteger(thirdArg, 10)), null, 2));
+    const listRaw = await fetchRawDocument(source.id, initialSourcePageUrl(source));
+    const page = discoverSourcePage(listRaw, source);
+    console.log(JSON.stringify(page.items.slice(0, positiveInteger(thirdArg, 10)), null, 2));
     return;
   }
 

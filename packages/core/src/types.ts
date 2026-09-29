@@ -11,6 +11,7 @@ export interface RawDocument {
 
 export type AcquisitionKind =
   | "webplus-detail"
+  | "boshan-detail"
   | "public-wechat"
   | "external-public";
 

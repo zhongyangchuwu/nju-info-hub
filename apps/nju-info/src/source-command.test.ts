@@ -9,6 +9,8 @@ import { runSourceCommand } from "./source-command.js";
 
 const sourceUrl = "https://stuex.nju.edu.cn/2539/list.htm";
 const baseUrl = "https://stuex.nju.edu.cn";
+const hospitalApiUrl =
+  "https://hospital.nju.edu.cn/njdx/openapi/t/info/list.do?channelid=MTgwOTk%3D&pageno=MQ%3D%3D&pagesize=MTU%3D";
 const detail = (name: string) => `${baseUrl}/${name}/page.htm`;
 const restriction = readFileSync(
   new URL("../../../packages/collector/fixtures/webplus/campus-restricted.html", import.meta.url),
@@ -584,6 +586,33 @@ describe("worker restricted details", () => {
       rmSync(directory, { recursive: true, force: true });
     }
   });
+  it("routes Boshan discovery through its public list API", async () => {
+    const requested = mockPages({
+      [hospitalApiUrl]: {
+        body: JSON.stringify({
+          pages: 1,
+          infolist: [{
+            iid: 419633,
+            channelid: 18099,
+            title: "Hospital notice",
+            releasetime: 1790208392000,
+            url: "http://hospital.nju.edu.cn//xwgg/ggtz/20260928/i419633.html",
+          }],
+        }),
+      },
+    });
+    const result = await runSource("nju-hospital-announcements", "discover", "1");
+    expect(JSON.parse(result.output)).toEqual([
+      expect.objectContaining({
+        sourceItemId: "419633",
+        url: "https://hospital.nju.edu.cn/xwgg/ggtz/20260928/i419633.html",
+        acquisitionKind: "boshan-detail",
+        publishedAtRaw: "2026-09-24",
+      }),
+    ]);
+    expect(requested).toEqual([hospitalApiUrl]);
+  });
+
   it("keeps mixed acquisition kinds and list order without fetching details", async () => {
     const listUrl = "https://xgb.nju.edu.cn/gsgg/list.htm";
     const wechatUrl = "https://mp.weixin.qq.com/s/public-article";

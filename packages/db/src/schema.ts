@@ -1,7 +1,7 @@
 import { normalizePublicationDate } from "@nju-info/core";
 import type { DatabaseSync } from "node:sqlite";
 
-export const DATABASE_SCHEMA_VERSION = 3;
+export const DATABASE_SCHEMA_VERSION = 4;
 
 const INITIAL_SCHEMA = `
 CREATE TABLE sources (
@@ -83,7 +83,7 @@ CREATE TABLE source_item_observations (
   published_at_raw TEXT,
   published_on TEXT,
   acquisition_kind TEXT NOT NULL CHECK (
-    acquisition_kind IN ('webplus-detail', 'public-wechat', 'external-public')
+    acquisition_kind IN ('webplus-detail', 'boshan-detail', 'public-wechat', 'external-public')
   ),
   created_at TEXT NOT NULL,
   UNIQUE (source_item_row_id, revision_number)
@@ -98,7 +98,7 @@ export function migrateDatabase(database: DatabaseSync): void {
   const currentVersion = Number(row?.user_version ?? 0);
 
   if (currentVersion === DATABASE_SCHEMA_VERSION) return;
-  if (![0, 1, 2].includes(currentVersion)) {
+  if (![0, 1, 2, 3].includes(currentVersion)) {
     throw new Error(
       `unsupported database schema version ${currentVersion}; expected ${DATABASE_SCHEMA_VERSION}`,
     );
@@ -108,20 +108,45 @@ export function migrateDatabase(database: DatabaseSync): void {
   try {
     if (currentVersion === 0) {
       database.exec(INITIAL_SCHEMA);
-    } else if (currentVersion === 1) {
-      database.exec("ALTER TABLE notice_revisions ADD COLUMN published_on TEXT");
-      const rows = database
-        .prepare("SELECT id, published_at_raw FROM notice_revisions")
-        .iterate() as Iterable<{ id: number; published_at_raw: string | null }>;
-      const update = database.prepare(
-        "UPDATE notice_revisions SET published_on = ? WHERE id = ?",
-      );
-      for (const row of rows) {
-        const publishedOn = normalizePublicationDate(row.published_at_raw);
-        if (publishedOn !== null) update.run(publishedOn, row.id);
+      database.exec(SOURCE_ITEM_OBSERVATIONS_SCHEMA);
+    } else {
+      if (currentVersion === 1) {
+        database.exec("ALTER TABLE notice_revisions ADD COLUMN published_on TEXT");
+        const rows = database
+          .prepare("SELECT id, published_at_raw FROM notice_revisions")
+          .iterate() as Iterable<{ id: number; published_at_raw: string | null }>;
+        const update = database.prepare(
+          "UPDATE notice_revisions SET published_on = ? WHERE id = ?",
+        );
+        for (const row of rows) {
+          const publishedOn = normalizePublicationDate(row.published_at_raw);
+          if (publishedOn !== null) update.run(publishedOn, row.id);
+        }
+      }
+
+      if (currentVersion <= 2) {
+        database.exec(SOURCE_ITEM_OBSERVATIONS_SCHEMA);
+      } else {
+        database.exec("DROP INDEX source_item_observations_item_idx");
+        database.exec(
+          "ALTER TABLE source_item_observations RENAME TO source_item_observations_v3",
+        );
+        database.exec(SOURCE_ITEM_OBSERVATIONS_SCHEMA);
+        database.exec(`
+          INSERT INTO source_item_observations (
+            id, source_item_row_id, revision_number, raw_document_id,
+            content_sha256, title, published_at_raw, published_on,
+            acquisition_kind, created_at
+          )
+          SELECT
+            id, source_item_row_id, revision_number, raw_document_id,
+            content_sha256, title, published_at_raw, published_on,
+            acquisition_kind, created_at
+          FROM source_item_observations_v3
+        `);
+        database.exec("DROP TABLE source_item_observations_v3");
       }
     }
-    database.exec(SOURCE_ITEM_OBSERVATIONS_SCHEMA);
     database.exec(`PRAGMA user_version = ${DATABASE_SCHEMA_VERSION}`);
     database.exec("COMMIT");
   } catch (error) {

@@ -35,12 +35,16 @@ All three use `recentLimit: 5`. Their first pages span months rather than days; 
 
 Before activation, isolated empty-database ingestion with limit 5 visited two pages and observed 28 items for each source. Security produced 5 full revisions and 23 link-only entries; Psychology produced 1 full revision and 27 public-WeChat link-only entries; Logistics produced 3 full revisions, 2 external-public observations, and 25 total link-only entries. No retained runtime database was used.
 
-## Needs validation or a non-WebPlus adapter
+## M2C-validated Boshan sources
+
+These sources share the same public Boshan list API and are registered through one reusable `boshan` adapter. They are not yet selected by `instances/official.json`; registration and official publication remain separate review steps.
 
 | Source | URL | Organization | Audience relevance | Adapter/status | Live evidence and notes |
 | --- | --- | --- | --- | --- | --- |
-| University Hospital announcements | https://hospital.nju.edu.cn/xwgg/ggtz/index.html | 南京大学医院 | Students and staff; health services, insurance, vaccination, and clinic schedules | Non-WebPlus list; not registered | The server HTML uses the Boshan `/njdx/front/ui/` stack and embeds records in a JavaScript `dataList` object (`channelId=18099`) rather than rendered list anchors. Generic WebPlus discovery returned `[]`. A reusable adapter for this source family is required before registration. |
-| Asset Management notices | https://zcc.nju.edu.cn/sy/tzzhxx/index.html | 资产管理处 | Staff and units; housing, assets, campus premises, and procurement; occasional student housing relevance | Non-WebPlus list; not registered | The Boshan page embeds records in JavaScript `dataList` (`channelId=13968`) and renders them client-side; there are no server-rendered list anchors for the current adapter. Generic WebPlus discovery returned `[]`. A reusable adapter for this source family is required before registration. |
+| University Hospital announcements | https://hospital.nju.edu.cn/xwgg/ggtz/index.html | 南京大学医院 | Students and staff; health services, insurance, vaccination, and clinic schedules | Boshan (`channelId=18099`); registered | Public list discovery uses `/njdx/openapi/t/info/list.do`; stable identity is the API `iid`. Detail pages expose `ArticleTitle` / `PubDate` metadata and `#zoom` content. Empty-database live ingest with limit 5 visited 2 pages, observed 30 items, inserted 5 full revisions, and found 1 attachment. |
+| Asset Management notices | https://zcc.nju.edu.cn/sy/tzzhxx/index.html | 资产管理处 | Staff and units; housing, assets, campus premises, and procurement; occasional student housing relevance | Boshan (`channelId=13968`); registered | Uses the same public list API and `iid` identity; detail content is configured as `#word`. Empty-database live ingest with limit 5 visited 2 pages, observed 30 items, inserted 5 full revisions, and found 3 attachments. |
+
+The adapter normalizes same-host API links to the source HTTPS origin before persistence, so legacy `http://host//path` values returned by the API do not leak into feeds. Fixture tests cover paging, channel mismatch failure, configured detail selectors, URL normalization, and DFS attachments.
 
 ## Deferred
 

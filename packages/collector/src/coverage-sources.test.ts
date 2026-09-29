@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import type { RawDocument, WebPlusSourceConfig } from "@nju-info/core";
+import { webPlusSourceConfigSchema, type RawDocument, type WebPlusSourceConfig } from "@nju-info/core";
 import { describe, expect, it } from "vitest";
 import { loadSourceFile } from "./registry.js";
 import { discoverWebPlusPage } from "./webplus.js";
@@ -14,9 +14,9 @@ function fixture(name: string): string {
 }
 
 async function source(name: string): Promise<WebPlusSourceConfig> {
-  return await loadSourceFile(fileURLToPath(
+  return webPlusSourceConfigSchema.parse(await loadSourceFile(fileURLToPath(
     new URL(`../../../sources/nju/${name}`, import.meta.url),
-  ));
+  )));
 }
 
 function raw(sourceId: string, url: string, body: string): RawDocument {

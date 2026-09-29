@@ -63,6 +63,10 @@ const webPlusSelectorsSchema = z.object({
   content: z.string().min(1).optional(),
 }).strict();
 
+const boshanSelectorsSchema = z.object({
+  content: z.string().min(1),
+}).strict();
+
 export const webPlusSourceConfigSchema = sourceBaseSchema.extend({
   adapter: z.object({
     type: z.literal('webplus'),
@@ -70,10 +74,31 @@ export const webPlusSourceConfigSchema = sourceBaseSchema.extend({
   }).strict(),
 });
 
+export const boshanSourceConfigSchema = sourceBaseSchema.extend({
+  adapter: z.object({
+    type: z.literal('boshan'),
+    channelId: z.number().int().positive(),
+    pageSize: z.number().int().positive().max(100),
+    selectors: boshanSelectorsSchema,
+  }).strict(),
+});
+
+export const sourceConfigSchema = z.union([
+  webPlusSourceConfigSchema,
+  boshanSourceConfigSchema,
+]);
+
 export function parseSourceConfig(input: unknown): SourceConfig {
-  return webPlusSourceConfigSchema.parse(input);
+  return sourceConfigSchema.parse(input);
 }
 
 export type WebPlusSourceConfig = z.infer<typeof webPlusSourceConfigSchema>;
-export type SourceConfig = WebPlusSourceConfig;
+export type BoshanSourceConfig = z.infer<typeof boshanSourceConfigSchema>;
+export type SourceConfig = z.infer<typeof sourceConfigSchema>;
+
+export function isBoshanSourceConfig(
+  source: SourceConfig,
+): source is BoshanSourceConfig {
+  return source.adapter.type === 'boshan';
+}
 

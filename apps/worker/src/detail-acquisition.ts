@@ -1,9 +1,14 @@
 import { fetchRawDocument } from "@nju-info/collector";
 import type { DiscoveredItem, RawDocument } from "@nju-info/core";
 
+type SupportedDetailAcquisitionKind = "webplus-detail" | "boshan-detail";
+
 export class UnsupportedDetailAcquisitionError extends Error {
   constructor(
-    readonly acquisitionKind: Exclude<DiscoveredItem["acquisitionKind"], "webplus-detail">,
+    readonly acquisitionKind: Exclude<
+      DiscoveredItem["acquisitionKind"],
+      SupportedDetailAcquisitionKind
+    >,
     readonly sourceId: string,
     readonly url: string,
   ) {
@@ -12,9 +17,14 @@ export class UnsupportedDetailAcquisitionError extends Error {
   }
 }
 
-export async function fetchWebPlusDetail(item: DiscoveredItem): Promise<RawDocument> {
-  if (item.acquisitionKind !== "webplus-detail") {
+export async function fetchSourceDetail(item: DiscoveredItem): Promise<RawDocument> {
+  if (
+    item.acquisitionKind !== "webplus-detail" &&
+    item.acquisitionKind !== "boshan-detail"
+  ) {
     throw new UnsupportedDetailAcquisitionError(item.acquisitionKind, item.sourceId, item.url);
   }
   return fetchRawDocument(item.sourceId, item.url);
 }
+
+export const fetchWebPlusDetail = fetchSourceDetail;

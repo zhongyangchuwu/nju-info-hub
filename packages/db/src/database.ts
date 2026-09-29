@@ -493,6 +493,7 @@ export class InfoHubDatabase implements Disposable {
       throw new Error("source item title must be a string");
     }
     if (item.acquisitionKind !== "webplus-detail"
+      && item.acquisitionKind !== "boshan-detail"
       && item.acquisitionKind !== "public-wechat"
       && item.acquisitionKind !== "external-public") {
       throw new Error(`unsupported source item acquisition kind: ${item.acquisitionKind}`);

@@ -170,7 +170,7 @@ describe("InfoHubDatabase", () => {
 
       const inspection = new DatabaseSync(temporary.path, { readOnly: true });
       try {
-        expect(inspection.prepare("PRAGMA user_version").get()).toEqual({ user_version: 3 });
+        expect(inspection.prepare("PRAGMA user_version").get()).toEqual({ user_version: DATABASE_SCHEMA_VERSION });
         expect(
           inspection
             .prepare(
@@ -1148,7 +1148,7 @@ describe("InfoHubDatabase", () => {
       try {
         const inspection = new DatabaseSync(path, { readOnly: true });
         try {
-          expect(inspection.prepare("PRAGMA user_version").get()).toEqual({ user_version: 3 });
+          expect(inspection.prepare("PRAGMA user_version").get()).toEqual({ user_version: DATABASE_SCHEMA_VERSION });
           expect(inspection.prepare("SELECT * FROM notice_revisions ORDER BY id").all())
             .toEqual(before.map((row, index) => ({
               ...row,
@@ -1278,7 +1278,7 @@ describe("InfoHubDatabase", () => {
       try {
         const inspection = new DatabaseSync(path, { readOnly: true });
         try {
-          expect(inspection.prepare("PRAGMA user_version").get()).toEqual({ user_version: 3 });
+          expect(inspection.prepare("PRAGMA user_version").get()).toEqual({ user_version: DATABASE_SCHEMA_VERSION });
           expect(inspection.prepare("SELECT * FROM notice_revisions ORDER BY id").all())
             .toEqual(before);
           expect(inspection.prepare("SELECT COUNT(*) AS count FROM source_item_observations").get())
@@ -1324,11 +1324,11 @@ describe("InfoHubDatabase", () => {
   it("rejects unknown database schema versions without changing them", () => {
     const database = new DatabaseSync(":memory:");
     try {
-      database.exec("PRAGMA user_version = 4");
+      database.exec("PRAGMA user_version = 5");
       expect(() => migrateDatabase(database)).toThrow(
-        "unsupported database schema version 4; expected 3",
+        "unsupported database schema version 5; expected 4",
       );
-      expect(database.prepare("PRAGMA user_version").get()).toEqual({ user_version: 4 });
+      expect(database.prepare("PRAGMA user_version").get()).toEqual({ user_version: 5 });
     } finally {
       database.close();
     }

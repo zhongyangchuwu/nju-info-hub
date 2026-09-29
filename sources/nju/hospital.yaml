@@ -1,0 +1,14 @@
+schemaVersion: 1
+id: nju-hospital-announcements
+name: 南京大学医院公告通知
+organization:
+  id: nju-hospital
+  name: 南京大学医院
+  kind: service-unit
+url: https://hospital.nju.edu.cn/xwgg/ggtz/index.html
+adapter:
+  type: boshan
+  channelId: 18099
+  pageSize: 15
+  selectors:
+    content: '#zoom'

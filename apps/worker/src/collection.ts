@@ -2,20 +2,21 @@ import { resolve } from "node:path";
 import { InfoHubDatabase, type DatabaseStats } from "@nju-info/db";
 import {
   RestrictedDetailError,
-  discoverWebPlusPage,
+  discoverSourcePage,
   fetchRawDocument,
+  initialSourcePageUrl,
   orderDiscoveredItemsByPublicationRecency,
-  parseWebPlusNotice,
+  parseSourceNotice,
 } from "@nju-info/collector";
 import type {
   DiscoveredItem,
   ParsedNotice,
   RawDocument,
-  WebPlusSourceConfig,
+  SourceConfig,
 } from "@nju-info/core";
 import {
   UnsupportedDetailAcquisitionError,
-  fetchWebPlusDetail,
+  fetchSourceDetail,
 } from "./detail-acquisition.js";
 
 export interface IngestSummary {
@@ -51,7 +52,7 @@ export interface DiscoverPagesOptions {
  * still create new revisions.
  */
 export async function discoverPages(
-  source: WebPlusSourceConfig,
+  source: SourceConfig,
   options: DiscoverPagesOptions,
 ): Promise<{
   pagesVisited: number;
@@ -64,7 +65,7 @@ export async function discoverPages(
   const knownSourceItemIds = options.knownSourceItemIds ?? new Set<string>();
   const incremental = knownSourceItemIds.size > 0;
   const maxOverlapSearchPages = options.maxOverlapSearchPages ?? 10;
-  let pageUrl: string | undefined = source.url;
+  let pageUrl: string | undefined = initialSourcePageUrl(source);
   let pagesVisited = 0;
   let reachedBootstrapLimit = false;
   let foundOverlap = false;
@@ -72,7 +73,7 @@ export async function discoverPages(
     seenPages.add(pageUrl);
     const raw = await fetchRawDocument(source.id, pageUrl);
     options.onPage?.(raw);
-    const page = discoverWebPlusPage(raw, source);
+    const page = discoverSourcePage(raw, source);
     let pageHasKnownItem = false;
     const isIncrementalLookahead = incremental && foundOverlap;
     for (const item of page.items) {
@@ -148,7 +149,7 @@ export async function discoverPages(
 }
 
 export async function collectNotices(
-  source: WebPlusSourceConfig,
+  source: SourceConfig,
   limit: number,
   onPage?: (raw: RawDocument) => void,
   onNotice?: (raw: RawDocument, notice: ParsedNotice) => void,
@@ -172,8 +173,8 @@ export async function collectNotices(
     },
     onCandidate: async (item) => {
       try {
-        const detailRaw = await fetchWebPlusDetail(item);
-        const notice = parseWebPlusNotice(detailRaw, source, item);
+        const detailRaw = await fetchSourceDetail(item);
+        const notice = parseSourceNotice(detailRaw, source, item);
         onNotice?.(detailRaw, notice);
         notices.push(notice);
       } catch (error) {
@@ -197,7 +198,7 @@ export async function collectNotices(
 }
 
 export async function ingestSource(
-  source: WebPlusSourceConfig,
+  source: SourceConfig,
   databasePath: string,
   recentItemLimit: number,
 ): Promise<IngestSummary> {
