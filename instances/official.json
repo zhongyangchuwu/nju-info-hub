@@ -18,7 +18,9 @@
       "nju-student-affairs-notices",
       "nju-security-office-notices",
       "nju-psychology-center-bulletin",
-      "nju-logistics-notices"
+      "nju-logistics-notices",
+      "nju-hospital-announcements",
+      "nju-asset-management-notices"
     ],
     "sets": [
       {
@@ -83,6 +85,14 @@
       },
       {
         "id": "nju-logistics-notices",
+        "recentLimit": 5
+      },
+      {
+        "id": "nju-hospital-announcements",
+        "recentLimit": 5
+      },
+      {
+        "id": "nju-asset-management-notices",
         "recentLimit": 5
       }
     ]

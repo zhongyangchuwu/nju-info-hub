@@ -37,14 +37,14 @@ Before activation, isolated empty-database ingestion with limit 5 visited two pa
 
 ## M2C-validated Boshan sources
 
-These sources share the same public Boshan list API and are registered through one reusable `boshan` adapter. They are not yet selected by `instances/official.json`; registration and official publication remain separate review steps.
+These sources share the same public Boshan list API and are registered through one reusable `boshan` adapter. M2D selects both in `instances/official.json` for independent per-source publication; they are not added to the `cs` curated set.
 
 | Source | URL | Organization | Audience relevance | Adapter/status | Live evidence and notes |
 | --- | --- | --- | --- | --- | --- |
-| University Hospital announcements | https://hospital.nju.edu.cn/xwgg/ggtz/index.html | 南京大学医院 | Students and staff; health services, insurance, vaccination, and clinic schedules | Boshan (`channelId=18099`); registered | Public list discovery uses `/njdx/openapi/t/info/list.do`; stable identity is the API `iid`. Detail pages expose `ArticleTitle` / `PubDate` metadata and `#zoom` content. Empty-database live ingest with limit 5 visited 2 pages, observed 30 items, inserted 5 full revisions, and found 1 attachment. |
-| Asset Management notices | https://zcc.nju.edu.cn/sy/tzzhxx/index.html | 资产管理处 | Staff and units; housing, assets, campus premises, and procurement; occasional student housing relevance | Boshan (`channelId=13968`); registered | Uses the same public list API and `iid` identity; detail content is configured as `#word`. Empty-database live ingest with limit 5 visited 2 pages, observed 30 items, inserted 5 full revisions, and found 3 attachments. |
+| University Hospital announcements | https://hospital.nju.edu.cn/xwgg/ggtz/index.html | 南京大学医院 | Students and staff; health services, insurance, vaccination, and clinic schedules | Boshan (`channelId=18099`); official instance | Public list discovery uses `/njdx/openapi/t/info/list.do`; stable identity is the API `iid`. Detail pages expose `ArticleTitle` / `PubDate` metadata and `#zoom` content. Empty-database live ingest with limit 5 visited 2 pages, observed 30 items, inserted 5 full revisions, and found 1 attachment. |
+| Asset Management notices | https://zcc.nju.edu.cn/sy/tzzhxx/index.html | 资产管理处 | Staff and units; housing, assets, campus premises, and procurement; occasional student housing relevance | Boshan (`channelId=13968`); official instance | Uses the same public list API and `iid` identity; detail content is configured as `#word`. Empty-database live ingest with limit 5 visited 2 pages, observed 30 items, inserted 5 full revisions, and found 3 attachments. |
 
-The adapter normalizes same-host API links to the source HTTPS origin before persistence, so legacy `http://host//path` values returned by the API do not leak into feeds. Fixture tests cover paging, channel mismatch failure, configured detail selectors, URL normalization, and DFS attachments.
+The adapter normalizes same-host API links to the source HTTPS origin before persistence, so legacy `http://host//path` values returned by the API do not leak into feeds. Fixture tests cover paging, channel mismatch failure, configured detail selectors, URL normalization, and DFS attachments. M2D live migration upgraded the retained localhost database from schema v3 to v4 without losing prior observations; the first 14-source startup run kept all existing sources bounded and added 5 full revisions from each Boshan source. JSON/Atom/RSS endpoints for both new sources returned HTTP 200, with unique JSON Feed item IDs and working ETag/304 revalidation.
 
 ## Deferred
 
