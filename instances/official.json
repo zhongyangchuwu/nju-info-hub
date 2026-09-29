@@ -23,7 +23,8 @@
       "nju-asset-management-notices",
       "nju-employment-news",
       "nju-employment-college",
-      "nju-employment-guidance"
+      "nju-employment-guidance",
+      "nju-employment-recruitments"
     ],
     "sets": [
       {
@@ -108,6 +109,10 @@
       },
       {
         "id": "nju-employment-guidance",
+        "recentLimit": 5
+      },
+      {
+        "id": "nju-employment-recruitments",
         "recentLimit": 5
       }
     ]

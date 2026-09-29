@@ -30,10 +30,10 @@ describe("instance config", () => {
   it("loads the official v4 collection and publication policy", async () => {
     const config = await loadInstanceConfig(officialPath, sourceDir);
     expect(config.schemaVersion).toBe(4);
-    expect(config.publication.sources).toHaveLength(17);
+    expect(config.publication.sources).toHaveLength(18);
     expect(config.publication.publicBaseUrl)
       .toBe("https://zhongyangchuwu.github.io/nju-info-hub/");
-    expect(config.publication.sources.slice(-8)).toEqual([
+    expect(config.publication.sources.slice(-9)).toEqual([
       "nju-security-office-notices",
       "nju-psychology-center-bulletin",
       "nju-logistics-notices",
@@ -42,6 +42,7 @@ describe("instance config", () => {
       "nju-employment-news",
       "nju-employment-college",
       "nju-employment-guidance",
+      "nju-employment-recruitments",
     ]);
     expect(config.publication.sets).toEqual([{
       id: "cs",
@@ -55,12 +56,12 @@ describe("instance config", () => {
     }]);
     expect(config.collection.schedule).toBe("17 */2 * * *");
     expect(config.collection.timeZone).toBe("UTC");
-    expect(config.collection.sources).toHaveLength(17);
+    expect(config.collection.sources).toHaveLength(18);
     expect(config.collection.sources[0]).toEqual({
       id: "nju-cs-graduate",
       recentLimit: 10,
     });
-    expect(config.collection.sources.slice(-8)).toEqual([
+    expect(config.collection.sources.slice(-9)).toEqual([
       { id: "nju-security-office-notices", recentLimit: 5 },
       { id: "nju-psychology-center-bulletin", recentLimit: 5 },
       { id: "nju-logistics-notices", recentLimit: 5 },
@@ -69,6 +70,7 @@ describe("instance config", () => {
       { id: "nju-employment-news", recentLimit: 5 },
       { id: "nju-employment-college", recentLimit: 5 },
       { id: "nju-employment-guidance", recentLimit: 5 },
+      { id: "nju-employment-recruitments", recentLimit: 5 },
     ]);
   });
 
