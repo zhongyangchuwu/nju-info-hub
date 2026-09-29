@@ -1,0 +1,60 @@
+{
+  "content": [
+    {
+      "id": "620320974528581633",
+      "company": {
+        "id": "618758853965647873",
+        "name": "苏州晶银新材料科技有限公司"
+      },
+      "theme": "苏州晶银新材料科技有限公司2026校园招聘",
+      "intro": "<p>招聘简介<img src=\"/images/recruit.png\"></p>",
+      "email": "HR@example.com",
+      "website": "https://example.com/jobs",
+      "deadline": "2026-09-30",
+      "enabled": true,
+      "applyAt": "2026-09-28 15:27:57",
+      "status": "PUBLISHED",
+      "positions": [
+        {
+          "position": {
+            "id": "p1",
+            "name": "研发工程师",
+            "major": "材料物理、材料化学",
+            "education": "硕士",
+            "fullTime": true
+          },
+          "count": 5,
+          "region": {
+            "province": "江苏省",
+            "city": "苏州市",
+            "district": "虎丘区"
+          },
+          "salary": "5K-10K",
+          "welfare": "五险一金",
+          "recruitmentCondition": "硕士及以上学历",
+          "otherRequirement": "可接受在校生实习"
+        }
+      ]
+    },
+    {
+      "id": "625257785524752386",
+      "company": {
+        "id": "624994581800292353",
+        "name": "北京市大峪中学"
+      },
+      "theme": "北京市大峪中学2027高考科目学科教师招聘",
+      "email": "teacher@example.com",
+      "deadline": "2026-09-30",
+      "enabled": true,
+      "applyAt": "2026-09-22 10:41:10",
+      "status": "PUBLISHED",
+      "positions": []
+    }
+  ],
+  "page": {
+    "size": 2,
+    "number": 0,
+    "totalElements": 3,
+    "totalPages": 2
+  }
+}

@@ -97,6 +97,38 @@ describe('parseSourceConfig', () => {
     },
   );
 
+  it('parses an employment recruitment source', () => {
+    const source = parseSourceConfig({
+      ...minimalSourceConfig,
+      id: 'nju-employment-recruitments',
+      url: 'https://job.nju.edu.cn/career/jobs-v2',
+      adapter: {
+        type: 'job-portal-recruitment',
+        pageSize: 20,
+      },
+    });
+
+    expect(source.adapter).toEqual({
+      type: 'job-portal-recruitment',
+      pageSize: 20,
+    });
+  });
+
+  it.each([0, 101])(
+    'rejects invalid employment recruitment page size: %s',
+    (pageSize) => {
+      expect(() =>
+        parseSourceConfig({
+          ...minimalSourceConfig,
+          adapter: {
+            type: 'job-portal-recruitment',
+            pageSize,
+          },
+        }),
+      ).toThrow();
+    },
+  );
+
   it('parses optional source classification metadata', () => {
     const source = parseSourceConfig({
       ...minimalSourceConfig,

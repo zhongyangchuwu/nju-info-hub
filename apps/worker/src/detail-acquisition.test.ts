@@ -45,6 +45,22 @@ const JOB_SOURCE: SourceConfig = {
   },
 };
 
+const RECRUITMENT_SOURCE: SourceConfig = {
+  schemaVersion: 1,
+  id: "nju-employment-recruitments",
+  name: "学生就业指导中心招聘信息",
+  organization: {
+    id: "nju-career-center",
+    name: "南京大学学生就业指导中心",
+    kind: "service-unit",
+  },
+  url: "https://job.nju.edu.cn/career/jobs-v2",
+  adapter: {
+    type: "job-portal-recruitment",
+    pageSize: 20,
+  },
+};
+
 function item(
   source: SourceConfig,
   url: string,
@@ -137,6 +153,44 @@ describe("worker detail acquisition", () => {
     );
     expect(fetchDetail).toHaveBeenCalledExactlyOnceWith(
       JOB_SOURCE.id,
+      apiUrl,
+    );
+  });
+
+  it("uses the recruitment API detail URL while preserving the jobs-v2 URL", async () => {
+    fetchDetail.mockClear();
+    resolveDetailUrl.mockReset();
+    const publicUrl =
+      "https://job.nju.edu.cn/career/jobs-v2?recruitmentId=620320974528581633";
+    const apiUrl =
+      "https://job.nju.edu.cn/api/career/job/recruitments/620320974528581633";
+    resolveDetailUrl.mockReturnValueOnce(apiUrl);
+    const raw: RawDocument = {
+      sourceId: RECRUITMENT_SOURCE.id,
+      url: apiUrl,
+      fetchedAt: "2026-09-29T00:00:00Z",
+      contentType: "application/json",
+      body: "{}",
+      sha256: "test-hash",
+    };
+    fetchDetail.mockResolvedValueOnce(raw);
+    const discovered: DiscoveredItem = {
+      sourceId: RECRUITMENT_SOURCE.id,
+      sourceItemId: "620320974528581633",
+      url: publicUrl,
+      acquisitionKind: "job-portal-recruitment",
+      title: "Recruitment batch",
+    };
+
+    await expect(
+      fetchSourceDetail(RECRUITMENT_SOURCE, discovered),
+    ).resolves.toBe(raw);
+    expect(resolveDetailUrl).toHaveBeenCalledExactlyOnceWith(
+      RECRUITMENT_SOURCE,
+      discovered,
+    );
+    expect(fetchDetail).toHaveBeenCalledExactlyOnceWith(
+      RECRUITMENT_SOURCE.id,
       apiUrl,
     );
   });

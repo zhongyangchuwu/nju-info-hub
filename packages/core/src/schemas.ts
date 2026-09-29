@@ -97,10 +97,18 @@ export const jobPortalInformationSourceConfigSchema = sourceBaseSchema.extend({
   }).strict(),
 });
 
+export const jobPortalRecruitmentSourceConfigSchema = sourceBaseSchema.extend({
+  adapter: z.object({
+    type: z.literal('job-portal-recruitment'),
+    pageSize: z.number().int().positive().max(100),
+  }).strict(),
+});
+
 export const sourceConfigSchema = z.union([
   webPlusSourceConfigSchema,
   boshanSourceConfigSchema,
   jobPortalInformationSourceConfigSchema,
+  jobPortalRecruitmentSourceConfigSchema,
 ]);
 
 export function parseSourceConfig(input: unknown): SourceConfig {
@@ -111,6 +119,9 @@ export type WebPlusSourceConfig = z.infer<typeof webPlusSourceConfigSchema>;
 export type BoshanSourceConfig = z.infer<typeof boshanSourceConfigSchema>;
 export type JobPortalInformationSourceConfig = z.infer<
   typeof jobPortalInformationSourceConfigSchema
+>;
+export type JobPortalRecruitmentSourceConfig = z.infer<
+  typeof jobPortalRecruitmentSourceConfigSchema
 >;
 export type SourceConfig = z.infer<typeof sourceConfigSchema>;
 
@@ -124,5 +135,11 @@ export function isJobPortalInformationSourceConfig(
   source: SourceConfig,
 ): source is JobPortalInformationSourceConfig {
   return source.adapter.type === 'job-portal-information';
+}
+
+export function isJobPortalRecruitmentSourceConfig(
+  source: SourceConfig,
+): source is JobPortalRecruitmentSourceConfig {
+  return source.adapter.type === 'job-portal-recruitment';
 }
 

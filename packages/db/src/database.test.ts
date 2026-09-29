@@ -1431,11 +1431,31 @@ describe("InfoHubDatabase", () => {
             jobItem,
           ),
         ).toMatchObject({ insertedRevision: true });
+
+        const recruitmentItem = discoveredItem(SOURCE, "v5-recruitment", {
+          acquisitionKind: "job-portal-recruitment",
+        });
+        expect(
+          database.observeSourceItem(
+            SOURCE,
+            listRawDocument(
+              SOURCE,
+              "<li>recruitment</li>",
+              "2026-09-29T05:01:00.000Z",
+            ),
+            recruitmentItem,
+          ),
+        ).toMatchObject({ insertedRevision: true });
+
         expect(database.listRecentSourceEntries()).toEqual(
           expect.arrayContaining([
             expect.objectContaining({
               sourceItemId: "v5-job-portal",
               acquisitionKind: "job-portal-information",
+            }),
+            expect.objectContaining({
+              sourceItemId: "v5-recruitment",
+              acquisitionKind: "job-portal-recruitment",
             }),
           ]),
         );

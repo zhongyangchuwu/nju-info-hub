@@ -10,7 +10,7 @@ NJU Info Hub aims to turn fragmented public campus information into normalized, 
 
 The public ingestion foundation and two read-only delivery adapters are in place:
 
-- configuration-driven source adapters cover WebPlus/Sudy, Boshan/NJDX, and public employment information APIs with fixture coverage, bounded pagination, resilient fetching, and parser hardening;
+- configuration-driven source adapters cover WebPlus/Sudy, Boshan/NJDX, and public employment information/recruitment APIs with fixture coverage, bounded pagination, resilient fetching, and parser hardening;
 - raw documents, considered source-item observations, full notice revisions, and attachments are persisted in SQLite;
 - a local-facing REST/JSON API serves persisted sources, organizations, and recent **full** notices without collecting or modifying data;
 - per-source JSON Feed 1.1, Atom 1.0, and RSS 2.0 publish both full notices and explicit link-only official-list events without contacting upstreams;
@@ -29,7 +29,7 @@ GitHub is the source of truth for implementation status:
 - [Issues](https://github.com/zhongyangchuwu/nju-info-hub/issues) — active/planned work;
 - [Pull requests](https://github.com/zhongyangchuwu/nju-info-hub/pulls) — implementation and review history.
 
-Current collection targets public NJU sources through explicit, tested adapters rather than one crawler shape. WebPlus/Sudy, Boshan/NJDX, and public employment information streams are supported; future providers, including public WeChat article discovery, should be added only behind the same replaceable adapter boundary. Optional local sidecars for private QQ/WeChat groups remain a later phase.
+Current collection targets public NJU sources through explicit, tested adapters rather than one crawler shape. WebPlus/Sudy, Boshan/NJDX, and public employment information/recruitment streams are supported; future providers, including public WeChat article discovery, should be added only behind the same replaceable adapter boundary. Optional local sidecars for private QQ/WeChat groups remain a later phase.
 
 The public core will not log into NJU SSO, personal QQ accounts, or personal WeChat accounts.
 
@@ -187,7 +187,7 @@ On an empty database, `ingest` bootstraps only the configured recent window plus
 
 ## Initial sources
 
-The public-source registry and fixtures cover NJU WebPlus/Sudy, Boshan/NJDX, and public employment information streams. The official instance now contains seventeen sources, including all three validated employment information streams. The localhost Docker/Compose instance remains the current test publisher, while public deployment acceptance is still pending.
+The public-source registry and fixtures cover NJU WebPlus/Sudy, Boshan/NJDX, and public employment information/recruitment streams. The official instance now contains seventeen sources, including the three validated employment information streams; the recruitment-batch source is registered and live-validated but not yet admitted. The localhost Docker/Compose instance remains the current test publisher, while public deployment acceptance is still pending.
 
 More sources should preferably be added by contributing YAML under `sources/nju/` rather than adding a new crawler.
 

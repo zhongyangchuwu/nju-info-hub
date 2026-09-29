@@ -13,6 +13,7 @@ export type AcquisitionKind =
   | "webplus-detail"
   | "boshan-detail"
   | "job-portal-information"
+  | "job-portal-recruitment"
   | "public-wechat"
   | "external-public";
 

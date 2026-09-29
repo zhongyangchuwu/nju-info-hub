@@ -1,6 +1,7 @@
 import {
   isBoshanSourceConfig,
   isJobPortalInformationSourceConfig,
+  isJobPortalRecruitmentSourceConfig,
 } from "@nju-info/core";
 import type {
   DiscoveredItem,
@@ -21,11 +22,20 @@ import {
   jobPortalInformationPageUrl,
   parseJobPortalInformationNotice,
 } from "./job-portal-information.js";
+import {
+  discoverJobPortalRecruitmentPage,
+  jobPortalRecruitmentDetailUrl,
+  jobPortalRecruitmentPageUrl,
+  parseJobPortalRecruitmentNotice,
+} from "./job-portal-recruitment.js";
 
 export function initialSourcePageUrl(source: SourceConfig): string {
   if (isBoshanSourceConfig(source)) return boshanPageUrl(source, 1);
   if (isJobPortalInformationSourceConfig(source)) {
     return jobPortalInformationPageUrl(source, 1);
+  }
+  if (isJobPortalRecruitmentSourceConfig(source)) {
+    return jobPortalRecruitmentPageUrl(source, 1);
   }
   return source.url;
 }
@@ -37,6 +47,9 @@ export function discoverSourcePage(
   if (isBoshanSourceConfig(source)) return discoverBoshanPage(raw, source);
   if (isJobPortalInformationSourceConfig(source)) {
     return discoverJobPortalInformationPage(raw, source);
+  }
+  if (isJobPortalRecruitmentSourceConfig(source)) {
+    return discoverJobPortalRecruitmentPage(raw, source);
   }
   return discoverWebPlusPage(raw, source);
 }
@@ -52,6 +65,9 @@ export function parseSourceNotice(
   if (isJobPortalInformationSourceConfig(source)) {
     return parseJobPortalInformationNotice(raw, source, discovered);
   }
+  if (isJobPortalRecruitmentSourceConfig(source)) {
+    return parseJobPortalRecruitmentNotice(raw, source, discovered);
+  }
   return parseWebPlusNotice(raw, source, discovered);
 }
 
@@ -61,6 +77,9 @@ export function sourceDetailUrl(
 ): string {
   if (isJobPortalInformationSourceConfig(source)) {
     return jobPortalInformationDetailUrl(source, discovered.sourceItemId);
+  }
+  if (isJobPortalRecruitmentSourceConfig(source)) {
+    return jobPortalRecruitmentDetailUrl(source, discovered.sourceItemId);
   }
   return discovered.url;
 }

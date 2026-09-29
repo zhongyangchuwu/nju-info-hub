@@ -1,0 +1,20 @@
+{
+  "content": [
+    {
+      "id": "old-1",
+      "company": { "name": "测试单位" },
+      "theme": "历史招聘",
+      "deadline": "2026-09-01",
+      "enabled": true,
+      "applyAt": "2026-09-01 09:00:00",
+      "status": "PUBLISHED",
+      "positions": []
+    }
+  ],
+  "page": {
+    "size": 2,
+    "number": 1,
+    "totalElements": 3,
+    "totalPages": 2
+  }
+}

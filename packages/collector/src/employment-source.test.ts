@@ -1,6 +1,9 @@
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { jobPortalInformationSourceConfigSchema } from "@nju-info/core";
+import {
+  jobPortalInformationSourceConfigSchema,
+  jobPortalRecruitmentSourceConfigSchema,
+} from "@nju-info/core";
 import { loadSourceFile } from "./registry.js";
 
 async function employmentSource(name: string) {
@@ -36,4 +39,28 @@ describe("employment source configs", () => {
       expect(new URL(source.url).searchParams.get("type")).toBe(contentType);
     },
   );
+
+  it("loads employment-recruitments.yaml as a recruitment source", async () => {
+    const source = jobPortalRecruitmentSourceConfigSchema.parse(
+      await loadSourceFile(fileURLToPath(
+        new URL(
+          "../../../sources/nju/employment-recruitments.yaml",
+          import.meta.url,
+        ),
+      )),
+    );
+    expect(source).toMatchObject({
+      id: "nju-employment-recruitments",
+      organization: {
+        id: "nju-career-center",
+        name: "南京大学学生就业指导中心",
+        kind: "service-unit",
+      },
+      adapter: {
+        type: "job-portal-recruitment",
+        pageSize: 20,
+      },
+    });
+    expect(source.url).toBe("https://job.nju.edu.cn/career/jobs-v2");
+  });
 });

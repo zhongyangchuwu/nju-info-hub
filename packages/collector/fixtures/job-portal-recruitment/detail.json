@@ -1,0 +1,37 @@
+{
+  "id": "620320974528581633",
+  "company": {
+    "id": "618758853965647873",
+    "name": "苏州晶银新材料科技有限公司"
+  },
+  "theme": "苏州晶银新材料科技有限公司2026校园招聘",
+  "intro": "<p>招聘简介<img src=\"/images/recruit.png\"></p><p><a href=\"/career/help\">查看说明</a></p>",
+  "email": "HR@example.com",
+  "phone": "025-12345678",
+  "website": "https://example.com/jobs",
+  "deadline": "2026-09-30",
+  "enabled": true,
+  "applyAt": "2026-09-28 15:27:57",
+  "status": "PUBLISHED",
+  "positions": [
+    {
+      "position": {
+        "id": "p1",
+        "name": "研发工程师",
+        "major": "材料物理、材料化学",
+        "education": "硕士",
+        "fullTime": true
+      },
+      "count": 5,
+      "region": {
+        "province": "江苏省",
+        "city": "苏州市",
+        "district": "虎丘区"
+      },
+      "salary": "5K-10K",
+      "welfare": "五险一金",
+      "recruitmentCondition": "硕士及以上学历",
+      "otherRequirement": "可接受在校生实习"
+    }
+  ]
+}

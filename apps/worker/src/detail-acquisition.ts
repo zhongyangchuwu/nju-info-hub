@@ -8,7 +8,8 @@ import type {
 type SupportedDetailAcquisitionKind =
   | "webplus-detail"
   | "boshan-detail"
-  | "job-portal-information";
+  | "job-portal-information"
+  | "job-portal-recruitment";
 
 export class UnsupportedDetailAcquisitionError extends Error {
   constructor(
@@ -31,7 +32,8 @@ export async function fetchSourceDetail(
   if (
     item.acquisitionKind !== "webplus-detail" &&
     item.acquisitionKind !== "boshan-detail" &&
-    item.acquisitionKind !== "job-portal-information"
+    item.acquisitionKind !== "job-portal-information" &&
+    item.acquisitionKind !== "job-portal-recruitment"
   ) {
     throw new UnsupportedDetailAcquisitionError(item.acquisitionKind, item.sourceId, item.url);
   }
