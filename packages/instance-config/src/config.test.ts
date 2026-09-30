@@ -31,6 +31,13 @@ describe("instance config", () => {
     const config = await loadInstanceConfig(officialPath, sourceDir);
     expect(config.schemaVersion).toBe(4);
     expect(config.publication.sources).toHaveLength(30);
+    expect(config.publication.sources).toContain("nju-security-office-general-notices");
+    expect(config.publication.sources).not.toContain("nju-security-office-notices");
+    expect(config.collection.sources.find(
+      ({ id }) => id === "nju-security-office-general-notices",
+    )).toEqual({ id: "nju-security-office-general-notices", recentLimit: 5 });
+    expect(config.collection.sources.map(({ id }) => id))
+      .not.toContain("nju-security-office-notices");
     expect(config.publication.publicBaseUrl)
       .toBe("https://zhongyangchuwu.github.io/nju-info-hub/");
     expect(config.publication.sources.slice(-5)).toEqual([

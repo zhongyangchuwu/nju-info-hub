@@ -1,0 +1,10 @@
+schemaVersion: 1
+id: nju-security-office-general-notices
+name: 保卫处一般通知
+organization:
+  id: nju-security-office
+  name: 南京大学保卫处
+  kind: administrative-unit
+url: https://bwc.nju.edu.cn/64533/list.htm
+adapter:
+  type: webplus

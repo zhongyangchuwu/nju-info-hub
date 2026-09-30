@@ -16,7 +16,7 @@
       "nju-undergraduate-notices",
       "nju-youth-league-announcements",
       "nju-student-affairs-notices",
-      "nju-security-office-notices",
+      "nju-security-office-general-notices",
       "nju-psychology-center-bulletin",
       "nju-logistics-notices",
       "nju-hospital-announcements",
@@ -92,7 +92,7 @@
         "recentLimit": 10
       },
       {
-        "id": "nju-security-office-notices",
+        "id": "nju-security-office-general-notices",
         "recentLimit": 5
       },
       {
