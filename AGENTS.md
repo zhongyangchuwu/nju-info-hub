@@ -4,7 +4,7 @@
 
 `nju-info-hub` is an unofficial, read-only information aggregation layer for Nanjing University.
 
-The public core must only ingest information that is publicly readable without a personal NJU, QQ, or WeChat login. Private chat sources belong in a future local sidecar, not in the public service.
+The public core may ingest anonymously readable information and approved public-channel publications acquired by isolated collectors using dedicated service accounts. Credentialed-public sources require allowlisting by stable publisher identity, general-public audience evidence, and an approved redistribution policy; public visibility does not imply permission to redistribute full text or images. Private chats, groups, friend timelines, relationship-restricted content, personal eHall/SSO data, and per-user data remain out of scope for the central service.
 
 ## Architectural boundaries
 
@@ -27,6 +27,7 @@ The current milestone is a WebPlus/Sudy proof of concept. Do not add a web front
 ## Safety and data handling
 
 - Never commit credentials, cookies, tokens, NJU SSO data, QQ sessions, or WeChat sessions.
+- Keep platform credentials and sessions outside Hub core, public state, publication artifacts, and Hub logs.
 - Do not bypass authentication or access controls.
 - Preserve source URL, fetch time, and content hash for provenance.
 - Prefer saving raw source material before normalization so parsers can be rerun later.
