@@ -16,20 +16,20 @@ describe('normalizeWereadLatest', () => {
     expect(candidate.publicationEligible).toBe(false);
     expect(candidate.bundleIdentityEligible).toBe(true);
     expect(candidate.bundleEligible).toBe(false);
-    expect(candidate.source.decodedBookId).toBe('3887238934');
+    expect(candidate.source.decodedBookId).toBe('1234567890');
     expect(candidate.source.publisherIdentity).toEqual({
-      scheme: 'wechat-biz', version: 1, value: 'Mzg4NzIzODkzNA==',
+      scheme: 'wechat-biz', version: 1, value: 'MTIzNDU2Nzg5MA==',
     });
     expect(candidate.item.nativeIdentity).toEqual({
-      scheme: 'wechat-mid-idx', version: 1, mid: '2247520990', idx: 1,
+      scheme: 'wechat-mid-idx', version: 1, mid: '10001', idx: 1,
     });
     expect(candidate.item.sourceItemId).toMatch(/^social-native-v1:[a-f0-9]{64}$/);
-    expect(candidate.item.originalUrl).toBe('https://mp.weixin.qq.com/s/VLPjFfxEelP9gPXGSr0JWg');
+    expect(candidate.item.originalUrl).toBe('https://mp.weixin.qq.com/s/syntheticReviewToken');
     const canonical = new URL(candidate.item.canonicalUrl);
-    expect(canonical.searchParams.get('__biz')).toBe('Mzg4NzIzODkzNA==');
-    expect(canonical.searchParams.get('mid')).toBe('2247520990');
+    expect(canonical.searchParams.get('__biz')).toBe('MTIzNDU2Nzg5MA==');
+    expect(canonical.searchParams.get('mid')).toBe('10001');
     expect(canonical.searchParams.get('idx')).toBe('1');
-    expect(canonical.searchParams.get('sn')).toBe('36564cd892fc22b26a449ee9cba75f8b');
+    expect(canonical.searchParams.get('sn')).toBe('0123456789abcdef0123456789abcdef');
     expect(candidate.item.publicationTime).toEqual({
       original: { value: '1790812560', representation: 'unix-seconds' },
       precision: 'second',
@@ -70,7 +70,7 @@ describe('normalizeWereadLatest', () => {
 
   it('rejects invalid canonical message identity', async () => {
     const input = await fixture();
-    (input.latest as Record<string, unknown>).mid = '0002247520990';
+    (input.latest as Record<string, unknown>).mid = '00010001';
     expect(() => normalizeWereadLatest(input)).toThrow();
   });
 

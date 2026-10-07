@@ -21,6 +21,8 @@ The official instance policy selects thirty sources for collection and independe
 
 Public-reader acceptance remains a post-deployment check. Local JSON/XML parsing and packaged CLI smoke establish format and artifact correctness but cannot establish third-party reader admission.
 
+The separate operator-only [WeRead latest qualification/shadow app](docs/adr-credentialed-public-acquisition.md#weread-latest-qualification-boundary) validates complete native identity and can explicitly derive a link-only `SocialAcquisitionBundle v1` using a separately reviewed official `review-only` policy. Its decision remains `review-required`, never publication approval. It has no importer/public-feed integration and does not start the thirty-day benchmark.
+
 Use GitHub Issues for the current work queue. AI/MCP integration is deferred until a concrete consumer requires it.
 
 GitHub is the source of truth for implementation status:
@@ -63,6 +65,7 @@ apps/
   nju-info/      product CLI and runtime orchestration
   worker/        collection and ingestion application logic
   api/           optional read-only HTTP adapter
+  wechat-weread-acquire/  offline operator-only qualification and review-required shadow export
 packages/
   core/          shared schemas and canonical types
   collector/     source registry loader and source adapters

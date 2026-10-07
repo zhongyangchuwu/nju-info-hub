@@ -3,7 +3,9 @@ import { lstat, mkdir, mkdtemp, readFile, realpath, rename, stat, writeFile } fr
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assertAbsoluteRuntime, type WereadAcquireRuntime } from './config.js';
-import { normalizeWereadLatest, wereadLatestExportSchema } from './normalize.js';
+import { normalizeWereadLatest } from './normalize.js';
+import { parseWechatSourcePolicy } from './policy.js';
+import { buildWereadShadowBundle } from './shadow.js';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 
@@ -45,29 +47,26 @@ async function restrictedOutputRoot(outputRoot: string, protectedRoot: string): 
   return canonical;
 }
 
-async function readSanitizedExport(inputPath: string, protectedRoot: string): Promise<{ bytes: Buffer; value: unknown }> {
+async function readIsolatedJson(inputPath: string, protectedRoot: string): Promise<{ bytes: Buffer; value: unknown }> {
   const resolved = path.resolve(inputPath);
   const protectedResolved = path.resolve(protectedRoot);
   if (contains(protectedResolved, resolved) || contains(repositoryRoot, resolved)) {
-    throw new Error('Input export must not be read from provider state or repository');
+    throw new Error('Input JSON must not be read from provider state or repository');
   }
   await rejectSymlinkPath(resolved);
   const info = await lstat(resolved);
-  if (!info.isFile()) throw new Error('Input export must be a regular file');
+  if (!info.isFile()) throw new Error('Input JSON must be a regular file');
   const canonical = await realpath(resolved);
   if (contains(protectedResolved, canonical) || contains(repositoryRoot, canonical)) {
-    throw new Error('Input export resolves into provider state or repository');
+    throw new Error('Input JSON resolves into provider state or repository');
   }
   const bytes = await readFile(canonical);
   let value: unknown;
   try {
     value = JSON.parse(bytes.toString('utf8'));
   } catch {
-    throw new Error('Input export must be valid JSON');
+    throw new Error('Input must be valid JSON');
   }
-  // Strict parsing is the boundary that prevents cookies/tokens or unknown provider state
-  // from crossing into Hub restricted evidence.
-  wereadLatestExportSchema.parse(value);
   return { bytes, value };
 }
 
@@ -80,14 +79,22 @@ export async function acquireWereadLatest(runtimeInput: WereadAcquireRuntime): P
   shadowItemId: string;
   sourceItemId: string;
   bundleEligible: false;
+  publicationEligible: false;
+  shadowBundleCreated: boolean;
 }> {
   const runtime = assertAbsoluteRuntime(runtimeInput);
   const root = await restrictedOutputRoot(runtime.outputRoot, runtime.protectedRoot);
-  const providerExport = await readSanitizedExport(runtime.inputPath, runtime.protectedRoot);
+  const providerExport = await readIsolatedJson(runtime.inputPath, runtime.protectedRoot);
   const candidate = normalizeWereadLatest(providerExport.value);
 
   const runId = randomUUID();
-  const startedAt = new Date().toISOString();
+  const now = new Date();
+  const startedAt = now.toISOString();
+  const sourcePolicy = runtime.sourcePolicyPath === undefined ? null : parseWechatSourcePolicy(
+    (await readIsolatedJson(runtime.sourcePolicyPath, runtime.protectedRoot)).value,
+    now,
+  );
+  const shadow = sourcePolicy === null ? null : buildWereadShadowBundle(candidate, sourcePolicy, runId, now);
   const staging = await mkdtemp(path.join(root, '.partial-'));
   await mkdir(path.join(staging, 'blobs'), { mode: 0o700 });
 
@@ -99,6 +106,16 @@ export async function acquireWereadLatest(runtimeInput: WereadAcquireRuntime): P
     { flag: 'wx', mode: 0o600 },
   );
 
+  if (shadow !== null) {
+    const publicSafe = path.join(staging, 'public-safe');
+    await mkdir(publicSafe, { mode: 0o700 });
+    await mkdir(path.join(publicSafe, 'blobs'), { mode: 0o700 });
+    await writeFile(path.join(publicSafe, 'blobs', sha256(shadow.metadataBytes)), shadow.metadataBytes, { flag: 'wx', mode: 0o600 });
+    await writeFile(path.join(publicSafe, 'bundle.json'), JSON.stringify(shadow.bundle, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
+    // Qualification evidence remains operator-only, outside the public-safe projection.
+    await writeFile(path.join(staging, 'source-policy.json'), JSON.stringify(sourcePolicy, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
+  }
+
   const manifest = {
     schemaVersion: 2,
     runId,
@@ -108,6 +125,11 @@ export async function acquireWereadLatest(runtimeInput: WereadAcquireRuntime): P
     publicationEligible: false,
     bundleIdentityEligible: true,
     bundleEligible: false,
+    shadowBundle: shadow === null ? null : {
+      path: 'public-safe/bundle.json',
+      decisionStatus: 'review-required',
+      policyVersion: shadow.bundle.envelopes[0]!.decision.policyVersion,
+    },
     identityStatus: 'complete',
     missingNativeIdentity: [],
     discovery: candidate.discovery,
@@ -129,5 +151,12 @@ export async function acquireWereadLatest(runtimeInput: WereadAcquireRuntime): P
   await writeFile(path.join(staging, 'run.json'), JSON.stringify(manifest, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
   await rename(staging, path.join(root, runId));
 
-  return { runId, shadowItemId: candidate.shadowItemId, sourceItemId: candidate.item.sourceItemId, bundleEligible: false };
+  return {
+    runId,
+    shadowItemId: candidate.shadowItemId,
+    sourceItemId: candidate.item.sourceItemId,
+    bundleEligible: false,
+    publicationEligible: false,
+    shadowBundleCreated: shadow !== null,
+  };
 }

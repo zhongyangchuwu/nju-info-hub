@@ -6,7 +6,7 @@ NJU Info Hub is a read-only aggregation layer for public Nanjing University info
 
 The public service is intentionally separated from any future private-message ingestion. Public website collectors may run on a server; personal QQ/WeChat collection, if implemented later, should run as a local sidecar and expose only user-controlled local data.
 
-Approved public-channel enumeration through isolated dedicated service accounts is a separate central acquisition category, not private-message ingestion. The [credentialed-public acquisition ADR](adr-credentialed-public-acquisition.md) defines its policy and offline core contract; the [thirty-day benchmark](social-acquisition-benchmark.md) defines admission evidence. No social provider, importer, or public-feed integration is implemented yet.
+Approved public-channel enumeration through isolated dedicated service accounts is a separate central acquisition category, not private-message ingestion. The [credentialed-public acquisition ADR](adr-credentialed-public-acquisition.md) defines its policy, offline core contract, and operator-only WeRead latest qualification/shadow export; the [thirty-day benchmark](social-acquisition-benchmark.md) defines admission evidence. The explicit shadow path emits only reviewed-policy-gated link metadata with a `review-required` decision. No social provider runtime, importer, scheduler, or public-feed integration is implemented; shadow generation does not start the benchmark.
 
 ## Data flow
 

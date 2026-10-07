@@ -7,19 +7,19 @@
     "mode": "weread_mp"
   },
   "feed": {
-    "id": "MP_WXS_3887238934",
-    "name": "南大后勤",
-    "fakerId": "Mzg4NzIzODkzNA=="
+    "id": "MP_WXS_1234567890",
+    "name": "Synthetic Official Publisher",
+    "fakerId": "MTIzNDU2Nzg5MA=="
   },
   "latest": {
-    "reviewId": "MP_WXS_3887238934_VLPjFfxEelP9gPXGSr0JWg",
-    "title": "南大后勤祝您国庆快乐，诸事顺意！",
+    "reviewId": "MP_WXS_1234567890_syntheticReviewToken",
+    "title": "Synthetic campus service notice",
     "coverUrl": "https://mmbiz.qpic.cn/mmbiz_jpg/example/640?wx_fmt=jpeg",
     "contentHtml": "<div><p>fixture content only</p></div>",
-    "canonicalBiz": "Mzg4NzIzODkzNA==",
-    "mid": "2247520990",
+    "canonicalBiz": "MTIzNDU2Nzg5MA==",
+    "mid": "10001",
     "idx": 1,
-    "sn": "36564cd892fc22b26a449ee9cba75f8b",
+    "sn": "0123456789abcdef0123456789abcdef",
     "publicationUnixSeconds": "1790812560"
   }
 }
