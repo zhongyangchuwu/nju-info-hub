@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { socialEnvelopePayloadSchema } from '@nju-info/core';
 import { z } from 'zod';
 
@@ -37,6 +38,7 @@ export interface QzoneRuntimeConfig {
   token: string;
   astrbotVersion: string;
   pluginVersion: string;
+  protectedRoot: string;
 }
 
 export function parseQzoneRuntimeConfig(env: NodeJS.ProcessEnv): QzoneRuntimeConfig {
@@ -44,8 +46,9 @@ export function parseQzoneRuntimeConfig(env: NodeJS.ProcessEnv): QzoneRuntimeCon
   const token = env.QZONE_ASTRBOT_TOKEN;
   const astrbotVersion = env.QZONE_ASTRBOT_VERSION;
   const pluginVersion = env.QZONE_PLUGIN_VERSION;
-  if (!origin || !token || !astrbotVersion?.trim() || !pluginVersion?.trim()) {
-    throw new Error('QZONE_ASTRBOT_URL, QZONE_ASTRBOT_TOKEN, QZONE_ASTRBOT_VERSION and QZONE_PLUGIN_VERSION are required');
+  const protectedRoot = env.QZONE_PROTECTED_ROOT;
+  if (!origin || !token || !astrbotVersion?.trim() || !pluginVersion?.trim() || !protectedRoot) {
+    throw new Error('QZONE_ASTRBOT_URL, QZONE_ASTRBOT_TOKEN, QZONE_ASTRBOT_VERSION, QZONE_PLUGIN_VERSION and QZONE_PROTECTED_ROOT are required');
   }
   let url: URL;
   try {
@@ -60,5 +63,8 @@ export function parseQzoneRuntimeConfig(env: NodeJS.ProcessEnv): QzoneRuntimeCon
     throw new Error('QZONE_ASTRBOT_URL must be a credential-free HTTPS origin or HTTP loopback origin');
   }
   if (!/^[\x21-\x7e]+$/.test(token)) throw new Error('Invalid QZONE_ASTRBOT_TOKEN');
-  return { origin: url.origin, token, astrbotVersion: astrbotVersion.trim(), pluginVersion: pluginVersion.trim() };
+  if (!path.isAbsolute(protectedRoot) || /[\u0000-\u001f\u007f]/.test(protectedRoot)) {
+    throw new Error('QZONE_PROTECTED_ROOT must be an absolute platform state/session root');
+  }
+  return { origin: url.origin, token, astrbotVersion: astrbotVersion.trim(), pluginVersion: pluginVersion.trim(), protectedRoot: path.resolve(protectedRoot) };
 }

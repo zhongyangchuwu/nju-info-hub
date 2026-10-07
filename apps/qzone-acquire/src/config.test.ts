@@ -7,13 +7,15 @@ const policyFixture = parseQzonePolicy(JSON.parse(readFileSync(new URL('./fixtur
 const env = {
   QZONE_ASTRBOT_URL: 'http://127.0.0.1:6185', QZONE_ASTRBOT_TOKEN: 'synthetic-service-token',
   QZONE_ASTRBOT_VERSION: 'synthetic-astrbot-revision', QZONE_PLUGIN_VERSION: 'synthetic-plugin-revision',
+  QZONE_PROTECTED_ROOT: '/synthetic/platform-state',
 };
 
 describe('collector-only configuration', () => {
-  it('requires explicit endpoint, bearer capability, and reviewed provider versions', () => {
+  it('requires explicit endpoint, bearer capability, reviewed provider versions and protected-root declaration', () => {
     expect(parseQzoneRuntimeConfig(env)).toEqual({
       origin: env.QZONE_ASTRBOT_URL, token: env.QZONE_ASTRBOT_TOKEN,
       astrbotVersion: env.QZONE_ASTRBOT_VERSION, pluginVersion: env.QZONE_PLUGIN_VERSION,
+      protectedRoot: env.QZONE_PROTECTED_ROOT,
     });
     for (const key of Object.keys(env)) expect(() => parseQzoneRuntimeConfig({ ...env, [key]: '' })).toThrow();
   });
@@ -33,6 +35,14 @@ describe('collector-only configuration', () => {
 
   it('rejects control characters in bearer tokens without echoing them', () => {
     expect(() => parseQzoneRuntimeConfig({ ...env, QZONE_ASTRBOT_TOKEN: 'synthetic\nsecret' })).toThrow('Invalid QZONE_ASTRBOT_TOKEN');
+  });
+
+  it.each(['relative/platform-state', ' ', '/synthetic/state\u0000', '/synthetic/state\n'])('rejects invalid protected-root declarations without echoing them', (protectedRoot) => {
+    expect(() => parseQzoneRuntimeConfig({ ...env, QZONE_PROTECTED_ROOT: protectedRoot })).toThrow('QZONE_PROTECTED_ROOT must be an absolute platform state/session root');
+  });
+
+  it('normalizes declared paths without accessing platform storage', () => {
+    expect(parseQzoneRuntimeConfig({ ...env, QZONE_PROTECTED_ROOT: '/synthetic/unused/../platform-state/' }).protectedRoot).toBe('/synthetic/platform-state');
   });
 
   it('requires non-expired explicit publisher, audience, content scope and rights qualification', () => {

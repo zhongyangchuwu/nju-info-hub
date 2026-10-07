@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { chmod, mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises';
+import { chmod, mkdtemp, readFile, readdir, rm, stat, symlink } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -19,7 +19,7 @@ const selectedPost = {
   uin: '10001', tid: 'CaseSensitiveTid', created_at: post.created_at,
   content: post.content, mediaUrls: post.images,
 };
-const routeBase = '/api/plugin/astrbot_plugin_qzone/page/';
+const routeBase = '/api/v1/plugins/extensions/astrbot_plugin_qzone/page/';
 
 function json(res: ServerResponse, value: unknown, status = 200) {
   res.writeHead(status, { 'content-type': 'application/json' });
@@ -55,6 +55,7 @@ describe('isolated HTTP acquisition', () => {
     runtime = {
       origin: `http://127.0.0.1:${address.port}`, token: 'synthetic-collector-capability',
       astrbotVersion: 'synthetic-astrbot-revision', pluginVersion: 'synthetic-plugin-revision',
+      protectedRoot: `${root}-platform-state`,
     };
   });
 
@@ -102,8 +103,13 @@ describe('isolated HTTP acquisition', () => {
       }
       expect((await stat(path.join(runDirectory, filename))).mode & 0o777).toBe(0o600);
     }
-    expect(requests.map((request) => request.method)).toEqual(['GET', 'GET']);
-    expect(requests.map((request) => new URL(request.url!, runtime.origin).pathname)).toEqual([`${routeBase}feed`, `${routeBase}detail`]);
+    expect(requests.map((request) => {
+      const url = new URL(request.url!, runtime.origin);
+      return { method: request.method, pathname: url.pathname, params: Object.fromEntries(url.searchParams) };
+    })).toEqual([
+      { method: 'GET', pathname: '/api/v1/plugins/extensions/astrbot_plugin_qzone/page/feed', params: { scope: 'profile', hostuin: '10001', limit: '10' } },
+      { method: 'GET', pathname: '/api/v1/plugins/extensions/astrbot_plugin_qzone/page/detail', params: { id: '10001:CaseSensitiveTid' } },
+    ]);
   });
 
   it('records empty discovery as incomplete rather than proving no posts exist', async () => {
@@ -185,5 +191,36 @@ describe('isolated HTTP acquisition', () => {
     await chmod(root, 0o755);
     await expect(acquireQzone(await policy(), runtime, root)).rejects.toThrow('mode 0700');
     expect(requests).toHaveLength(0);
+  });
+
+  it.each(['equal', 'descendant', 'ancestor', 'normalized-descendant'])('rejects %s protected-root overlap before writes or requests', async (kind) => {
+    const protectedRoot = path.join(root, 'platform-state');
+    const output = kind === 'equal' ? protectedRoot : kind === 'ancestor' ? root :
+      kind === 'normalized-descendant' ? `${root}/elsewhere/../platform-state/evidence` :
+        path.join(protectedRoot, 'evidence');
+    await expect(acquireQzone(await policy(), { ...runtime, protectedRoot }, output)).rejects.toThrow('protected platform storage');
+    expect(requests).toHaveLength(0);
+    expect(await readdir(root)).toEqual([]);
+  });
+
+  it('allows a nonoverlapping sibling with a shared string prefix without requiring the protected root to exist', async () => {
+    const protectedRoot = path.join(root, 'platform-state');
+    const output = path.join(root, 'platform-state-evidence');
+    const result = await acquireQzone(await policy(), { ...runtime, protectedRoot }, output);
+    expect(await readdir(root)).toEqual(['platform-state-evidence']);
+    const manifest = JSON.parse(await readFile(path.join(output, result.runId, 'run.json'), 'utf8'));
+    expect(manifest.discovery).toMatchObject({ listedCount: 1, detailCount: 1 });
+    expect(JSON.stringify(manifest)).not.toContain(protectedRoot);
+  });
+
+  it.each(['root', 'ancestor'])('rejects a symlinked output %s without following it into protected storage', async (kind) => {
+    const protectedRoot = path.join(root, 'platform-state');
+    const alias = path.join(root, 'output-alias');
+    // The nonexistent target remains untouched; following this link would create platform state.
+    await symlink(protectedRoot, alias);
+    const output = kind === 'root' ? alias : path.join(alias, 'evidence');
+    await expect(acquireQzone(await policy(), { ...runtime, protectedRoot }, output)).rejects.toThrow('must not contain symlinks');
+    expect(requests).toHaveLength(0);
+    expect(await readdir(root)).toEqual(['output-alias']);
   });
 });

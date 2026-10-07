@@ -36,6 +36,7 @@ export class AstrBotQzoneClient {
     const checked = parseQzoneRuntimeConfig({
       QZONE_ASTRBOT_URL: config.origin, QZONE_ASTRBOT_TOKEN: config.token,
       QZONE_ASTRBOT_VERSION: config.astrbotVersion, QZONE_PLUGIN_VERSION: config.pluginVersion,
+      QZONE_PROTECTED_ROOT: config.protectedRoot,
     });
     const identity = socialNativeIdentitySchema.safeParse({
       platform: 'qzone', publisher: { scheme: 'qzone-uin', version: 1, value: uin },
@@ -48,7 +49,7 @@ export class AstrBotQzoneClient {
   }
 
   async #read(operation: 'feed' | 'detail', params: URLSearchParams): Promise<QzoneRead<unknown>> {
-    const url = new URL(`/api/plugin/astrbot_plugin_qzone/page/${operation}`, this.#origin);
+    const url = new URL(`/api/v1/plugins/extensions/astrbot_plugin_qzone/page/${operation}`, this.#origin);
     url.search = params.toString();
     try {
       const response = await fetch(url, {

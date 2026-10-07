@@ -26,12 +26,14 @@ main().catch((error: unknown) => {
     'Cannot read QZone source policy JSON', 'Invalid QZone source policy',
     'QZone acquisition requires an allowlisted credentialed-public publisher policy',
     'QZone source qualification is not currently valid',
-    'QZONE_ASTRBOT_URL, QZONE_ASTRBOT_TOKEN, QZONE_ASTRBOT_VERSION and QZONE_PLUGIN_VERSION are required',
+    'QZONE_ASTRBOT_URL, QZONE_ASTRBOT_TOKEN, QZONE_ASTRBOT_VERSION, QZONE_PLUGIN_VERSION and QZONE_PROTECTED_ROOT are required',
     'Invalid QZONE_ASTRBOT_URL', 'Invalid QZONE_ASTRBOT_TOKEN',
     'QZONE_ASTRBOT_URL must be a credential-free HTTPS origin or HTTP loopback origin',
+    'QZONE_PROTECTED_ROOT must be an absolute platform state/session root',
     'Restricted output root must be absolute',
-    'Restricted output must be separate from the repository and QQ session storage',
-    'Restricted output must not resolve to repository or QQ session storage',
+    'Restricted output must be separate from the repository and protected platform storage',
+    'Restricted output must not resolve to repository or protected platform storage',
+    'Restricted output path must not contain symlinks',
     'Restricted output root must be operator-owned and mode 0700',
   ];
   const message = error instanceof QzoneAcquisitionError ? error.message :
