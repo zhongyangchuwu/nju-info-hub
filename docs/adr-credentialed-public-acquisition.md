@@ -1,12 +1,12 @@
 # ADR: central credentialed-public acquisition
 
-Status: accepted architecture; implementation limited to an offline contract.
+Status: accepted architecture; the core contract remains offline, with a separate restricted QZone/AstrBot acquisition app that is not a Hub release or publication integration.
 
 ## Decision and scope
 
 NJU Info Hub remains a centrally operated shared service with Feed as the unified downstream. A platform login needed to enumerate a generally public publisher stream does not, by itself, make that stream private. Dedicated WeChat/QQ service identities may acquire explicitly approved public channels through isolated providers. This is not a per-user account connection or private-source sidecar.
 
-This change adds only policy, the [benchmark protocol](social-acquisition-benchmark.md), and the versioned contract in `packages/core/src/social-acquisition.ts`. It adds no accounts, providers, network collection, importer, database migration, feed publication, or live sources. Existing website `SourceConfig`, adapters, and URL-derived IDs remain unchanged. Private chats, groups, friend timelines, relationship-restricted posts, personal eHall/SSO data, and per-user information are prohibited. Normal authentication is permitted; bypassing authentication, challenges, access controls, or rate limits is not.
+This architecture keeps the versioned contract in `packages/core/src/social-acquisition.ts` and adds the isolated `apps/qzone-acquire` operator tool described below. It does not add accounts, a Hub importer, database migration, feed publication, automatic approval, or live source registration. Existing website `SourceConfig`, adapters, and URL-derived IDs remain unchanged. Private chats, groups, friend timelines, relationship-restricted posts, personal eHall/SSO data, and per-user information are prohibited. Normal authentication is permitted; bypassing authentication, challenges, access controls, or rate limits is not.
 
 ## Three separate policy dimensions
 
@@ -33,11 +33,35 @@ Dedicated service identities
     -> existing canonical persistence and public Feed
 ```
 
-Providers own login, session renewal, platform requests, discovery, and platform error interpretation. A thin exporter emits the contract. Hub owns structural validation, native identity, policy lookup, blob verification, normalization, persistence, and public output. Hub must never invoke account actions, open provider databases, or inherit platform credentials.
+Providers own login, session renewal, platform requests, discovery, and platform error interpretation. Hub owns structural validation, native identity, trusted policy lookup, blob verification, normalization, persistence, and public output. Hub must never invoke account actions, open provider databases, or inherit platform credentials.
 
-For a pilot, deploy providers and a thin exporter separately from Hub, with separate OS identities/containers, secret mounts, browser profiles, and storage. A thin exporter may live in a separately deployable monorepo app; it must not depend on Hub database/feed/runtime packages or enter the normal Hub release artifact. Do not vendor provider implementations. A same-host atomic completed-bundle directory is sufficient: provider/exporter writes; Hub reads; Hub writes its own acknowledgment state. No webhook, queue, or dynamic plugin loader is needed. Repository separation alone is not credential isolation.
+Deploy providers and the acquisition app separately from Hub, with separate OS identities/containers, secret mounts, browser profiles, and storage. Do not vendor provider implementations. A same-host atomic completed-bundle directory remains sufficient for a future approved importer: provider/exporter writes; Hub reads; Hub writes its own acknowledgment state. No webhook, queue, or dynamic plugin loader is needed.
 
 Allow only publisher-targeted post listing, detail/media retrieval, and necessary session health operations. Deny posting, messaging, likes, comments, reposting, uploads, deletion, privacy changes, friend enumeration, and broad timelines. Enforce operation and target allowlists, not just HTTP methods. Reads can still create platform view/visitor records; strip these from content.
+
+An isolated provider and thin exporter may live in a separately deployable monorepo app, but must not depend on Hub database/feed/runtime packages or enter the normal Hub release artifact. The `apps/qzone-acquire` tool is a restricted-evidence qualification hook only: it depends on `@nju-info/core` and `zod`, has no Hub DB/feed/runtime dependency, and emits neither `SocialAcquisitionBundle` nor public-safe data. It does not import, approve, register, or publish sources. Repository separation alone is not credential isolation.
+
+Platform credentials and session state stay entirely external. The QZone app accepts only the collector service's bearer token through `QZONE_ASTRBOT_TOKEN` and an absolute origin in `QZONE_ASTRBOT_URL`; there are no defaults. The origin must be HTTPS remotely or HTTP on loopback, without path, query, or userinfo. `QZONE_ASTRBOT_VERSION` and `QZONE_PLUGIN_VERSION` are required reviewed installed version/revision strings. Do not discover dashboard login/password/cookies or infer that AstrBot `/api/v1` API keys authorize plugin dashboard routes. A supervisor must supply verified bearer authentication or a verified read-only reverse-proxy capability; there is no auth fallback. See [AstrBot OpenAPI documentation](https://docs.astrbot.app/en/dev/openapi.html), whose authentication routes must not be conflated with the plugin routes.
+
+## Restricted QZone/AstrBot qualification hook
+
+Run one operator-controlled acquisition from the repository root. Export the four `QZONE_*` variables above in the isolated collector environment; set `POLICY_JSON` to the reviewed policy file and `RESTRICTED_OUTPUT_ROOT` to an absolute operator-owned `0700` directory outside Hub/session storage (a missing root is created with that mode):
+
+```bash
+mise exec -- pnpm --filter @nju-info/qzone-acquire acquire -- "$POLICY_JSON" "$RESTRICTED_OUTPUT_ROOT"
+```
+
+Configuration is strict JSON: `{ "schemaVersion": 1, "source": <existing SocialEnvelopePayload source policy with qzone-uin>, "qualification": { "owner": "…", "publicAudienceEvidence": "…", "allowedContentScope": "…", "redistributionBasis": "…", "reviewedAt": "<ISO instant>", "reviewUntil": "<ISO instant>" } }`. The source policy must use `platform: qzone`, `access: credentialed-public`, and `audience: public`, and must not be denied; a sentinel is review-only. Policy expiry stops acquisition. Metadata role and rights require explicit operator approval. Do not auto-register/admit UIN `492711989`, or invent display-name or alias evidence.
+
+The app calls only `GET /api/plugin/astrbot_plugin_qzone/page/feed?scope=profile&hostuin=<canonical UIN>&limit=10`, expecting `{ok:true,data:{items:[post],cursor:'',has_more:false}}`, followed by serialized `GET /api/plugin/astrbot_plugin_qzone/page/detail?id=<uin:tid>` for every target item, expecting `{ok:true,data:{post}}`. Every response must be successful and each post ID/author must agree with the expected publisher; detail ID must exactly match the requested ID. A numeric UIN is canonicalized only if it is a positive safe integer, to canonical decimal; `tid` remains the exact case-sensitive native ID and whitespace/control characters are rejected by core identity validation. Only the first page is used; `cursor` is ignored upstream, so discovery is always incomplete, including empty feeds and `has_more: false`. No broad timelines, comments route, actions, status endpoint, checkpoint/cursor, retries, scheduler, login, or media downloads are allowed. Detail responses contain comments, which are discarded immediately; extraction positively projects permitted fields and excludes comments, stats, avatar, collector/viewer data, and session material. Media links must pass the existing asset-URL policy or the post is rejected; no stripping session parameters to make a URL acceptable. Media is partial, and unknown origin/attribution stays unknown rather than being inferred original or official.
+
+Selected, restricted, credential-free provider-export JSON is stored under SHA-256 blobs before normalization—not as lossless origin responses. Whole provider responses and free-form errors are never archived or logged. The atomic output contains a `run.json` completion manifest, `candidates.json`, and `blobs/<sha256>`, with raw-record fetched time/hash/length and source publication URL, run ID, source policy, provider/exporter versions, feed/detail records, and normalized candidates. Directories are mode `0700`, files `0600`. Failures fail the run without a completed marker and leave prior artifacts untouched; a successful empty run is still incomplete. Stdout reports only safe counts and run ID.
+
+Positive extraction removes account/session metadata; it cannot certify arbitrary publisher text or linked media for privacy, embedded secrets, audience, or redistribution rights. Treat every candidate as unreviewed restricted evidence and discard irrelevant personal submissions during operator review. No media bytes are fetched, and no candidate is declared public-safe.
+
+Keep the restricted output outside the repository, Hub public directories/state/backups, and all platform credential/session paths. Never publish it or copy it into Hub state. Publication requires separate content, privacy, audience, and redistribution review plus approval of a public-safe bundle. For a supervisor smoke, use the exact environment variables and reviewed policy, with UIN `492711989` only if qualified, and an output root outside repository and Hub public directories. Do not claim a smoke unless actually performed.
+
+The app reads the public [Zhalslar QZone plugin route implementation](https://github.com/Zhalslar/astrbot_plugin_qzone/blob/main/main.py): profile feed and per-post detail only. Authentication/session-expiry failures can be indistinguishable from plugin HTTP 400 errors; report a generic provider failure, retain no error text, and never relogin automatically.
 
 ## Positive extraction and evidence tiers
 
@@ -82,7 +106,7 @@ Official 南大后勤 is the first candidate after identity and redistribution r
 
 WeRSS/onebot-qzone are candidate external implementations, not core dependencies. Pin reviewed versions and qualify replacements with shared safe fixtures: native identity, publication precision, ordered images, attribution, incomplete content, raw evidence, and failure behavior. A provider offering only filtered RSS exports cannot claim original-response evidence. Reject implementations whose unwanted writes, broad polling, or limit-avoidance behavior cannot be disabled.
 
-Session expiry/challenges pause the account and require human recovery. Rate limits pause the account request stream and honor retry guidance; no account rotation or endpoint fallback to evade limits. Bounded transient retries cannot turn a failed poll into an empty successful one. Discovery caps/gaps must be visible; do not advance past unaccounted items. Preserve previously accepted Hub content on acquisition failures and report staleness separately.
+Session expiry/challenges pause the account and require human recovery. Rate limits pause the account request stream and honor retry guidance; no account rotation or endpoint fallback to evade limits. This QZone qualification app performs no retries or automatic relogin: failures fail the run. Other future providers must bound transient retries so a failed poll cannot become an empty successful one. Discovery caps/gaps must be visible; do not advance past unaccounted items. Preserve previously accepted Hub content on acquisition failures and report staleness separately.
 
 Record last attempted/successful poll, last new item, discovery completeness, retries/rate limits, session downtime, rejected/partial items, media failures, import/export lag, and operator recovery/review cost without exposing secrets. Source revocation or content corrections must support suppression across all future public output paths and assets. Previously downloaded reader copies cannot be recalled.
 
@@ -90,4 +114,4 @@ Record last attempted/successful poll, last new item, discovery completeness, re
 
 The offline schema prevents accidental metadata expansion and stale decision declarations; it cannot certify content safety or legal rights. Dedicated accounts may still face platform restrictions or sanctions. Image review, origin ambiguity, and relay/sentinel review effort are admission risks.
 
-After accounts exist: approve source policies; qualify isolated providers; implement positive extraction and approval; add a credential-free importer with raw-before-normalization preservation; add only necessary persistence/publication support; exercise an unauthenticated reader and run the benchmark. None of those runtime integrations is part of this change.
+The QZone/AstrBot qualification app is implemented as a restricted, incomplete-evidence path only; it does not admit a source or integrate with Hub publication. Remaining work after account and policy qualification includes any separately approved importer, content review/approval, persistence/publication support, unauthenticated reader proof, and the prospective benchmark. Those integrations are not performed by this app.

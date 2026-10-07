@@ -1,0 +1,27 @@
+{
+  "ok": true,
+  "data": {
+    "post": {
+      "id": "123456789:synthetic-Tid_01",
+      "author": {
+        "uin": 123456789,
+        "nickname": "Synthetic publisher name",
+        "avatar": "https://avatar.example.invalid/private.png"
+      },
+      "content": "Synthetic restricted acquisition text",
+      "created_at": 1790724600,
+      "images": [
+        "https://images.example.invalid/first.png",
+        "https://images.example.invalid/second.png?width=640"
+      ],
+      "stats": { "likes": 42, "comments": 7, "views": 900 },
+      "liked": true,
+      "can_delete": false,
+      "viewer": { "uin": 987654321, "nickname": "Synthetic viewer" },
+      "session": { "access_token": "synthetic-secret-token", "p_skey": "synthetic-session-key" },
+      "comments": [
+        { "uin": 222333444, "content": "Synthetic private comment", "session_id": "synthetic-comment-session" }
+      ]
+    }
+  }
+}

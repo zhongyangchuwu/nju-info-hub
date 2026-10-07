@@ -21,6 +21,18 @@ The official instance policy selects thirty sources for collection and independe
 
 Public-reader acceptance remains a post-deployment check. Local JSON/XML parsing and packaged CLI smoke establish format and artifact correctness but cannot establish third-party reader admission.
 
+### Restricted QZone/AstrBot qualification
+
+`apps/qzone-acquire` is a manual, read-only qualification tool, not a Hub release or a live source integration. It writes restricted incomplete evidence/candidates only; it does not create a bundle, import or approve items, register sources, or publish feeds. Run only with a reviewed, unexpired QZone policy and verified supervisor-supplied bearer authentication/read-only proxy capability:
+
+Export `QZONE_ASTRBOT_URL`, `QZONE_ASTRBOT_TOKEN`, `QZONE_ASTRBOT_VERSION`, and `QZONE_PLUGIN_VERSION` in the isolated collector environment. Set `POLICY_JSON` to the reviewed policy file and `RESTRICTED_OUTPUT_ROOT` to an absolute operator-owned `0700` directory outside Hub/session storage; the app creates a missing root with that mode.
+
+```bash
+mise exec -- pnpm --filter @nju-info/qzone-acquire acquire -- "$POLICY_JSON" "$RESTRICTED_OUTPUT_ROOT"
+```
+
+The URL must be an absolute HTTPS origin (or HTTP loopback) without path, query, or userinfo; no endpoint, token, or version defaults are provided. Keep output outside the repository and Hub state/backups/public directories and all platform credential/session paths. Never publish it without separate content/privacy/audience/redistribution review and public-safe bundle approval. The app reads one feed page and serialized details only and always reports incomplete discovery. See the [credentialed-public acquisition ADR](docs/adr-credentialed-public-acquisition.md) for strict policy/configuration, storage and auth boundaries; see the [prospective benchmark](docs/social-acquisition-benchmark.md) for what remains unmeasured.
+
 Use GitHub Issues for the current work queue. AI/MCP integration is deferred until a concrete consumer requires it.
 
 GitHub is the source of truth for implementation status:
@@ -54,14 +66,14 @@ public detail raw + provenance (when available)
 parsed full notice revision --> full feed entry / optional REST notices
 ```
 
-The source adapter boundary is intentionally independent of output protocols. Future WeChat/QQ support should add new adapters or a local sidecar without changing the canonical data model.
+The QZone/AstrBot qualification hook is a restricted operator tool, not a public adapter: it does not change the canonical model, importer, release artifact, or feed. Future WeChat/QQ publication needs separate approved import and review paths; private/local sidecars remain separate.
 
 ## Repository layout
 
 ```text
 apps/
   nju-info/      product CLI and runtime orchestration
-  worker/        collection and ingestion application logic
+  qzone-acquire/ restricted QZone/AstrBot operator qualification app
   api/           optional read-only HTTP adapter
 packages/
   core/          shared schemas and canonical types

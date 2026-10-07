@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "sourceId": "synthetic-qzone",
+    "platform": "qzone",
+    "publisherIdentity": { "scheme": "qzone-uin", "version": 1, "value": "10001" },
+    "displayName": "Synthetic public relay",
+    "role": "relay",
+    "access": "credentialed-public",
+    "audience": "public",
+    "redistributionMode": "review-only",
+    "policyVersion": "synthetic-policy-v1"
+  },
+  "qualification": {
+    "owner": "Synthetic operator",
+    "publicAudienceEvidence": "Synthetic audience qualification, not a live approval",
+    "allowedContentScope": "Synthetic campus service notices",
+    "redistributionBasis": "Individual rights review required",
+    "reviewedAt": "2026-01-01T00:00:00Z",
+    "reviewUntil": "9999-01-01T00:00:00Z"
+  }
+}

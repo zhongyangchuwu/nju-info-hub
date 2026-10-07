@@ -6,7 +6,9 @@ NJU Info Hub is a read-only aggregation layer for public Nanjing University info
 
 The public service is intentionally separated from any future private-message ingestion. Public website collectors may run on a server; personal QQ/WeChat collection, if implemented later, should run as a local sidecar and expose only user-controlled local data.
 
-Approved public-channel enumeration through isolated dedicated service accounts is a separate central acquisition category, not private-message ingestion. The [credentialed-public acquisition ADR](adr-credentialed-public-acquisition.md) defines its policy and offline core contract; the [thirty-day benchmark](social-acquisition-benchmark.md) defines admission evidence. No social provider, importer, or public-feed integration is implemented yet.
+Approved public-channel enumeration through isolated dedicated service accounts is a separate central acquisition category, not private-message ingestion. The [credentialed-public acquisition ADR](adr-credentialed-public-acquisition.md) defines its policy and offline core contract; the [thirty-day benchmark](social-acquisition-benchmark.md) defines prospective admission evidence. The isolated `apps/qzone-acquire` QZone/AstrBot qualification tool writes restricted, incomplete acquisition evidence only; it is excluded from normal Hub releases and has no Hub DB/feed/runtime dependency. It creates no bundle, importer input, automatic approval, live source registration, or public-feed entry. No social importer or public-feed integration exists.
+
+The QZone tool makes a single first-page profile feed request and serialized per-post detail requests only. Discovery is always reported incomplete, even for an empty feed or `has_more: false`; it has no scheduler, cursor/checkpoint, retries, login, status endpoint, write actions, or media downloads. Credentials/session state remain external, and its private-permission output is not public-safe or eligible for Hub state/backups. See the ADR for operator configuration, evidence format, safe storage, and smoke instructions.
 
 ## Data flow
 
