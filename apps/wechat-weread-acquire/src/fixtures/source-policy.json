@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "sourceId": "synthetic-wechat-official",
+    "platform": "wechat",
+    "publisherIdentity": {
+      "scheme": "wechat-biz",
+      "version": 1,
+      "value": "MTIzNDU2Nzg5MA=="
+    },
+    "displayName": "Synthetic Official Publisher",
+    "role": "official",
+    "access": "credentialed-public",
+    "audience": "public",
+    "redistributionMode": "review-only",
+    "policyVersion": "synthetic-review-v1"
+  },
+  "qualification": {
+    "owner": "synthetic-operator",
+    "publicAudienceEvidence": "Synthetic review evidence records the publisher role as official and the audience as public.",
+    "allowedContentScope": "One latest synthetic WeChat feed item for offline shadow review only.",
+    "redistributionBasis": "Review-only; no redistribution permission is claimed or inferred.",
+    "reviewedAt": "2026-10-06T00:00:00Z",
+    "reviewUntil": "2026-11-06T00:00:00Z"
+  }
+}

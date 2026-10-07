@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 2,
+  "acquiredAt": "2026-10-07T12:48:00.000Z",
+  "provider": {
+    "name": "WeRSS",
+    "version": "v1.5.3-nju1",
+    "mode": "weread_mp"
+  },
+  "feed": {
+    "id": "MP_WXS_1234567890",
+    "name": "Synthetic Official Publisher",
+    "fakerId": "MTIzNDU2Nzg5MA=="
+  },
+  "latest": {
+    "reviewId": "MP_WXS_1234567890_syntheticReviewToken",
+    "title": "Synthetic campus service notice",
+    "coverUrl": "https://mmbiz.qpic.cn/mmbiz_jpg/example/640?wx_fmt=jpeg",
+    "contentHtml": "<div><p>fixture content only</p></div>",
+    "canonicalBiz": "MTIzNDU2Nzg5MA==",
+    "mid": "10001",
+    "idx": 1,
+    "sn": "0123456789abcdef0123456789abcdef",
+    "publicationUnixSeconds": "1790812560"
+  }
+}
