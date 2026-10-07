@@ -16,6 +16,8 @@ describe('shadow CLI boundary', () => {
     expect(() => runtimeFromEnv({ ...env, WECHAT_WEREAD_SOURCE_POLICY: policyPath })).toThrow(/explicit --shadow/);
     expect(runtimeFromEnv(env)).not.toHaveProperty('sourcePolicyPath');
     expect(runtimeFromEnv({ ...env, WECHAT_WEREAD_SOURCE_POLICY: policyPath }, ['--shadow']).sourcePolicyPath).toBe(policyPath);
+    expect(runtimeFromEnv({ ...env, WECHAT_WEREAD_SOURCE_POLICY: policyPath }, ['--', '--shadow']).sourcePolicyPath)
+      .toBe(policyPath);
   });
 
   it.each([['--approve'], ['--publish'], ['--shadow', '--approve'], ['--shadow', '--shadow']])(

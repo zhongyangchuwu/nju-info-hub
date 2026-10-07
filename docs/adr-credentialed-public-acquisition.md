@@ -90,7 +90,7 @@ Operator commands (all configured paths must be absolute, outside the repository
 mise exec -- pnpm --filter @nju-info/wechat-weread-acquire acquire
 
 # Explicit shadow export; additionally requires WECHAT_WEREAD_SOURCE_POLICY.
-mise exec -- pnpm --filter @nju-info/wechat-weread-acquire acquire --shadow
+mise exec -- pnpm --filter @nju-info/wechat-weread-acquire acquire -- --shadow
 ```
 
 The atomically completed run keeps restricted `candidate.json`, `run.json`, and `blobs/<provider-export-sha256>` separate from `public-safe/bundle.json` and `public-safe/blobs/<sanitized-metadata-sha256>`. A validated `source-policy.json` snapshot, including operator qualification evidence, stays on the restricted side. Directories are 0700 and files are 0600; public-safe artifacts remain operator-only pending review. Restricted `rawEvidence` descriptors are not reused by the bundle. CLI output separately reports `shadowBundleCreated`; it retains `publicationEligible: false` and the restricted candidate's `bundleEligible: false`. The [synthetic policy fixture](../apps/wechat-weread-acquire/src/fixtures/source-policy.json) is a schema example, not a live source approval.

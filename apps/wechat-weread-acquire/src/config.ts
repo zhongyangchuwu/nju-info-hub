@@ -14,10 +14,11 @@ export function runtimeFromEnv(
   env: NodeJS.ProcessEnv = process.env,
   args: readonly string[] = [],
 ): WereadAcquireRuntime {
-  if (args.length > 1 || (args.length === 1 && args[0] !== '--shadow')) {
+  const normalizedArgs = args[0] === '--' ? args.slice(1) : args;
+  if (normalizedArgs.length > 1 || (normalizedArgs.length === 1 && normalizedArgs[0] !== '--shadow')) {
     throw new Error('Usage: wechat-weread-acquire [--shadow]');
   }
-  const shadow = args[0] === '--shadow';
+  const shadow = normalizedArgs[0] === '--shadow';
   if (shadow && !env.WECHAT_WEREAD_SOURCE_POLICY) {
     throw new Error('--shadow requires WECHAT_WEREAD_SOURCE_POLICY');
   }
