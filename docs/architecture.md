@@ -14,6 +14,8 @@ Deploy provider/gateway and collector under separate operator OS users and envir
 
 The acquisition tool makes one first-page profile feed request and serialized per-post detail requests only. Discovery is always reported incomplete, even for an empty feed or `has_more: false`; it has no scheduler, cursor/checkpoint, retries, login, status endpoint, write actions, or media downloads. Credentials/session state remain external, and its restricted output is not public-safe or eligible for Hub state/backups. See the ADR for operator configuration, evidence format, safe storage, and smoke instructions.
 
+`apps/wechat-weread-acquire` is an operator-only offline WeRead latest qualification/shadow app, also defined by the credentialed-public acquisition ADR. The explicit shadow path emits only reviewed-policy-gated link metadata with a `review-required` decision. It adds no provider runtime, network collection, importer, scheduler, or public-feed integration; shadow generation does not start the prospective benchmark.
+
 ## Data flow
 
 ```text

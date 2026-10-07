@@ -43,6 +43,10 @@ mise exec -- pnpm --filter @nju-info/qzone-acquire acquire -- "$POLICY_JSON" "$R
 
 The collector calls only the AstrBot v1 feed/detail routes through that bearer capability and always reports discovery incomplete. The gateway passes successful provider JSON, including comments, to the collector; positive extraction still discards prohibited fields, and output remains restricted, not public-safe. Keep evidence outside the repository, Hub state/backups/public directories, and platform session paths. Never publish without separate content/privacy/audience/redistribution review and public-safe bundle approval. See the [credentialed-public acquisition ADR](docs/adr-credentialed-public-acquisition.md) for exact protocol, failure and deployment boundaries, and the [prospective benchmark](docs/social-acquisition-benchmark.md) for what remains unmeasured.
 
+### WeRead latest qualification/shadow
+
+The separate operator-only [WeRead latest qualification/shadow app](docs/adr-credentialed-public-acquisition.md#weread-latest-qualification-boundary) validates complete native identity and can explicitly derive a link-only `SocialAcquisitionBundle v1` using a separately reviewed official `review-only` policy. Its decision remains `review-required`, never publication approval. It has no importer/public-feed integration and does not start the thirty-day benchmark.
+
 Use GitHub Issues for the current work queue. AI/MCP integration is deferred until a concrete consumer requires it.
 
 GitHub is the source of truth for implementation status:
@@ -86,6 +90,7 @@ apps/
   qzone-acquire/ restricted QZone/AstrBot operator qualification app
   qzone-gateway/ private Node-only read-only capability gateway
   api/           optional read-only HTTP adapter
+  wechat-weread-acquire/  offline operator-only qualification and review-required shadow export
 packages/
   core/          shared schemas and canonical types
   collector/     source registry loader and source adapters
