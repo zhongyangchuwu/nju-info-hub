@@ -21,6 +21,30 @@ The official instance policy selects thirty sources for collection and independe
 
 Public-reader acceptance remains a post-deployment check. Local JSON/XML parsing and packaged CLI smoke establish format and artifact correctness but cannot establish third-party reader admission.
 
+### Restricted QZone/AstrBot qualification
+
+`apps/qzone-acquire` remains a manual restricted-evidence qualification tool, not a Hub release or live source integration. It writes incomplete evidence/candidates only; it creates no bundle, importer input, approval, source registration, or feed entry. Production read access is provided by the isolated generic Node-only `apps/qzone-gateway`, excluded from the public release and separate from Hub core/runtime. The gateway has no internal workspace dependencies, login/session handling, writes, chat/LLM behavior, or copied provider implementation.
+
+Operate the gateway and collector under separate OS users and environments. Set only the gateway environment's six required variables: `QZONE_GATEWAY_UPSTREAM_URL`, `QZONE_GATEWAY_UPSTREAM_TOKEN`, `QZONE_GATEWAY_READER_TOKEN`, `QZONE_GATEWAY_PUBLISHER_UINS`, `QZONE_GATEWAY_HOST`, and `QZONE_GATEWAY_PORT`. No defaults or checked-in credentials, UINs, or operator paths are provided. The upstream is HTTPS remote or HTTP loopback, origin-only; the listener requires an explicit IP literal or `localhost` and port 0–65535 (0 selects an ephemeral port). Upstream and reader tokens must differ. The gateway accepts only GET on the exact v1 feed/detail routes with the required profile/UIN/limit or UIN:tid parameters, rejects other paths, methods, and malformed/duplicate/unknown parameters before upstream access, denies redirects, retries none, enforces 2 MiB actual response and 30-second timeout bounds, and returns only validated JSON with fixed redacted errors. It does not sanitize provider JSON or grant redistribution rights.
+
+Production uses a private local gateway listener with no TLS and no public exposure. Network-isolate the upstream dashboard from the reader process to prevent bypass; the application boundary alone cannot do that. Keep the broad AstrBot plugin-scope key only in the gateway environment. The collector receives only the reader capability, which authorizes every UIN configured on that gateway. Token rotation is external and requires process restart. A short-lived direct plugin-scope key revoked immediately after smoke remains a qualification option, not least privilege for production. No live gateway deployment or gateway run is established by these repository instructions.
+
+Set gateway-only environment configuration and start it:
+
+```bash
+mise exec -- pnpm --filter @nju-info/qzone-gateway serve
+```
+
+Separately set collector `QZONE_ASTRBOT_URL` to the private gateway origin and `QZONE_ASTRBOT_TOKEN` to the reader capability, plus `QZONE_ASTRBOT_VERSION`, `QZONE_PLUGIN_VERSION`, and `QZONE_PROTECTED_ROOT`. Collector settings and protected-root rules are unchanged. Keep tokens and operator paths out of tracked configuration; the reviewed source policy still records the stable publisher UIN. Set `POLICY_JSON` to that policy and `RESTRICTED_OUTPUT_ROOT` to the operator-owned restricted evidence directory, then run:
+
+```bash
+mise exec -- pnpm --filter @nju-info/qzone-acquire acquire -- "$POLICY_JSON" "$RESTRICTED_OUTPUT_ROOT"
+```
+
+The collector calls only the AstrBot v1 feed/detail routes through that bearer capability and always reports discovery incomplete. The gateway passes successful provider JSON, including comments, to the collector; positive extraction still discards prohibited fields, and output remains restricted, not public-safe. Keep evidence outside the repository, Hub state/backups/public directories, and platform session paths. Never publish without separate content/privacy/audience/redistribution review and public-safe bundle approval. See the [credentialed-public acquisition ADR](docs/adr-credentialed-public-acquisition.md) for exact protocol, failure and deployment boundaries, and the [prospective benchmark](docs/social-acquisition-benchmark.md) for what remains unmeasured.
+
+### WeRead latest qualification/shadow
+
 The separate operator-only [WeRead latest qualification/shadow app](docs/adr-credentialed-public-acquisition.md#weread-latest-qualification-boundary) validates complete native identity and can explicitly derive a link-only `SocialAcquisitionBundle v1` using a separately reviewed official `review-only` policy. Its decision remains `review-required`, never publication approval. It has no importer/public-feed integration and does not start the thirty-day benchmark.
 
 Use GitHub Issues for the current work queue. AI/MCP integration is deferred until a concrete consumer requires it.
@@ -56,14 +80,15 @@ public detail raw + provenance (when available)
 parsed full notice revision --> full feed entry / optional REST notices
 ```
 
-The source adapter boundary is intentionally independent of output protocols. Future WeChat/QQ support should add new adapters or a local sidecar without changing the canonical data model.
+The QZone/AstrBot acquisition path remains outside Hub core/runtime and the public release. `apps/qzone-acquire` is the restricted operator qualification tool; `apps/qzone-gateway` is a separate local read-only capability gateway, not a public adapter or publication integration. Future social publication needs separate approved import and review paths; private/local sidecars remain separate.
 
 ## Repository layout
 
 ```text
 apps/
   nju-info/      product CLI and runtime orchestration
-  worker/        collection and ingestion application logic
+  qzone-acquire/ restricted QZone/AstrBot operator qualification app
+  qzone-gateway/ private Node-only read-only capability gateway
   api/           optional read-only HTTP adapter
   wechat-weread-acquire/  offline operator-only qualification and review-required shadow export
 packages/
