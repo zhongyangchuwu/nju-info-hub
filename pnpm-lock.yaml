@@ -243,6 +243,8 @@ importers:
         specifier: 4.6.5
         version: 4.6.5
 
+  apps/qzone-gateway: {}
+
   apps/worker:
     dependencies:
       '@nju-info/collector':

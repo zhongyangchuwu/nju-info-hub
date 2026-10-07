@@ -1,0 +1,11 @@
+{
+  "name": "@nju-info/qzone-gateway",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run src",
+    "serve": "tsx src/cli.ts"
+  }
+}
