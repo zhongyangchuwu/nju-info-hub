@@ -21,9 +21,9 @@ The official instance policy selects thirty sources for collection and independe
 
 Public-reader acceptance remains a post-deployment check. Local JSON/XML parsing and packaged CLI smoke establish format and artifact correctness but cannot establish third-party reader admission.
 
-### Restricted QZone/AstrBot qualification
+### Restricted QZone acquisition and offline review
 
-`apps/qzone-acquire` remains a manual restricted-evidence qualification tool, not a Hub release or live source integration. It writes incomplete evidence/candidates only; it creates no bundle, importer input, approval, source registration, or feed entry. Production read access is provided by the isolated generic Node-only `apps/qzone-gateway`, excluded from the public release and separate from Hub core/runtime. The gateway has no internal workspace dependencies, login/session handling, writes, chat/LLM behavior, or copied provider implementation.
+`apps/qzone-acquire` is an operator-only restricted acquisition and offline item-review tool, not a Hub release or live source integration. Its `acquire` command still writes incomplete evidence/candidates only. Explicit `shadow` and `review` commands can derive link-metadata bundles and record per-item decisions offline, without importing, admitting sources, or publishing feeds. Production read access is provided by the isolated generic Node-only `apps/qzone-gateway`, excluded from the public release and separate from Hub core/runtime. The gateway has no internal workspace dependencies, login/session handling, writes, chat/LLM behavior, or copied provider implementation.
 
 Operate the gateway and collector under separate OS users and environments. Set only the gateway environment's six required variables: `QZONE_GATEWAY_UPSTREAM_URL`, `QZONE_GATEWAY_UPSTREAM_TOKEN`, `QZONE_GATEWAY_READER_TOKEN`, `QZONE_GATEWAY_PUBLISHER_UINS`, `QZONE_GATEWAY_HOST`, and `QZONE_GATEWAY_PORT`. No defaults or checked-in credentials, UINs, or operator paths are provided. The upstream is HTTPS remote or HTTP loopback, origin-only; the listener requires an explicit IP literal or `localhost` and port 0–65535 (0 selects an ephemeral port). Upstream and reader tokens must differ. The gateway accepts only GET on the exact v1 feed/detail routes with the required profile/UIN/limit or UIN:tid parameters, rejects other paths, methods, and malformed/duplicate/unknown parameters before upstream access, denies redirects, retries none, enforces 2 MiB actual response and 30-second timeout bounds, and returns only validated JSON with fixed redacted errors. It does not sanitize provider JSON or grant redistribution rights.
 
@@ -42,6 +42,15 @@ mise exec -- pnpm --filter @nju-info/qzone-acquire acquire -- "$POLICY_JSON" "$R
 ```
 
 The collector calls only the AstrBot v1 feed/detail routes through that bearer capability and always reports discovery incomplete. The gateway passes successful provider JSON, including comments, to the collector; positive extraction still discards prohibited fields, and output remains restricted, not public-safe. Keep evidence outside the repository, Hub state/backups/public directories, and platform session paths. Never publish without separate content/privacy/audience/redistribution review and public-safe bundle approval. See the [credentialed-public acquisition ADR](docs/adr-credentialed-public-acquisition.md) for exact protocol, failure and deployment boundaries, and the [prospective benchmark](docs/social-acquisition-benchmark.md) for what remains unmeasured.
+
+The offline [QZone shadow/item-review flow](docs/adr-credentialed-public-acquisition.md#qzone-offline-shadow-and-item-review) accepts only current public relay/sentinel `review-only` policies. Supply only `QZONE_PROTECTED_ROOT` in the offline environment; no provider URL or token is required. All arguments are absolute private paths outside repository/protected storage. Select native item IDs and safe titles explicitly, then submit decisions bound to the generated review request:
+
+```bash
+mise exec -- pnpm --filter @nju-info/qzone-acquire shadow -- "$ACQUISITION_RUN" "$SELECTION_JSON" "$POLICY_JSON" "$SHADOW_OUTPUT_ROOT"
+mise exec -- pnpm --filter @nju-info/qzone-acquire review -- "$SHADOW_RUN" "$DECISIONS_JSON" "$POLICY_JSON" "$REVIEW_OUTPUT_ROOT"
+```
+
+Shadow decisions start `review-required`; an explicit review can record `approved / link-only`, `rejected / none`, or `review-required / none`. Reviewer/private reasons remain restricted. Even approved declarations retain **`publicationEligible=false`, `bundleEligible=false`**: no trusted importer, real public publication, source admission, or benchmark is implied. Title/link privacy and rights remain human responsibilities.
 
 ### WeRead latest qualification/shadow
 
@@ -82,14 +91,14 @@ public detail raw + provenance (when available)
 parsed full notice revision --> full feed entry / optional REST notices
 ```
 
-The QZone/AstrBot acquisition path remains outside Hub core/runtime and the public release. `apps/qzone-acquire` is the restricted operator qualification tool; `apps/qzone-gateway` is a separate local read-only capability gateway, not a public adapter or publication integration. Future social publication needs separate approved import and review paths; private/local sidecars remain separate.
+The QZone/AstrBot acquisition and offline item-review paths remain outside Hub core/runtime and the public release. `apps/qzone-gateway` is a separate local read-only capability gateway, not a public adapter or publication integration. Future social publication needs trusted producer/import/approval verification and publication/correction/reader support; private/local sidecars remain separate.
 
 ## Repository layout
 
 ```text
 apps/
   nju-info/      product CLI and runtime orchestration
-  qzone-acquire/ restricted QZone/AstrBot operator qualification app
+  qzone-acquire/ restricted QZone acquisition, offline shadow and item-review declarations
   qzone-gateway/ private Node-only read-only capability gateway
   api/           optional read-only HTTP adapter
   wechat-weread-acquire/  offline operator-only qualification and review-required shadow export
