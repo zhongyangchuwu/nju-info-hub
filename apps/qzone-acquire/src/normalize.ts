@@ -12,6 +12,7 @@ export interface QzonePost {
   tid: string;
   created_at: number;
   content: string;
+  /** Exact extracted provider URLs, before candidate locator normalization. */
   mediaUrls: string[];
 }
 
@@ -36,6 +37,7 @@ export interface QzoneCandidate {
   };
   media: Array<{
     position: number;
+    /** Validated HTTPS locator; restricted evidence retains the provider URL. */
     originalUrl: string;
     acquisitionStatus: 'not-requested';
   }>;
@@ -61,6 +63,19 @@ const upstreamPostSchema = z.object({
 const qzonePublicationUrlSchema = socialEnvelopePayloadSchema.shape.item.shape.originalUrl;
 const qzoneAssetUrlSchema = socialEnvelopePayloadSchema.shape.media.element.shape.originalUrl;
 
+// Only this qualified photo-store family permits an HTTP scheme upgrade.
+const qqPhotoStoreHttp = /^http:\/\/(?=[^/?#]{1,253}(?:[/?#]|$))(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*photo\.store\.qq\.com(?=\/|\?|$)/i;
+const httpsAssetSyntax = /^https:\/\/[^/?#\\\s]+(?:[/?#]|$)/i;
+const malformedPercentEscape = /%(?![a-f0-9]{2})/i;
+const invalidAssetCharacters = /[\s\u0000-\u001f\u007f\\]/;
+
+function canonicalQzoneMediaUrl(providerUrl: string): string | null {
+  const canonicalUrl = qqPhotoStoreHttp.test(providerUrl) ? `https:${providerUrl.slice(5)}` : providerUrl;
+  if (!httpsAssetSyntax.test(canonicalUrl) || invalidAssetCharacters.test(canonicalUrl) || malformedPercentEscape.test(canonicalUrl)) return null;
+  const parsed = qzoneAssetUrlSchema.safeParse(canonicalUrl);
+  return parsed.success ? parsed.data : null;
+}
+
 /** Positively projects the upstream post fields allowed into restricted evidence. */
 export function projectQzonePost(input: unknown, expectedUin: string, expectedId?: string): QzonePost {
   const parsed = upstreamPostSchema.safeParse(input);
@@ -79,14 +94,11 @@ export function projectQzonePost(input: unknown, expectedUin: string, expectedId
   if (idUin !== uin || uin !== expectedPublisher.data.value || !validIdentity.success ||
       (expectedId !== undefined && id !== expectedId)) throw new Error(postError);
 
-  const mediaUrls: string[] = [];
   for (const image of images) {
-    const validatedImage = qzoneAssetUrlSchema.safeParse(image);
-    if (!validatedImage.success || validatedImage.data === null) throw new Error(postError);
-    mediaUrls.push(validatedImage.data);
+    if (canonicalQzoneMediaUrl(image) === null) throw new Error(postError);
   }
 
-  return { uin, tid, created_at, content, mediaUrls };
+  return { uin, tid, created_at, content, mediaUrls: images };
 }
 
 function shanghaiCalendarDate(unixMilliseconds: number): string {
@@ -122,7 +134,7 @@ export function normalizeQzonePost(post: QzonePost): QzoneCandidate {
       publishedOn: shanghaiCalendarDate(unixMilliseconds),
     });
     const media = post.mediaUrls.map((originalUrl, position) => {
-      const validatedUrl = qzoneAssetUrlSchema.parse(originalUrl);
+      const validatedUrl = canonicalQzoneMediaUrl(originalUrl);
       if (validatedUrl === null) throw new Error();
       return { position, originalUrl: validatedUrl, acquisitionStatus: 'not-requested' as const };
     });
