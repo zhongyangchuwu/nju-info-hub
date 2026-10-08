@@ -8,7 +8,8 @@
     "test": "vitest run src",
     "acquire": "tsx src/cli.ts",
     "shadow": "tsx src/review-cli.ts shadow",
-    "review": "tsx src/review-cli.ts review"
+    "review": "tsx src/review-cli.ts review",
+    "audit": "tsx src/audit-cli.ts"
   },
   "dependencies": {
     "@nju-info/core": "workspace:*",

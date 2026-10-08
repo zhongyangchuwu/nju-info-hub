@@ -76,30 +76,30 @@ async function ancestors(value: string, allowMissing: boolean): Promise<void> {
 }
 
 /** Perform lexical exclusions for every argument before inspecting any filesystem path. */
-export async function offlinePaths(inputDir: string, inputFiles: string[], outputRoot: string, protectedRoot: string): Promise<{
-  inputDir: string; inputFiles: string[]; outputRoot: string; protectedRoot: string;
+export async function offlinePaths(inputDirs: string[], inputFiles: string[], outputRoot: string, protectedRoot: string): Promise<{
+  inputDirs: string[]; inputFiles: string[]; outputRoot: string; protectedRoot: string;
 }> {
   const protectedPath = absolute(protectedRoot);
   // The operator supplies a canonical platform root; never resolve or inspect it.
   if (protectedPath !== protectedRoot) throw new Error('Invalid protected storage root');
-  const directory = absolute(inputDir);
+  const directories = inputDirs.map(absolute);
   const files = inputFiles.map(absolute);
   const output = absolute(outputRoot);
-  for (const value of [directory, ...files, output]) separate(value, protectedPath);
-  if (contains(directory, output) || contains(output, directory) ||
+  for (const value of [...directories, ...files, output]) separate(value, protectedPath);
+  if (directories.some((directory) => contains(directory, output) || contains(output, directory)) ||
       files.some((file) => contains(output, file) || contains(file, output))) {
     throw new Error('Offline input and output must be separate');
   }
-  for (const value of [directory, ...files]) await ancestors(value, false);
+  for (const value of [...directories, ...files]) await ancestors(value, false);
   await ancestors(output, true);
-  await privateDirectory(directory);
+  for (const directory of directories) await privateDirectory(directory);
   for (const file of files) await privateDirectory(path.dirname(file));
   try {
     await privateDirectory(output);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
   }
-  return { inputDir: directory, inputFiles: files, outputRoot: output, protectedRoot: protectedPath };
+  return { inputDirs: directories, inputFiles: files, outputRoot: output, protectedRoot: protectedPath };
 }
 
 export async function privateDirectory(directory: string): Promise<void> {

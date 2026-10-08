@@ -21,9 +21,9 @@ The official instance policy selects thirty sources for collection and independe
 
 Public-reader acceptance remains a post-deployment check. Local JSON/XML parsing and packaged CLI smoke establish format and artifact correctness but cannot establish third-party reader admission.
 
-### Restricted QZone acquisition and offline review
+### Restricted QZone acquisition, review and manual audit
 
-`apps/qzone-acquire` is an operator-only restricted acquisition and offline item-review tool, not a Hub release or live source integration. Its `acquire` command still writes incomplete evidence/candidates only. Explicit `shadow` and `review` commands can derive link-metadata bundles and record per-item decisions offline, without importing, admitting sources, or publishing feeds. Production read access is provided by the isolated generic Node-only `apps/qzone-gateway`, excluded from the public release and separate from Hub core/runtime. The gateway has no internal workspace dependencies, login/session handling, writes, chat/LLM behavior, or copied provider implementation.
+`apps/qzone-acquire` is an operator-only restricted acquisition, offline item-review and manual observation-audit tool, not a Hub release or live source integration. Its `acquire` command still writes incomplete evidence/candidates only. Explicit `shadow`/`review` commands derive link metadata and bound decisions; `audit` compares separately prepared manual public-profile observations with verified completed runs and declared failures. None imports, admits sources, publishes feeds, or starts a benchmark. Production read access is provided by the isolated generic Node-only `apps/qzone-gateway`, excluded from the public release and separate from Hub core/runtime. The gateway has no internal workspace dependencies, login/session handling, writes, chat/LLM behavior, or copied provider implementation.
 
 Operate the gateway and collector under separate OS users and environments. Set only the gateway environment's six required variables: `QZONE_GATEWAY_UPSTREAM_URL`, `QZONE_GATEWAY_UPSTREAM_TOKEN`, `QZONE_GATEWAY_READER_TOKEN`, `QZONE_GATEWAY_PUBLISHER_UINS`, `QZONE_GATEWAY_HOST`, and `QZONE_GATEWAY_PORT`. No defaults or checked-in credentials, UINs, or operator paths are provided. The upstream is HTTPS remote or HTTP loopback, origin-only; the listener requires an explicit IP literal or `localhost` and port 0–65535 (0 selects an ephemeral port). Upstream and reader tokens must differ. The gateway accepts only GET on the exact v1 feed/detail routes with the required profile/UIN/limit or UIN:tid parameters, rejects other paths, methods, and malformed/duplicate/unknown parameters before upstream access, denies redirects, retries none, enforces 2 MiB actual response and 30-second timeout bounds, and returns only validated JSON with fixed redacted errors. It does not sanitize provider JSON or grant redistribution rights.
 
@@ -51,6 +51,14 @@ mise exec -- pnpm --filter @nju-info/qzone-acquire review -- "$SHADOW_RUN" "$DEC
 ```
 
 Shadow decisions start `review-required`; an explicit review can record `approved / link-only`, `rejected / none`, or `review-required / none`. Reviewer/private reasons remain restricted. Even approved declarations retain **`publicationEligible=false`, `bundleEligible=false`**: no trusted importer, real public publication, source admission, or benchmark is implied. Title/link privacy and rights remain human responsibilities.
+
+The [manual source-observation audit](docs/adr-credentialed-public-acquisition.md#qzone-manual-source-observation-audit) uses a separately prepared public-profile post list, capture cutoff, verified successful run directories and explicitly declared failed attempts. It deduplicates native identities, distinguishes missing/partial/unknown/conflicting observations, and returns N/A rates when the manual denominator is incomplete or inconsistent. It requires only `QZONE_PROTECTED_ROOT` and writes private immutable ledgers:
+
+```bash
+mise exec -- pnpm --filter @nju-info/qzone-acquire run audit -- "$MANUAL_AUDIT_JSON" "$OBSERVATIONS_JSON" "$POLICY_JSON" "$AUDIT_OUTPUT_ROOT"
+```
+
+Use explicit `run audit`: bare `pnpm audit` is the package manager's dependency-audit command, not this script. Audited post-capture ratios are scoped operator declarations, not campus/event/public-feed recall or image usability. All outputs retain publicationEligible=false, bundleEligible=false and benchmarkStarted=false; empty provider discovery never proves an empty publisher timeline.
 
 ### WeRead latest qualification/shadow
 
@@ -98,7 +106,7 @@ The QZone/AstrBot acquisition and offline item-review paths remain outside Hub c
 ```text
 apps/
   nju-info/      product CLI and runtime orchestration
-  qzone-acquire/ restricted QZone acquisition, offline shadow and item-review declarations
+  qzone-acquire/ restricted acquisition, offline shadow/item-review and manual audit ledger
   qzone-gateway/ private Node-only read-only capability gateway
   api/           optional read-only HTTP adapter
   wechat-weread-acquire/  offline operator-only qualification and review-required shadow export
