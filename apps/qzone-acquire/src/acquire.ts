@@ -1,50 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { lstat, mkdir, mkdtemp, realpath, rename, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { AstrBotQzoneClient } from './client.js';
 import { parseQzonePolicy, type QzonePolicy, type QzoneRuntimeConfig } from './config.js';
 import { normalizeQzonePost } from './normalize.js';
 
-const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-
-function contains(parent: string, child: string): boolean {
-  const relative = path.relative(parent, child);
-  return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
-}
-
-async function restrictedRoot(outputRoot: string, protectedRoot: string): Promise<string> {
-  if (!path.isAbsolute(outputRoot)) throw new Error('Restricted output root must be absolute');
-  const resolved = path.resolve(outputRoot);
-  if (contains(repositoryRoot, resolved) || contains(protectedRoot, resolved) ||
-      contains(resolved, repositoryRoot) || contains(resolved, protectedRoot)) {
-    throw new Error('Restricted output must be separate from the repository and protected platform storage');
-  }
-  // Inspect only output ancestors, never the declared protected root or symlink targets.
-  // Refuse aliases before mkdir so an output symlink cannot write into platform state.
-  let current = path.parse(resolved).root;
-  for (const component of path.relative(current, resolved).split(path.sep)) {
-    current = path.join(current, component);
-    try {
-      if ((await lstat(current)).isSymbolicLink()) {
-        throw new Error('Restricted output path must not contain symlinks');
-      }
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    }
-  }
-  await mkdir(resolved, { recursive: true, mode: 0o700 });
-  const canonical = await realpath(resolved);
-  if (contains(repositoryRoot, canonical) || contains(protectedRoot, canonical) ||
-      contains(canonical, repositoryRoot) || contains(canonical, protectedRoot)) {
-    throw new Error('Restricted output must not resolve to repository or protected platform storage');
-  }
-  const info = await stat(canonical);
-  if (!info.isDirectory() || (info.mode & 0o077) !== 0 || info.uid !== process.getuid?.()) {
-    throw new Error('Restricted output root must be operator-owned and mode 0700');
-  }
-  return canonical;
-}
+import { restrictedRoot } from './storage.js';
 
 export async function acquireQzone(
   inputPolicy: QzonePolicy,
