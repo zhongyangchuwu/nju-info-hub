@@ -1,0 +1,13 @@
+{
+  "id": "10001:PhotoStore-Tid_01",
+  "author": { "uin": 10001, "nickname": "Synthetic publisher" },
+  "content": "Synthetic photo-store service notice; paths are fixture-only.",
+  "created_at": 1790724600,
+  "images": [
+    "http://photonjmaz.photo.store.qq.com/psc/synthetic-first/0",
+    "http://photonjmaz.photo.store.qq.com/psc/synthetic-second%2Fvariant/0?width=640&height=480",
+    "http://photonjmaz.photo.store.qq.com/psc/synthetic-third/0?format=png&size=large"
+  ],
+  "stats": { "comments": 1 },
+  "comments": [{ "content": "excluded-photo-comment" }]
+}

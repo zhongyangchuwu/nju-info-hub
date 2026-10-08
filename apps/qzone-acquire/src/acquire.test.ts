@@ -112,6 +112,63 @@ describe('isolated HTTP acquisition', () => {
     ]);
   });
 
+  it('hashes exact HTTP provider media before creating HTTPS candidates without fetching images', async () => {
+    const photoPost = JSON.parse(await readFile(new URL('./fixtures/photo-store-post.json', import.meta.url), 'utf8'));
+    respond = (req, res) => {
+      const url = new URL(req.url!, runtime.origin);
+      if (url.pathname === `${routeBase}feed`) json(res, { ok: true, data: { items: [photoPost], cursor: '', has_more: false } });
+      else if (url.pathname === `${routeBase}detail` && url.searchParams.get('id') === photoPost.id) {
+        json(res, { ok: true, data: { post: photoPost } });
+      } else json(res, { ok: false }, 403);
+    };
+    const result = await acquireQzone(await policy(), runtime, root);
+    const directory = path.join(root, result.runId);
+    const manifest = JSON.parse(await readFile(path.join(directory, 'run.json'), 'utf8'));
+    const [candidate] = JSON.parse(await readFile(path.join(directory, 'candidates.json'), 'utf8'));
+    expect(candidate.media).toEqual([
+      { position: 0, originalUrl: 'https://photonjmaz.photo.store.qq.com/psc/synthetic-first/0', acquisitionStatus: 'not-requested' },
+      { position: 1, originalUrl: 'https://photonjmaz.photo.store.qq.com/psc/synthetic-second%2Fvariant/0?width=640&height=480', acquisitionStatus: 'not-requested' },
+      { position: 2, originalUrl: 'https://photonjmaz.photo.store.qq.com/psc/synthetic-third/0?format=png&size=large', acquisitionStatus: 'not-requested' },
+    ]);
+    const expectedRaw = {
+      uin: '10001', tid: 'PhotoStore-Tid_01', created_at: photoPost.created_at,
+      content: photoPost.content, mediaUrls: photoPost.images,
+    };
+    for (const [reference, value] of [[manifest.feedEvidence, [expectedRaw]], [candidate.rawEvidence, expectedRaw]] as const) {
+      const raw = await readFile(path.join(directory, 'blobs', reference.blob.sha256));
+      expect(raw.toString('utf8')).toBe(JSON.stringify(value));
+      expect(reference.blob.sha256).toBe(createHash('sha256').update(raw).digest('hex'));
+      expect(reference.blob.byteLength).toBe(raw.byteLength);
+      expect(reference.evidenceTier).toBe('restricted');
+      expect(reference.evidenceKind).toBe('provider-export');
+    }
+    expect(manifest.publicationEligible).toBe(false);
+    expect(manifest.discovery.complete).toBe(false);
+    expect(candidate.content.completeness).toBe('partial');
+    expect(requests.map((request) => ({ method: request.method, pathname: new URL(request.url!, runtime.origin).pathname }))).toEqual([
+      { method: 'GET', pathname: `${routeBase}feed` }, { method: 'GET', pathname: `${routeBase}detail` },
+    ]);
+  });
+
+  it.each(['feed', 'detail'])('fails unsafe %s media without completing or archiving the unsafe URL', async (stage) => {
+    const unsafe = 'http://photo.store.qq.com/image?access_token=excluded-media-secret';
+    respond = (req, res) => {
+      const isFeed = new URL(req.url!, runtime.origin).pathname === `${routeBase}feed`;
+      const selected = (isFeed ? stage === 'feed' : stage === 'detail') ? { ...post, images: [unsafe] } : post;
+      json(res, { ok: true, data: isFeed ? { items: [selected], cursor: '', has_more: false } : { post: selected } });
+    };
+    await expect(acquireQzone(await policy(), runtime, root)).rejects.toMatchObject({ code: 'invalid-response' });
+    const directories = await readdir(root);
+    expect(directories.every((entry) => entry.startsWith('.partial-'))).toBe(true);
+    const partial = path.join(root, directories[0]!);
+    expect(await readdir(partial)).not.toContain('run.json');
+    expect(await readdir(partial)).not.toContain('candidates.json');
+    for (const hash of await readdir(path.join(partial, 'blobs'))) {
+      expect(await readFile(path.join(partial, 'blobs', hash), 'utf8')).not.toContain('excluded-media-secret');
+    }
+    expect(requests).toHaveLength(stage === 'feed' ? 1 : 2);
+  });
+
   it('records empty discovery as incomplete rather than proving no posts exist', async () => {
     respond = (_req, res) => json(res, { ok: true, data: { items: [], cursor: '', has_more: false } });
     const result = await acquireQzone(await policy(), runtime, root);

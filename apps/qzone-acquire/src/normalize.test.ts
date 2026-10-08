@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { socialSourceItemId } from '@nju-info/core';
+import { socialEnvelopePayloadSchema, socialSourceItemId } from '@nju-info/core';
 import { normalizeQzonePost, projectQzonePost, type QzonePost } from './normalize.js';
 
 const feedResponse = JSON.parse(readFileSync(new URL('./fixtures/feed-response.json', import.meta.url), 'utf8')) as {
@@ -13,6 +13,9 @@ const feedPost = feedResponse.data.items[0];
 const detailPost = detailResponse.data.post;
 const expectedUin = '123456789';
 const expectedId = '123456789:synthetic-Tid_01';
+const photoStorePost = JSON.parse(readFileSync(new URL('./fixtures/photo-store-post.json', import.meta.url), 'utf8')) as {
+  id: string; author: { uin: number }; created_at: number; content: string; images: string[];
+};
 
 describe('QZone post projection', () => {
   it('positively projects feed and detail posts without unused provider fields', () => {
@@ -159,5 +162,78 @@ describe('QZone candidate normalization', () => {
       ...projected,
       mediaUrls: ['https://images.example.invalid/photo.png?access_token=synthetic-secret'],
     })).toThrowError('Invalid QZone candidate.');
+  });
+});
+
+describe('qualified QQ photo-store media canonicalization', () => {
+  it('preserves provider evidence and image order while producing HTTPS locators with stable identity', () => {
+    const projected = projectQzonePost(photoStorePost, '10001', photoStorePost.id);
+    const candidate = normalizeQzonePost(projected);
+    expect(projected.mediaUrls).toEqual(photoStorePost.images);
+    expect(candidate.media).toEqual([
+      { position: 0, originalUrl: 'https://photonjmaz.photo.store.qq.com/psc/synthetic-first/0', acquisitionStatus: 'not-requested' },
+      { position: 1, originalUrl: 'https://photonjmaz.photo.store.qq.com/psc/synthetic-second%2Fvariant/0?width=640&height=480', acquisitionStatus: 'not-requested' },
+      { position: 2, originalUrl: 'https://photonjmaz.photo.store.qq.com/psc/synthetic-third/0?format=png&size=large', acquisitionStatus: 'not-requested' },
+    ]);
+    expect(candidate.content.completeness).toBe('partial');
+    const publicAssetSchema = socialEnvelopePayloadSchema.shape.media.element.shape.originalUrl;
+    for (const providerUrl of projected.mediaUrls) expect(publicAssetSchema.safeParse(providerUrl).success).toBe(false);
+    for (const media of candidate.media) expect(publicAssetSchema.parse(media.originalUrl)).toBe(media.originalUrl);
+    const httpsReplay = normalizeQzonePost({ ...projected, mediaUrls: candidate.media.map((media) => media.originalUrl) });
+    expect(httpsReplay.sourceItemId).toBe(candidate.sourceItemId);
+    expect(httpsReplay.media).toEqual(candidate.media);
+  });
+
+  it.each([
+    ['http://photo.store.qq.com/image', 'https://photo.store.qq.com/image'],
+    ['http://cdn.photo.store.qq.com/image?q=90', 'https://cdn.photo.store.qq.com/image?q=90'],
+    ['HTTP://PHOTONJMAZ.PHOTO.STORE.QQ.COM/image?width=640', 'https://PHOTONJMAZ.PHOTO.STORE.QQ.COM/image?width=640'],
+    ['https://images.example.invalid/unchanged.png?format=png', 'https://images.example.invalid/unchanged.png?format=png'],
+  ])('changes only the qualified scheme of %s', (providerUrl, canonicalUrl) => {
+    const projected = projectQzonePost({ ...photoStorePost, images: [providerUrl] }, '10001');
+    expect(normalizeQzonePost(projected).media[0]?.originalUrl).toBe(canonicalUrl);
+    expect(projected.mediaUrls).toEqual([providerUrl]);
+  });
+
+  it.each([
+    'http://images.example.invalid/image',
+    'http://photonjmaz.photo.store.qq.com.evil.example/image',
+    'http://evilphoto.store.qq.com/image',
+    'http://photonjmaz.photo.store.qq.com:80/image',
+    'http://photonjmaz.photo.store.qq.com:8443/image',
+    'http://user:password@photonjmaz.photo.store.qq.com/image',
+    'http://@photonjmaz.photo.store.qq.com/image',
+    'https://user:password@photonjmaz.photo.store.qq.com/image',
+    'http://photonjmaz.photo.store.qq.com/image#fragment',
+    'http://photonjmaz.photo.store.qq.com/image#',
+    'https://photonjmaz.photo.store.qq.com/image#fragment',
+    'http://photonjmaz.photo.store.qq.com/image?access_token=synthetic-secret',
+    'http://photonjmaz.photo.store.qq.com/image?%70_skey=synthetic-secret',
+    'http://photonjmaz.photo.store.qq.com/image?SESSION_ID=synthetic-secret',
+    'http://photonjmaz.photo.store.qq.com/image?unapproved=value',
+    'https://photonjmaz.photo.store.qq.com/image?access_token=synthetic-secret',
+    'http://photonjmaz.photo.store.qq.com/image?redirect=https%3A%2F%2Fevil.example',
+    'http:/photonjmaz.photo.store.qq.com/image',
+    'http:///photonjmaz.photo.store.qq.com/image',
+    'https:/photonjmaz.photo.store.qq.com/image',
+    '//photonjmaz.photo.store.qq.com/image',
+    'http://photonjmaz.photo.store.qq.com/image%GG',
+    'https://photonjmaz.photo.store.qq.com/image%',
+    'http://photonjmaz.photo.store.qq.com/\\image',
+    'https://photonjmaz.photo.store.qq.com/\\image',
+    'http://photonjmaz.photo.store.qq.com/image\n',
+    'http://photonjmaz.photo.store.qq.com./image',
+    'http://photonjmaz%2Ephoto.store.qq.com/image',
+    'http://-cdn.photo.store.qq.com/image',
+    'http://cdn_.photo.store.qq.com/image',
+    `http://${'a'.repeat(64)}.photo.store.qq.com/image`,
+    `http://${Array(4).fill('a'.repeat(63)).join('.')}.photo.store.qq.com/image`,
+    'not-a-url',
+  ])('rejects unsafe media at extraction and normalization: %s', (providerUrl) => {
+    expect(() => projectQzonePost({ ...photoStorePost, images: [providerUrl] }, '10001')).toThrow('Invalid QZone post.');
+    expect(() => normalizeQzonePost({
+      uin: '10001', tid: 'PhotoStore-Tid_01', created_at: photoStorePost.created_at,
+      content: photoStorePost.content, mediaUrls: [providerUrl],
+    })).toThrow('Invalid QZone candidate.');
   });
 });
