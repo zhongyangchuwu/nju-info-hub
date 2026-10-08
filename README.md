@@ -47,6 +47,8 @@ The collector calls only the AstrBot v1 feed/detail routes through that bearer c
 
 The separate operator-only [WeRead latest qualification/shadow app](docs/adr-credentialed-public-acquisition.md#weread-latest-qualification-boundary) validates complete native identity and can explicitly derive a link-only `SocialAcquisitionBundle v1` using a separately reviewed official `review-only` policy. Its decision remains `review-required`, never publication approval. It has no importer/public-feed integration and does not start the thirty-day benchmark.
 
+The [2026-10-08 social acquisition Agent handoff](docs/social-acquisition-handoff-2026-10-08.md) records merged PRs, open Issues, verified paths, admission blockers, and next-Agent verification steps. The machine-specific operator snapshot is stored outside Git and should never be committed.
+
 Use GitHub Issues for the current work queue. AI/MCP integration is deferred until a concrete consumer requires it.
 
 GitHub is the source of truth for implementation status:
