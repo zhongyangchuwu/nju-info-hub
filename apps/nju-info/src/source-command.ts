@@ -7,10 +7,15 @@ import {
 } from "@nju-info/collector";
 import type { SourceConfig } from "@nju-info/core";
 import { collectNotices, discoverPages, ingestSource } from "@nju-info/worker/collection";
+import { RuntimeInputError } from "./runtime-input.js";
+
+const sourceCommands: Record<string, true> = {
+  discover: true, "discover-pages": true, fetch: true, ingest: true,
+};
 
 function findSource(sources: SourceConfig[], id: string): SourceConfig {
   const source = sources.find((item) => item.id === id);
-  if (!source) throw new Error(`unknown source: ${id}`);
+  if (!source) throw new RuntimeInputError("unknown_source");
   return source;
 }
 
@@ -18,7 +23,7 @@ function positiveInteger(value: string | undefined, fallback: number): number {
   if (value === undefined) return fallback;
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new Error(`expected a positive integer, got: ${value}`);
+    throw new RuntimeInputError("invalid_limit");
   }
   return parsed;
 }
@@ -38,13 +43,12 @@ export async function runSourceCommand(
     return;
   }
 
-  const sourceCommands = new Set(["discover", "discover-pages", "fetch", "ingest"]);
-  if (!sourceCommands.has(command)) throw new Error(`unknown source command: ${command}`);
-  if (!sourceId) throw new Error(`usage: source ${command} <source-id> [args...]`);
+  if (sourceCommands[command] !== true) throw new RuntimeInputError("unknown_source_command");
+  if (!sourceId) throw new RuntimeInputError("usage_source");
   const source = findSource(sources, sourceId);
 
   if (command === "ingest") {
-    if (!thirdArg) throw new Error("usage: source ingest <source-id> <database-path> [limit]");
+    if (!thirdArg) throw new RuntimeInputError("usage_source_ingest");
     const result = await ingestSource(
       source,
       resolve(workingDirectory, thirdArg),

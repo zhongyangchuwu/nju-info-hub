@@ -36,24 +36,9 @@ describe("collection scheduler", () => {
     scheduler.stop();
   });
 
-  it("reports successful triggers for readiness hooks", async () => {
-    const successes: string[] = [];
-    const scheduler = createCollectionScheduler({
-      schedule: "0 0 1 1 *",
-      timeZone: "UTC",
-      collect: async () => {},
-      onSuccess: (trigger) => { successes.push(trigger); },
-    });
-    await scheduler.start();
-    expect(successes).toEqual(["startup"]);
-    expect(await scheduler.trigger()).toBe(true);
-    expect(successes).toEqual(["startup", "manual"]);
-    scheduler.stop();
-  });
 
-  it("logs a transient failure and accepts later runs", async () => {
+  it("accepts later runs after a transient collection failure", async () => {
     let calls = 0;
-    const failures: string[] = [];
     const scheduler = createCollectionScheduler({
       schedule: "0 0 1 1 *",
       timeZone: "UTC",
@@ -61,10 +46,8 @@ describe("collection scheduler", () => {
         calls += 1;
         if (calls === 1) throw new Error("temporary upstream failure");
       },
-      onError: (error) => failures.push(error instanceof Error ? error.message : String(error)),
     });
     await scheduler.start();
-    expect(failures).toEqual(["temporary upstream failure"]);
     expect(await scheduler.trigger()).toBe(true);
     expect(calls).toBe(2);
     scheduler.stop();

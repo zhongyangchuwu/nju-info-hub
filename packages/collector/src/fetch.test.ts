@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchRawDocument } from "./fetch.js";
+import { HttpStatusError, fetchRawDocument } from "./fetch.js";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -111,6 +111,29 @@ describe("fetchRawDocument", () => {
 
     expect(document.body).toBe("<html>ok</html>");
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("retains final HTTP status as numeric error metadata", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response("", { status: 503, statusText: "private server text" }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    vi.useFakeTimers();
+
+    try {
+      const request = fetchRawDocument(
+        "nju-test",
+        "https://example.edu/unavailable.htm",
+      ).catch((cause: unknown) => cause);
+      await vi.runAllTimersAsync();
+      const error = await request;
+
+      expect(error).toBeInstanceOf(HttpStatusError);
+      expect(error).toMatchObject({ status: 503 });
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("hashes original bytes and decodes legacy Chinese charsets", async () => {

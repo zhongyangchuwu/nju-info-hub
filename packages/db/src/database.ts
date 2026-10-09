@@ -4,6 +4,13 @@ import { normalizePublicationDate } from "@nju-info/core";
 import type {
   AcquisitionKind,
   Attachment,
+  CollectionErrorDiagnostic,
+  CollectionRun,
+  CollectionSourceAttempt,
+  CollectionSourceCompletion,
+  CollectionSourceCounts,
+  CollectionSourceStatus,
+  CollectionTrigger,
   DiscoveredItem,
   ParsedNotice,
   RawDocument,
@@ -175,6 +182,40 @@ interface SourceEntryQueryRow {
   modified_at: string | null;
 }
 
+interface CollectionRunRow {
+  id: number;
+  trigger: CollectionTrigger;
+  started_at: string;
+  finished_at: string | null;
+  outcome: CollectionRun["outcome"];
+  succeeded_sources: number;
+  failed_sources: number;
+}
+
+interface CollectionAttemptRow {
+  id: number;
+  run_id: number;
+  source_id: string;
+  started_at: string;
+  finished_at: string | null;
+  outcome: CollectionSourceAttempt["outcome"];
+  counts_json: string | null;
+  error_json: string | null;
+}
+
+function collectionRun(row: CollectionRunRow): CollectionRun {
+  return { id: row.id, trigger: row.trigger, startedAt: row.started_at,
+    finishedAt: row.finished_at, outcome: row.outcome,
+    succeededSources: row.succeeded_sources, failedSources: row.failed_sources };
+}
+
+function collectionAttempt(row: CollectionAttemptRow): CollectionSourceAttempt {
+  return { id: row.id, runId: row.run_id, sourceId: row.source_id,
+    startedAt: row.started_at, finishedAt: row.finished_at, outcome: row.outcome,
+    counts: row.counts_json === null ? null : JSON.parse(row.counts_json) as CollectionSourceCounts,
+    error: row.error_json === null ? null : JSON.parse(row.error_json) as CollectionErrorDiagnostic };
+}
+
 function numberField(
   row: Record<string, unknown> | undefined,
   field: string,
@@ -233,6 +274,75 @@ export class InfoHubDatabase implements Disposable {
 
   [Symbol.dispose](): void {
     this.close();
+  }
+
+  beginCollectionRun(trigger: CollectionTrigger, startedAt: string): number {
+    return Number(this.#database.prepare(
+      "INSERT INTO collection_runs (trigger, started_at) VALUES (?, ?)",
+    ).run(trigger, startedAt).lastInsertRowid);
+  }
+
+  beginCollectionSourceAttempt(runId: number, sourceId: string, startedAt: string): number {
+    const result = this.#database.prepare(
+      `INSERT INTO collection_source_attempts (run_id, source_id, started_at)
+       SELECT id, ?, ? FROM collection_runs WHERE id = ? AND outcome = 'unfinished'`,
+    ).run(sourceId, startedAt, runId);
+    if (Number(result.changes) !== 1) throw new Error("collection run is missing or already completed");
+    return Number(result.lastInsertRowid);
+  }
+
+  finishCollectionSourceAttempt(
+    attemptId: number, finishedAt: string, completion: CollectionSourceCompletion,
+  ): void {
+    // Persist only the public contract, never incidental exception or collector fields.
+    const counts = completion.outcome === "success" ? JSON.stringify({
+      pagesVisited: completion.counts.pagesVisited,
+      itemsObserved: completion.counts.itemsObserved,
+      newItemsObserved: completion.counts.newItemsObserved,
+      noticesIngested: completion.counts.noticesIngested,
+      insertedRevisions: completion.counts.insertedRevisions,
+      unchangedRevisions: completion.counts.unchangedRevisions,
+      skippedRestricted: completion.counts.skippedRestricted,
+      skippedUnsupported: completion.counts.skippedUnsupported,
+    }) : null;
+    const error = completion.outcome === "failure" ? JSON.stringify({
+      phase: completion.error.phase,
+      causes: completion.error.causes.map((cause) => ({
+        name: cause.name,
+        ...(cause.code === undefined ? {} : { code: cause.code }),
+        ...(cause.status === undefined ? {} : { status: cause.status }),
+      })),
+    }) : null;
+    const result = this.#database.prepare(
+      `UPDATE collection_source_attempts
+          SET finished_at = ?, outcome = ?, counts_json = ?, error_json = ?
+        WHERE id = ? AND outcome = 'unfinished'`,
+    ).run(finishedAt, completion.outcome, counts, error, attemptId);
+    if (Number(result.changes) !== 1) throw new Error("collection source attempt is missing or already completed");
+  }
+
+  finishCollectionRun(runId: number, finishedAt: string): CollectionRun {
+    return this.#transaction(() => {
+      const totals = this.#database.prepare(
+        `SELECT COUNT(*) FILTER (WHERE outcome = 'unfinished') AS unfinished,
+                COUNT(*) FILTER (WHERE outcome = 'success') AS succeeded,
+                COUNT(*) FILTER (WHERE outcome = 'failure') AS failed
+           FROM collection_source_attempts WHERE run_id = ?`,
+      ).get(runId)!;
+      if (numberField(totals, "unfinished") > 0) {
+        throw new Error("collection run has unfinished source attempts");
+      }
+      const succeeded = numberField(totals, "succeeded");
+      const failed = numberField(totals, "failed");
+      const outcome = failed === 0 ? "success" : succeeded === 0 ? "failure" : "partial-failure";
+      const row = this.#database.prepare(
+        `UPDATE collection_runs SET finished_at = ?, outcome = ?,
+                succeeded_sources = ?, failed_sources = ?
+          WHERE id = ? AND outcome = 'unfinished' RETURNING *`,
+      ).get(finishedAt, outcome, succeeded, failed, runId) as unknown as CollectionRunRow | undefined;
+      if (row === undefined) throw new Error("collection run is missing or already completed");
+      return collectionRun(row);
+    });
   }
 
   upsertSource(source: SourceConfig): void {
@@ -436,6 +546,18 @@ export class InfoHubDatabase implements Disposable {
         insertedRevision: true,
       };
     });
+  }
+
+  listCollectionRuns(limit = 20): CollectionRun[] {
+    return this.#queries.listCollectionRuns(limit);
+  }
+
+  listCollectionSourceAttempts(runId: number): CollectionSourceAttempt[] {
+    return this.#queries.listCollectionSourceAttempts(runId);
+  }
+
+  listCollectionSourceStatuses(): CollectionSourceStatus[] {
+    return this.#queries.listCollectionSourceStatuses();
   }
 
   listSources(): PersistedSourceSummary[] {
@@ -698,6 +820,18 @@ export class InfoHubDatabaseReader implements Disposable {
     this.#queries = new DatabaseQueries(this.#database);
   }
 
+  listCollectionRuns(limit = 20): CollectionRun[] {
+    return this.#queries.listCollectionRuns(limit);
+  }
+
+  listCollectionSourceAttempts(runId: number): CollectionSourceAttempt[] {
+    return this.#queries.listCollectionSourceAttempts(runId);
+  }
+
+  listCollectionSourceStatuses(): CollectionSourceStatus[] {
+    return this.#queries.listCollectionSourceStatuses();
+  }
+
   listRecentNotices(options: RecentNoticeOptions = {}): NoticeQueryResult[] {
     return this.#queries.listRecentNotices(options);
   }
@@ -732,6 +866,57 @@ class DatabaseQueries {
 
   constructor(database: DatabaseSync) {
     this.#database = database;
+  }
+
+  listCollectionRuns(limit = 20): CollectionRun[] {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+      throw new Error("collection run limit must be an integer from 1 to 100");
+    }
+    const rows = this.#database.prepare(
+      "SELECT * FROM collection_runs ORDER BY id DESC LIMIT ?",
+    ).all(limit) as unknown as CollectionRunRow[];
+    return rows.map(collectionRun);
+  }
+
+  listCollectionSourceAttempts(runId: number): CollectionSourceAttempt[] {
+    const rows = this.#database.prepare(
+      "SELECT * FROM collection_source_attempts WHERE run_id = ? ORDER BY id",
+    ).all(runId) as unknown as CollectionAttemptRow[];
+    return rows.map(collectionAttempt);
+  }
+
+  listCollectionSourceStatuses(): CollectionSourceStatus[] {
+    const rows = this.#database.prepare(
+      `WITH latest AS (
+         SELECT source_id, MAX(id) AS attempt_id,
+                MAX(CASE WHEN outcome = 'success' THEN id END) AS success_id,
+                MAX(CASE WHEN outcome = 'success' AND json_extract(counts_json, '$.newItemsObserved') > 0
+                         THEN id END) AS new_item_id,
+                MAX(CASE WHEN outcome = 'success' AND json_extract(counts_json, '$.insertedRevisions') > 0
+                         THEN id END) AS new_revision_id
+           FROM collection_source_attempts GROUP BY source_id
+       )
+       SELECT attempt.*, success.finished_at AS last_success_at,
+              new_item.finished_at AS last_new_item_at,
+              new_revision.finished_at AS last_new_revision_at,
+              (SELECT COUNT(*) FROM collection_source_attempts failure
+                WHERE failure.source_id = latest.source_id AND failure.outcome = 'failure'
+                  AND failure.id > COALESCE(latest.success_id, 0)) AS consecutive_failures
+         FROM latest
+         JOIN collection_source_attempts attempt ON attempt.id = latest.attempt_id
+         LEFT JOIN collection_source_attempts success ON success.id = latest.success_id
+         LEFT JOIN collection_source_attempts new_item ON new_item.id = latest.new_item_id
+         LEFT JOIN collection_source_attempts new_revision ON new_revision.id = latest.new_revision_id
+        ORDER BY latest.source_id`,
+    ).all() as unknown as Array<CollectionAttemptRow & {
+      last_success_at: string | null;
+      last_new_item_at: string | null;
+      last_new_revision_at: string | null;
+      consecutive_failures: number;
+    }>;
+    return rows.map((row) => ({ sourceId: row.source_id, lastAttempt: collectionAttempt(row),
+      lastSuccessAt: row.last_success_at, lastNewItemAt: row.last_new_item_at,
+      lastNewRevisionAt: row.last_new_revision_at, consecutiveFailures: row.consecutive_failures }));
   }
 
   listSources(): PersistedSourceSummary[] {

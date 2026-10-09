@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./collection": "./src/collection.ts"
+    "./collection": "./src/collection.ts",
+    "./diagnostics": "./src/diagnostics.ts"
   },
   "scripts": {
     "check": "tsc -p tsconfig.json --noEmit",

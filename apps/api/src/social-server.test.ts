@@ -5,7 +5,8 @@ import type { InfoHubDatabaseReader, PersistedSourceSummary, SourceEntryQueryRes
 import { createApiServer } from "./server.js";
 
 type Reader = Pick<InfoHubDatabaseReader,
-  "listSources" | "listOrganizations" | "listRecentNotices" | "listRecentSourceEntries">;
+  "listSources" | "listOrganizations" | "listRecentNotices" | "listRecentSourceEntries"
+  | "listCollectionRuns" | "listCollectionSourceStatuses">;
 type SocialMetadata = NonNullable<SourceEntryQueryResult["social"]>;
 const publisher: SocialMetadata["publisherIdentity"] = { scheme: "qzone-uin", version: 1, value: "123456" };
 const source: PersistedSourceSummary = {
@@ -55,6 +56,7 @@ describe("social public API boundary", () => {
     const newest = entry("newest", "2026-09-24T10:00:00.200Z");
     let entries: SourceEntryQueryResult[] = [newest, older];
     const reader: Reader = {
+      listCollectionRuns: () => [], listCollectionSourceStatuses: () => [],
       listSources: () => [currentSource], listOrganizations: () => [source.organization], listRecentNotices: () => [],
       listRecentSourceEntries: (options = {}) => options.sourceId === source.id ? entries.slice(0, options.limit ?? 50) : [],
     };
@@ -165,7 +167,8 @@ describe("social public API boundary", () => {
     const expired: PersistedSourceSummary = { ...source,
       socialPublication: { status: "expired", changedAt: "2026-09-24T10:00:00.200Z" } };
     const base = await serving({ listSources: () => [expired], listRecentSourceEntries: () => [],
-      listOrganizations: () => [source.organization], listRecentNotices: () => [] });
+      listOrganizations: () => [source.organization], listRecentNotices: () => [],
+      listCollectionRuns: () => [], listCollectionSourceStatuses: () => [] });
     const result = await fetch(`${base}/feeds/${source.id}.json`, { headers: { "If-Modified-Since": "Thu, 24 Sep 2099 10:00:00 GMT" } });
     expect(result.status).toBe(200);
     expect(await result.json()).toMatchObject({ items: [], _nju: { social_publication: { status: "expired" } } });

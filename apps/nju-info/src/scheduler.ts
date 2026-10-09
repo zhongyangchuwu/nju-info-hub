@@ -1,11 +1,12 @@
 import { Cron } from "croner";
+import type { CollectionTrigger } from "@nju-info/core";
 
 export interface CollectionSchedulerOptions {
   schedule: string;
   timeZone: string;
-  collect: () => Promise<void>;
-  onError?: (error: unknown, trigger: "startup" | "scheduled" | "manual") => void;
-  onSuccess?: (trigger: "startup" | "scheduled" | "manual") => void | Promise<void>;
+  collect: (trigger: CollectionTrigger) => Promise<void>;
+  onError?: (error: unknown, trigger: CollectionTrigger) => void;
+  onSuccess?: (trigger: CollectionTrigger) => void | Promise<void>;
   runOnStart?: boolean;
 }
 
@@ -20,11 +21,11 @@ export function createCollectionScheduler(options: CollectionSchedulerOptions): 
   let started = false;
   let stopped = false;
 
-  const execute = async (trigger: "startup" | "scheduled" | "manual"): Promise<boolean> => {
+  const execute = async (trigger: CollectionTrigger): Promise<boolean> => {
     if (active || stopped) return false;
     active = true;
     try {
-      await options.collect();
+      await options.collect(trigger);
       await options.onSuccess?.(trigger);
       return true;
     } catch (error) {

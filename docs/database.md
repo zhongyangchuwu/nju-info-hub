@@ -4,7 +4,7 @@
 
 The persistence package uses Node.js 24's built-in `node:sqlite` `DatabaseSync` API. The schema and ingestion path need only prepared statements, transactions, foreign keys, and migrations; Drizzle would add an ORM and driver dependency without removing meaningful code at this stage. The synchronous API is acceptable because the current collection runtime is single-process. A concurrent service would need a separate connection and concurrency design.
 
-`InfoHubDatabase` is the writer: it opens with foreign keys enabled, a five-second busy timeout, WAL journaling, and `synchronous = NORMAL`. Schema versioning uses SQLite's `user_version` pragma. Fresh databases use v6; versions 0–5 migrate transactionally while preserving website history, applying the existing publication-day/observation upgrades when necessary and then adding authenticated social lifecycle tables. Unknown versions are rejected rather than modified implicitly. No migration invents historical observations or social publication authority.
+`InfoHubDatabase` is the writer: it opens with foreign keys enabled, a five-second busy timeout, WAL journaling, and `synchronous = NORMAL`. Schema versioning uses SQLite's `user_version` pragma. Fresh databases use v7; versions 0–6 migrate transactionally while preserving website and authenticated social history. Earlier publication-day/observation/social upgrades run only when needed; v6→v7 adds collection operation tables without rebuilding existing canonical/social tables. Unknown versions are rejected rather than modified implicitly. No migration invents historical observations, collection attempts, timestamps, or social publication authority. A current read-only reader rejects v6 until the normal writer upgrades it.
 
 ## Schema
 
@@ -65,6 +65,24 @@ Stores ordered attachment URL, title, and optional media type for a specific not
 
 The [credentialed-public ADR](adr-credentialed-public-acquisition.md#authenticated-metadata-import-and-lifecycle) owns operator trust/signing/storage rules. The separate private importer publishes a new database filename only after successful commit; existing writer initialization still performs normal schema migrations. Databases/sidecars/backups contain private operator registration/authorization audit records even though item raw blobs are public-safe: never expose a DB dump as public publication.
 
+### Collection operation tables
+
+`collection_runs` stores instance `collect`/`schedule` trigger, start/end clocks and final source totals. `collection_source_attempts` stores one attempt per `(run_id, source_id)` with an independent monotonic ID. Attempts deliberately have no foreign key to canonical `sources`: a first-ever list fetch can fail before source registration. Startup/manual/scheduled passes use the same ledger; source-level debugging commands and social imports do not create instance collection history.
+
+Start rows are `unfinished`; each completion is once-only. A run cannot finish while a child is unfinished. Finished runs derive `success`, `partial-failure` or `failure` from their source outcomes. Failed attempt counts are null, not fabricated zeros: observations or full notices may already have been committed before a later failure. An unfinished row may be active or interrupted; it is not a process heartbeat and is not automatically rewritten on restart.
+
+Successful counts distinguish scanned pages, observed rows, unique IDs absent from the pass's initial history (`newItemsObserved`), full notices, inserted/unchanged revisions and actual restricted/unsupported skips. A new full revision may only enrich an already-known link; neither revision count nor new observation count is a count of newly published campus events.
+
+| Source-status field | Meaning |
+| --- | --- |
+| `lastAttempt` | Highest attempt ID, independent of run ID or wall-clock ordering; includes outcome, nullable counts and safe diagnostic. |
+| `lastSuccessAt` | Completion clock of the latest successful attempt by attempt ID. A no-change success advances this clock and resets completed failures. |
+| `lastNewItemAt` | Completion clock of the latest successful attempt that observed a previously unknown native item ID. |
+| `lastNewRevisionAt` | Completion clock of the latest successful attempt that inserted a full revision, including enrichment or correction. |
+| `consecutiveFailures` | Completed failed attempts after the latest successful attempt; unfinished attempts do not invent recovery. |
+
+Activity clocks describe successful attempts only. Partial writes from a failed attempt do not advance them, and none is an upstream publication instant or a reader-delivery timestamp. Diagnostics retain only bounded approved stage/name/code/HTTP-status metadata, never incidental message, stack, URL or body fields. The exception normalizer limits graph traversal; it cannot impose a wall-clock bound on arbitrary synchronous accessor code. Operational history remains in the same local database and verified backups, separate from canonical source/notice counts in `stats()`.
+
 ## Transactions and idempotency
 
 A notice ingest runs in one `BEGIN IMMEDIATE` transaction:
@@ -91,6 +109,8 @@ For read-only delivery, use `new InfoHubDatabaseReader(path)` from `@nju-info/db
 
 `apps/api` opens this reader once at startup and serves the persisted query results without accessing registry YAML or the ingestion API. Its default loopback bind does not change SQLite's live-WAL sidecar requirements above; a reader must be able to access the live database and its sidecars. API startup fails for missing or unsupported-schema files rather than initializing them.
 
+The writer and reader also share `listCollectionRuns(limit = 20)` (integer 1–100), `listCollectionSourceAttempts(runId)` and `listCollectionSourceStatuses()`. Source statuses include attempted sources only, including failed sources without canonical registration. Run totals are final completion totals, not live progress counters. HTTP exposes the latest status and bounded run history; `nju-info status [database]` opens this reader without creating or migrating state.
+
 ## Source command
 
 ```bash
@@ -104,4 +124,4 @@ The source command persists list-page raw documents and records an observation f
 
 ## Deferred
 
-The schema deliberately omits canonical cross-source notices, semantic deduplication, fetch-attempt history, REST output tables, FTS/vector indexes, queues, PostgreSQL, and parser-version tracking. Raw documents remain available for a later reparsing or migration path.
+The schema deliberately omits canonical cross-source notices, semantic deduplication, individual HTTP request/retry-attempt history, REST output tables, FTS/vector indexes, queues, PostgreSQL, and parser-version tracking. Instance collection runs/source attempts are persisted separately as described above. Raw documents remain available for a later reparsing or migration path.

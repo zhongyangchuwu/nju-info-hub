@@ -97,11 +97,89 @@ describe("read-only API", () => {
     expect(await response(base, "/v1/health")).toMatchObject({
       status: 200, contentType: "application/json; charset=utf-8", body: { data: { status: "ok" } },
     });
-    for (const route of ["/v1/sources", "/v1/organizations", "/v1/notices/recent"]) {
+    for (const route of ["/v1/sources", "/v1/organizations", "/v1/notices/recent", "/v1/collection/runs"]) {
       expect(await response(base, route)).toMatchObject({
         status: 200, contentType: "application/json; charset=utf-8", body: { data: [] },
       });
     }
+    expect((await response(base, "/v1/collection/status")).body).toEqual({ data: { latestRun: null, sources: [] } });
+  });
+
+  it("reports failed and unfinished collection state without treating health as source success", async () => {
+    const { path, writer } = database();
+    writer.upsertSource(source);
+    const startedAt = "2026-10-09T10:00:00.000Z";
+    const finishedAt = "2026-10-09T11:00:00.000Z";
+    const runId = writer.beginCollectionRun("manual", startedAt);
+    const attemptId = writer.beginCollectionSourceAttempt(runId, "first-fetch-failed", startedAt);
+    writer.finishCollectionSourceAttempt(attemptId, finishedAt, {
+      outcome: "failure", error: { phase: "list-fetch", causes: [{ name: "TypeError", code: "ETIMEDOUT" }] },
+    });
+    writer.finishCollectionRun(runId, finishedAt);
+    const base = await serving(path);
+    const failedRun = { id: runId, trigger: "manual", startedAt, finishedAt, outcome: "failure",
+      succeededSources: 0, failedSources: 1 };
+    const failedStatus = { sourceId: "first-fetch-failed", lastAttempt: { id: attemptId, runId,
+      sourceId: "first-fetch-failed", startedAt, finishedAt, outcome: "failure", counts: null,
+      error: { phase: "list-fetch", causes: [{ name: "TypeError", code: "ETIMEDOUT" }] } },
+      lastSuccessAt: null, lastNewItemAt: null, lastNewRevisionAt: null, consecutiveFailures: 1 };
+    expect((await response(base, "/v1/collection/status")).body).toEqual({ data: {
+      latestRun: failedRun, sources: [failedStatus],
+    } });
+    expect((await response(base, "/v1/health")).body).toEqual({ data: { status: "ok" } });
+    const pendingRunId = writer.beginCollectionRun("scheduled", finishedAt);
+    const pendingAttemptId = writer.beginCollectionSourceAttempt(pendingRunId, "first-fetch-failed", finishedAt);
+    const pendingRun = { id: pendingRunId, trigger: "scheduled", startedAt: finishedAt, finishedAt: null,
+      outcome: "unfinished", succeededSources: 0, failedSources: 0 };
+    expect((await response(base, "/v1/collection/status")).body).toEqual({ data: {
+      latestRun: pendingRun, sources: [{ ...failedStatus, lastAttempt: { id: pendingAttemptId,
+        runId: pendingRunId, sourceId: "first-fetch-failed", startedAt: finishedAt, finishedAt: null,
+        outcome: "unfinished", counts: null, error: null } }],
+    } });
+    expect((await response(base, "/v1/collection/runs")).body).toEqual({ data: [pendingRun, failedRun] });
+    expect((await response(base, "/v1/sources")).body.data.map((item: { id: string }) => item.id)).toEqual([source.id]);
+    expect((await response(base, "/v1/notices/recent")).body).toEqual({ data: [] });
+    for (const route of ["/v1/collection/status", "/v1/collection/runs"]) {
+      for (const method of ["POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"]) {
+        const result = await fetch(`${base}${route}`, { method });
+        expect(result.status).toBe(405);
+        expect(result.headers.get("allow")).toBe("GET");
+      }
+    }
+    expect(writer.listCollectionRuns()).toEqual([pendingRun, failedRun]);
+    expect(writer.listCollectionSourceAttempts(pendingRunId)).toMatchObject([{ id: pendingAttemptId,
+      outcome: "unfinished", finishedAt: null, counts: null, error: null }]);
+  });
+
+  it("bounds collection history and rejects all noncanonical limits and unrelated or repeated parameters", async () => {
+    const { path, writer } = database();
+    const ids: number[] = [];
+    for (let index = 0; index < 25; index++) {
+      ids.unshift(writer.beginCollectionRun("scheduled", "2026-10-09T10:00:00.000Z"));
+    }
+    const base = await serving(path);
+    const defaults = (await response(base, "/v1/collection/runs")).body.data;
+    expect(defaults.map((run: { id: number }) => run.id)).toEqual(ids.slice(0, 20));
+    expect((await response(base, "/v1/collection/runs?limit=1")).body.data.map((run: { id: number }) => run.id))
+      .toEqual(ids.slice(0, 1));
+    expect((await response(base, "/v1/collection/runs?limit=100")).body.data.map((run: { id: number }) => run.id))
+      .toEqual(ids);
+    for (const query of ["limit=0", "limit=101", "limit=-1", "limit=1.5", "limit=01", "limit=1e1",
+      "limit=%2B1", "limit=%201", "limit=", "limit=999999999999999999999999999",
+      "limit=1&limit=2", "limit=1&%6cimit=2", "sourceId=first", "organizationId=first",
+      "other=1", "limit=1&sourceId=first"]) {
+      expect(await response(base, `/v1/collection/runs?${query}`)).toMatchObject({ status: 400,
+        body: { error: { code: "invalid_query" } } });
+    }
+    for (const query of ["limit=1", "sourceId=first", "other=", "limit=1&limit=2"]) {
+      expect(await response(base, `/v1/collection/status?${query}`)).toMatchObject({ status: 400,
+        body: { error: { code: "invalid_query" } } });
+    }
+    for (const route of ["/v1/collection/status/", "/v1/collection/runs/", "/V1/collection/status"]) {
+      expect((await response(base, route)).status).toBe(404);
+    }
+    expect(writer.listCollectionRuns(100)).toHaveLength(25);
+    expect(writer.listCollectionSourceStatuses()).toEqual([]);
   });
 
   it("preserves persisted summaries, current revisions, attachments, dates, and provenance", async () => {
@@ -363,46 +441,6 @@ describe("read-only API", () => {
     }
   });
 
-  it("uses source entries for feeds and leaves REST notices on the current-revision reader", async () => {
-    const listRecentNotices = vi.fn(() => []);
-    const listRecentSourceEntries = vi.fn(() => []);
-    const listSources = vi.fn(() => [{ id: source.id, name: source.name,
-      organization: source.organization, url: source.url }]);
-    const server = createApiServer({ listSources, listRecentNotices, listRecentSourceEntries,
-      listOrganizations: vi.fn(() => []) });
-    extraServers.push(server);
-    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-    const address = server.address();
-    if (!address || typeof address === "string") throw new Error("expected TCP address");
-    const base = `http://127.0.0.1:${address.port}`;
-    expect((await response(base, "/feeds/notices-a.json")).body).toMatchObject({
-      items: [], _nju: { source_id: "notices-a" },
-    });
-    expect(listRecentSourceEntries).toHaveBeenCalledExactlyOnceWith({ sourceId: "notices-a", limit: 100 });
-    expect(listRecentNotices).not.toHaveBeenCalled();
-    expect(await response(base, "/feeds/unknown.json")).toMatchObject({
-      status: 404, contentType: "application/json; charset=utf-8",
-      body: { error: { code: "not_found", message: "Not found" } },
-    });
-    expect(listRecentSourceEntries).toHaveBeenCalledTimes(1);
-    expect(listSources).toHaveBeenCalledTimes(2);
-    for (const route of ["/feeds/notices-a.json?limit=1", "/feeds/notices-a.json?limit=1&limit=2"]) {
-      expect(await response(base, route)).toMatchObject({ status: 400,
-        body: { error: { code: "invalid_query", message: "Invalid query parameters" } },
-      });
-    }
-    for (const method of ["POST", "PUT", "OPTIONS", "HEAD"]) {
-      const result = await fetch(`${base}/feeds/notices-a.json`, { method });
-      expect(result.status).toBe(405);
-      expect(result.headers.get("allow")).toBe("GET");
-      expect(result.headers.get("content-type")).toBe("application/json; charset=utf-8");
-      if (method !== "HEAD") {
-        expect(await result.json()).toEqual({ error: { code: "method_not_allowed", message: "Method not allowed" } });
-      }
-    }
-    expect(listSources).toHaveBeenCalledTimes(2);
-    expect(listRecentSourceEntries).toHaveBeenCalledTimes(1);
-  });
 
   it("rejects malformed, repeated, unknown, and misrouted query parameters", async () => {
     const base = await serving(database().path);
@@ -449,12 +487,14 @@ describe("read-only API", () => {
     const address = server.address();
     if (!address || typeof address === "string") throw new Error("expected TCP address");
     reader.close();
-    const result = await response(`http://127.0.0.1:${address.port}`, "/v1/sources");
-    expect(result).toMatchObject({ status: 500,
-      body: { error: { code: "internal_error", message: "Internal server error" } },
-    });
-    expect(JSON.stringify(result.body)).not.toContain(path);
-    expect(JSON.stringify(result.body)).not.toContain("SQLite");
+    for (const route of ["/v1/sources", "/v1/collection/status", "/v1/collection/runs"]) {
+      const result = await response(`http://127.0.0.1:${address.port}`, route);
+      expect(result).toMatchObject({ status: 500,
+        body: { error: { code: "internal_error", message: "Internal server error" } },
+      });
+      expect(JSON.stringify(result.body)).not.toContain(path);
+      expect(JSON.stringify(result.body)).not.toContain("SQLite");
+    }
   });
 });
 

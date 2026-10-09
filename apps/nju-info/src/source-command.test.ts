@@ -6,6 +6,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { runSourceCommand } from "./source-command.js";
+import { CollectionStageError, diagnoseCollectionError } from "@nju-info/worker/diagnostics";
 
 const sourceUrl = "https://stuex.nju.edu.cn/2539/list.htm";
 const baseUrl = "https://stuex.nju.edu.cn";
@@ -55,16 +56,16 @@ function mockPages(pages: Record<string, { body: string; finalUrl?: string }>) {
 
 async function runSource(sourceId: string, command: string, ...args: string[]) {
   const stdout = vi.spyOn(console, "log").mockImplementation(() => {});
-  const stderr = vi.spyOn(console, "error").mockImplementation(() => {});
+  let failure: unknown;
   try {
     await runSourceCommand([command, sourceId, ...args], sourceDirectory);
   } catch (error) {
-    console.error(error instanceof Error ? error.message : error);
+    failure = error;
     process.exitCode = 1;
   }
   return {
     output: stdout.mock.calls.map(([value]) => String(value)).join("\n"),
-    errors: stderr.mock.calls.map(([value]) => String(value)).join("\n"),
+    failure,
   };
 }
 
@@ -101,7 +102,6 @@ describe("worker restricted details", () => {
     expect(JSON.parse(result.output).map((notice: { title: string }) => notice.title)).toEqual([
       "public-new",
     ]);
-    expect(result.errors).toContain(`nju-student-exchange ${detail("blocked")}: campus-network`);
     expect(requested).toEqual([
       sourceUrl,
       `${baseUrl}/2539/list2.htm`,
@@ -197,8 +197,6 @@ describe("worker restricted details", () => {
         noticesIngested: 0,
         insertedRevisions: 0,
       });
-      expect(result.errors).toContain(`${detail("ip-blocked")}: campus-network`);
-      expect(result.errors).toContain(`${detail("auth-blocked")}: authentication`);
       expect(requested).toEqual([
         sourceUrl,
         secondListUrl,
@@ -232,8 +230,8 @@ describe("worker restricted details", () => {
     });
     const result = await run("fetch", "1");
     expect(result.output).toBe("");
-    expect(result.errors).toContain(`missing notice content for nju-student-exchange: ${detail("broken")}`);
-    expect(result.errors).not.toContain("skipping restricted detail");
+    expect(result.failure).toBeInstanceOf(CollectionStageError);
+    expect(diagnoseCollectionError(result.failure).phase).toBe("detail-parse");
     expect(process.exitCode).toBe(1);
   });
 
@@ -249,7 +247,6 @@ describe("worker restricted details", () => {
         publishedAtRaw: "2026-09-24",
       }),
     ]);
-    expect(result.errors).toBe("");
   });
 
   it("keeps public-WeChat link-only items inside the recent window without refilling", async () => {
@@ -276,7 +273,6 @@ describe("worker restricted details", () => {
         noticesIngested: 1,
         insertedRevisions: 1,
       });
-      expect(result.errors).toContain(`nju-student-affairs-notices ${wechatUrl}: public-wechat`);
       expect(requested).toEqual([listUrl, first]);
       const database = new DatabaseSync(path);
       try {
@@ -506,8 +502,8 @@ describe("worker restricted details", () => {
       }])));
       const result = await run("ingest", path, "1");
       expect(result.output).toBe("");
-      expect(result.errors).toContain("nju-student-exchange: no known source-item overlap after 10 list pages");
-      expect(result.errors).toContain("overlap-search cap 10");
+      expect(result.failure).toBeInstanceOf(CollectionStageError);
+      expect(diagnoseCollectionError(result.failure).phase).toBe("discovery");
       expect(process.exitCode).toBe(1);
       expect(requested).toEqual(urls.slice(0, 10));
       const database = new DatabaseSync(path);
@@ -566,7 +562,7 @@ describe("worker restricted details", () => {
         [detail("broken")]: { body: "<h1>Broken article</h1>" },
       });
       const result = await run("ingest", path, "1");
-      expect(result.errors).toContain(`missing notice content for nju-student-exchange: ${detail("broken")}`);
+      expect(result.failure).toBeInstanceOf(CollectionStageError);
       expect(process.exitCode).toBe(1);
       const database = new DatabaseSync(path);
       try {

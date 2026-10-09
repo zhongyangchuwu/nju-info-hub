@@ -6,8 +6,11 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs as parseApiArgs } from "@nju-info/api/config";
 import { startApi } from "@nju-info/api/server";
 import { loadInstanceConfig } from "@nju-info/instance-config";
+import { InfoHubDatabaseReader } from "@nju-info/db";
+import { CollectionStageError, diagnoseCollectionError } from "@nju-info/worker/diagnostics";
 import { collectInstance, exportInstance } from "./operations.js";
 import { createCollectionScheduler } from "./scheduler.js";
+import { RuntimeInputError, runtimeInputDiagnostic } from "./runtime-input.js";
 import { runSourceCommand } from "./source-command.js";
 
 const packageRoot = fileURLToPath(new URL("../", import.meta.url));
@@ -25,20 +28,6 @@ interface SnapshotModule {
   restoreSnapshot(archivePath: string, databasePath: string): Promise<unknown>;
 }
 
-function message(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function normalizeArgs(argv: string[]): string[] {
-  return argv[0] === "--" ? argv.slice(1) : argv;
-}
-
-function usage(): string {
-  return [
-    "usage: nju-info <command> [args...]",
-    "commands: serve, validate, collect, schedule, export, backup, restore, verify-backup, source",
-  ].join("\n");
-}
 
 function resolveUserPath(value: string): string {
   return path.resolve(invocationRoot, value);
@@ -70,9 +59,7 @@ function validateImageRef(): void {
   );
   const digest = new RegExp(`^${escaped}@sha256:[0-9a-f]{64}$`);
   if (!pinnedTag.test(ref) && !digest.test(ref)) {
-    throw new Error(
-      "official GHCR image must use an immutable sha-* tag, version tag, or sha256 digest: " + ref,
-    );
+    throw new RuntimeInputError("invalid_image_ref");
   }
 }
 
@@ -81,7 +68,7 @@ async function waitForReady(): Promise<void> {
   if (!readyFile) return;
   const timeout = Number(process.env.NJU_INFO_READY_TIMEOUT_SECONDS ?? "900");
   if (!Number.isInteger(timeout) || timeout < 0) {
-    throw new Error("NJU_INFO_READY_TIMEOUT_SECONDS must be a non-negative integer");
+    throw new RuntimeInputError("invalid_ready_timeout");
   }
   const { stat } = await import("node:fs/promises");
   for (let elapsed = 0; elapsed <= timeout; elapsed += 1) {
@@ -143,21 +130,34 @@ async function loadRuntimeConfig(config?: string, sourceDir?: string) {
 }
 
 async function runValidate(args: string[]): Promise<void> {
-  if (args.length > 2) throw new Error("usage: nju-info validate [config.json] [source-dir]");
+  if (args.length > 2) throw new RuntimeInputError("usage_validate");
   await loadRuntimeConfig(args[0], args[1]);
 }
 
 async function runCollect(args: string[]): Promise<void> {
   if (args.length > 3) {
-    throw new Error("usage: nju-info collect [config.json] [source-dir] [database]");
+    throw new RuntimeInputError("usage_collect");
   }
   const runtime = await loadRuntimeConfig(args[0], args[1]);
   await collectInstance(runtime.config, databasePath(args[2]), runtime.sourceDir);
 }
+async function runStatus(args: string[]): Promise<void> {
+  if (args.length > 1) throw new RuntimeInputError("usage_status");
+  const reader = new InfoHubDatabaseReader(databasePath(args[0]));
+  try {
+    console.log(JSON.stringify({
+      runs: reader.listCollectionRuns(),
+      sources: reader.listCollectionSourceStatuses(),
+    }, null, 2));
+  } finally {
+    reader.close();
+  }
+}
+
 
 async function runExport(args: string[]): Promise<void> {
   if (args.length > 4) {
-    throw new Error("usage: nju-info export [config.json] [source-dir] [database] [output-dir]");
+    throw new RuntimeInputError("usage_export");
   }
   const runtime = await loadRuntimeConfig(args[0], args[1]);
   await exportInstance(
@@ -169,28 +169,38 @@ async function runExport(args: string[]): Promise<void> {
 
 async function runSchedule(args: string[]): Promise<void> {
   if (args.length > 3) {
-    throw new Error("usage: nju-info schedule [config.json] [source-dir] [database]");
+    throw new RuntimeInputError("usage_schedule");
   }
   const runtime = await loadRuntimeConfig(args[0], args[1]);
   const readyFile = process.env.NJU_INFO_READY_FILE;
   const scheduler = createCollectionScheduler({
     schedule: runtime.config.collection.schedule,
     timeZone: runtime.config.collection.timeZone,
-    collect: async () => {
-      await collectInstance(runtime.config, databasePath(args[2]), runtime.sourceDir);
+    collect: async (trigger) => {
+      await collectInstance(runtime.config, databasePath(args[2]), runtime.sourceDir, trigger);
     },
     onError: (error, trigger) => {
-      console.error(`[scheduler] ${trigger} collection failed: ${message(error)}`);
+      console.error(JSON.stringify({
+        event: "scheduler.failed", trigger, at: new Date().toISOString(),
+        error: diagnoseCollectionError(error),
+      }));
     },
     onSuccess: async (trigger) => {
-      if (readyFile) await writeFile(readyFile, `${new Date().toISOString()} ${trigger}\n`);
-      console.log(`[scheduler] ${trigger} collection run completed`);
+      if (readyFile) {
+        try {
+          await writeFile(readyFile, `${new Date().toISOString()} ${trigger}\n`);
+        } catch (error) {
+          throw new CollectionStageError("persistence", error);
+        }
+      }
+      console.log(JSON.stringify({ event: "scheduler.completed", trigger, at: new Date().toISOString() }));
     },
   });
 
-  console.log(
-    `[scheduler] collection schedule ${runtime.config.collection.schedule} (${runtime.config.collection.timeZone})`,
-  );
+  console.log(JSON.stringify({
+    event: "scheduler.started", schedule: runtime.config.collection.schedule,
+    timeZone: runtime.config.collection.timeZone, at: new Date().toISOString(),
+  }));
   const shutdown = waitForShutdown(() => scheduler.stop());
   await scheduler.start();
   await shutdown;
@@ -198,7 +208,7 @@ async function runSchedule(args: string[]): Promise<void> {
 
 async function runBackup(args: string[]): Promise<void> {
   if (args.length < 1 || args.length > 2) {
-    throw new Error("usage: nju-info backup <snapshot.tar.gz> [database]");
+    throw new RuntimeInputError("usage_backup");
   }
   const snapshot = await snapshots();
   const snapshotPath = resolveUserPath(args[0]!);
@@ -209,7 +219,7 @@ async function runBackup(args: string[]): Promise<void> {
 
 async function runRestore(args: string[]): Promise<void> {
   if (args.length < 1 || args.length > 2) {
-    throw new Error("usage: nju-info restore <snapshot.tar.gz> [database]");
+    throw new RuntimeInputError("usage_restore");
   }
   const snapshotPath = resolveUserPath(args[0]!);
   await (await snapshots()).restoreSnapshot(snapshotPath, databasePath(args[1]));
@@ -220,13 +230,13 @@ async function runRestore(args: string[]): Promise<void> {
 
 async function runVerifyBackup(args: string[]): Promise<void> {
   if (args.length !== 1) {
-    throw new Error("usage: nju-info verify-backup <snapshot.tar.gz>");
+    throw new RuntimeInputError("usage_verify_backup");
   }
   console.log(JSON.stringify(await (await snapshots()).verifySnapshot(resolveUserPath(args[0]!))));
 }
 
 export async function main(argv: string[]): Promise<void> {
-  const args = normalizeArgs(argv);
+  const args = argv[0] === "--" ? argv.slice(1) : argv;
   const command = args.shift() ?? "serve";
   validateImageRef();
 
@@ -239,6 +249,9 @@ export async function main(argv: string[]): Promise<void> {
       return;
     case "collect":
       await runCollect(args);
+      return;
+    case "status":
+      await runStatus(args);
       return;
     case "schedule":
       await runSchedule(args);
@@ -259,7 +272,7 @@ export async function main(argv: string[]): Promise<void> {
       await runSourceCommand(args, sourceDirectory(), invocationRoot);
       return;
     default:
-      throw new Error(`unknown command: ${command}\n${usage()}`);
+      throw new RuntimeInputError("unknown_command");
   }
 }
 
@@ -268,7 +281,11 @@ const invokedDirectly = process.argv[1] !== undefined &&
 
 if (invokedDirectly) {
   main(process.argv.slice(2)).catch((error) => {
-    console.error(message(error));
+    const input = runtimeInputDiagnostic(error);
+    console.error(JSON.stringify({
+      event: "runtime.failed", at: new Date().toISOString(), error: diagnoseCollectionError(error),
+      ...(input === undefined ? {} : { input }),
+    }));
     process.exitCode = 1;
   });
 }

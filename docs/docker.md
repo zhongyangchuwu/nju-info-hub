@@ -1,6 +1,6 @@
 # Docker / GHCR
 
-Docker Compose is the canonical product deployment for NJU Info Hub. GitHub Actions/Pages remains the official public reference publisher and CI surface, not a second user deployment architecture.
+Docker Compose is the canonical product deployment for NJU Info Hub. GitHub Actions owns software CI/GHCR publishing; the Pages content workflow remains manually disabled while public deployment acceptance is pending. Publishing a software image does not activate a public information service.
 
 ## Image
 
@@ -133,6 +133,8 @@ docker compose up -d
 
 Do not restore into the shared data volume while the resident services are running.
 
+Restore verifies the archive, database integrity and checksum before replacing state. A verified snapshot also records `schema_version`; integrity verification is not proof that every older image can read that schema. Keep a verified pre-upgrade snapshot before changing image versions, and do not overwrite it with the post-upgrade backup.
+
 ## Custom instance config
 
 From this repository, Compose defaults to `instances/official.json`. Override it without changing the Compose file:
@@ -164,16 +166,24 @@ The named volume remains.
 
 Upgrade:
 
-1. choose a new immutable GHCR revision/version tag;
-2. update `NJU_INFO_IMAGE`;
-3. pull and recreate the services.
+1. create and verify a separately named pre-upgrade snapshot with the currently running image;
+2. stop scheduler/API so old readers do not race a schema migration;
+3. choose a new immutable GHCR revision/version tag and update `NJU_INFO_IMAGE`;
+4. pull and run the new writer once to migrate/collect, then recreate resident services.
 
 ```bash
+docker compose --profile maintenance run --rm maintenance backup /backup/pre-upgrade.tar.gz
+docker compose --profile maintenance run --rm maintenance verify-backup /backup/pre-upgrade.tar.gz
+docker compose down
+# set NJU_INFO_IMAGE to the new immutable reference
 docker compose pull
+docker compose --profile maintenance run --rm collect
 docker compose up -d
 ```
 
 The scheduler performs collection using the new image while the SQLite volume is preserved.
+
+The current reader requires schema v7; the writer migrates v6 before read-only delivery starts. A downgrade is **not** just changing the image tag: stop resident services, select the previous immutable image, restore its verified pre-upgrade snapshot, and only then start the old reader/scheduler. A v6 reader cannot open a v7 database. Restoring the pre-upgrade snapshot loses later writes unless they are preserved separately; retain both snapshots before deciding to roll back.
 
 Removing the named volume is a destructive state reset and is intentionally not part of normal stop/upgrade flow.
 
@@ -190,6 +200,26 @@ Compose readiness is state-based:
 5. HTTP healthcheck becomes healthy.
 
 A failure from one source is logged without blocking later sources in the same run; that source keeps its previously persisted entries until a later run succeeds. If every configured source fails, the run fails and the scheduler remains alive for the next configured run. On a fresh volume it does not publish readiness until at least one source succeeds.
+
+Health is HTTP/database-reader liveness, not per-source collection health. A retained readiness marker permits serving previously collected data while a later source fails; inspect collection status and clocks for collection progress. Do not interpret a low-cadence source having no new article as an outage.
+
+## Collection logs and status
+
+```bash
+docker compose logs --since 1h scheduler
+docker compose exec -T api nju-info status
+curl http://127.0.0.1:3000/v1/collection/status
+curl 'http://127.0.0.1:3000/v1/collection/runs?limit=20'
+```
+
+Instance runs emit one-line JSON `collection.run.started`, `collection.source.started`, `collection.source.finished` and `collection.run.finished` events with stable run/attempt IDs and clocks. Startup/scheduled/manual triggers are retained in SQLite. Successful counts distinguish new item identities from full revisions; zero new items/revisions after a successful poll is expected. Restricted/unsupported details remain explicit skips/link-only entries, not silently filled from older pages.
+
+Failed sources retain null counts and approved phase/cause metadata. DNS/TLS/Undici/timeout/SQLite/filesystem codes and typed HTTP status are preserved when known; unknown exception data stays generic. Messages, stacks, response bodies, URLs, cookies and argument values are not operational log fields. Trusted CLI input failures have finite codes and static guidance. Unfinished history means an attempt may still be active or may have been interrupted; it is never treated as verified recovery or process liveness. See [the exact clocks and ledger scope](database.md#collection-operation-tables).
+
+Canonical Compose uses Docker's `local` logging driver with `max-size: 10m` and `max-file: 3` per service, keeping container log retention bounded without an additional logging service. `docker compose logs` remains available. Persisted operation history is separate and is retained with the SQLite database/snapshots; no automatic database-history deletion policy is introduced.
+
+Keep the default loopback bind for a controlled instance. A VPS/NAS uses this same image/config/local-volume contract, not a source fork; expose selected read-only feeds through an operator-managed TLS reverse proxy/firewall only after deployment acceptance. Do not serve SQLite/backups or mistake operator status for a new public dashboard. Future private data still requires a separate access-control decision.
+
 
 ## Security boundary
 

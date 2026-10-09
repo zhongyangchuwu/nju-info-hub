@@ -1387,6 +1387,8 @@ describe("InfoHubDatabase", () => {
           DROP TABLE social_raw_blobs;
           DROP TABLE social_import_operations;
           DROP TABLE social_source_state;
+          DROP TABLE collection_source_attempts;
+          DROP TABLE collection_runs;
           PRAGMA user_version = 4;
         `);
         before = legacy
