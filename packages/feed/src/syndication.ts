@@ -1,3 +1,4 @@
+import type { SocialEntryMetadata } from "@nju-info/core";
 import type { PersistedSourceSummary, SourceEntryQueryResult } from "@nju-info/db";
 
 const linkOnlyContentText = "Full text is unavailable from the public collector; open the original item.";
@@ -8,7 +9,7 @@ export function entryXmlMetadata(entry: SyndicationEntry, indent: string): strin
   return [
     ...(entry.publishedOn === null ? [] : [
       `${indent}<nju:published_on>${xmlEscape(entry.publishedOn)}</nju:published_on>`,
-      `${indent}<nju:date_precision>day</nju:date_precision>`,
+      `${indent}<nju:date_precision>${xmlEscape(entry.social?.publicationTime.precision ?? "day")}</nju:date_precision>`,
     ]),
     ...(entry.contentStatus !== "link-only" ? [] : [
       `${indent}<nju:content_status>link-only</nju:content_status>`,
@@ -18,7 +19,54 @@ export function entryXmlMetadata(entry: SyndicationEntry, indent: string): strin
       `${indent}<nju:fetched_at>${xmlEscape(entry.fetchedAt)}</nju:fetched_at>`,
       `${indent}<nju:content_sha256>${xmlEscape(entry.contentSha256)}</nju:content_sha256>`,
     ]),
+    ...(entry.social ? [
+      `${indent}<nju:modified_at>${xmlEscape(entry.updatedAt)}</nju:modified_at>`,
+      ...socialXmlMetadata(entry.social, indent),
+    ] : []),
   ];
+}
+
+function socialXmlMetadata(social: SocialEntryMetadata, indent: string): string[] {
+  const time = social.publicationTime;
+  const origin = social.attribution.origin;
+  return [
+    `${indent}<nju:social>`,
+    `${indent}  <nju:platform>${xmlEscape(social.platform)}</nju:platform>`,
+    `${indent}  <nju:role>${xmlEscape(social.role)}</nju:role>`,
+    `${indent}  <nju:publisher_identity scheme="${xmlEscape(social.publisherIdentity.scheme)}" version="${social.publisherIdentity.version}">${xmlEscape(social.publisherIdentity.value)}</nju:publisher_identity>`,
+    `${indent}  <nju:native_identity scheme="${xmlEscape(social.nativeIdentity.scheme)}" version="${social.nativeIdentity.version}">`,
+    ...(social.nativeIdentity.scheme === "wechat-mid-idx" ? [
+      `${indent}    <nju:mid>${xmlEscape(social.nativeIdentity.mid)}</nju:mid>`,
+      `${indent}    <nju:idx>${social.nativeIdentity.idx}</nju:idx>`,
+    ] : [`${indent}    <nju:tid>${xmlEscape(social.nativeIdentity.tid)}</nju:tid>`]),
+    `${indent}  </nju:native_identity>`,
+    `${indent}  <nju:publication_time>`,
+    ...(time.original ? [`${indent}    <nju:original representation="${xmlEscape(time.original.representation)}">${xmlEscape(time.original.value)}</nju:original>`] : []),
+    `${indent}    <nju:precision>${xmlEscape(time.precision)}</nju:precision>`,
+    ...(time.timezone === null ? [] : [`${indent}    <nju:timezone>${xmlEscape(time.timezone)}</nju:timezone>`]),
+    ...(time.normalizedAt === null ? [] : [`${indent}    <nju:normalized_at>${xmlEscape(time.normalizedAt)}</nju:normalized_at>`]),
+    ...(time.publishedOn === null ? [] : [`${indent}    <nju:published_on>${xmlEscape(time.publishedOn)}</nju:published_on>`]),
+    `${indent}  </nju:publication_time>`,
+    `${indent}  <nju:attribution relationship="${xmlEscape(social.attribution.relationship)}" verification="${xmlEscape(social.attribution.verification)}">`,
+    ...(origin ? [
+      `${indent}    <nju:origin>`,
+      `${indent}      <nju:publisher_name>${xmlEscape(origin.publisherName)}</nju:publisher_name>`,
+      ...(origin.publisherId === null ? [] : [`${indent}      <nju:publisher_id>${xmlEscape(origin.publisherId)}</nju:publisher_id>`]),
+      ...(origin.nativeItemId === null ? [] : [`${indent}      <nju:native_item_id>${xmlEscape(origin.nativeItemId)}</nju:native_item_id>`]),
+      ...(origin.url === null ? [] : [`${indent}      <nju:url>${xmlEscape(origin.url)}</nju:url>`]),
+      `${indent}    </nju:origin>`,
+    ] : []),
+    `${indent}  </nju:attribution>`,
+    `${indent}  <nju:policy_version>${xmlEscape(social.policyVersion)}</nju:policy_version>`,
+    `${indent}  <nju:revision_number>${social.revisionNumber}</nju:revision_number>`,
+    `${indent}</nju:social>`,
+  ];
+}
+
+export function sourceXmlMetadata(source: PersistedSourceSummary, indent: string): string[] {
+  return source.socialPublication ? [
+    `${indent}<nju:social_publication status="${xmlEscape(source.socialPublication.status)}" changed_at="${xmlEscape(source.socialPublication.changedAt)}"/>`,
+  ] : [];
 }
 const mimeTypes: Record<string, string> = {
   pdf: "application/pdf",
@@ -57,7 +105,7 @@ export interface SyndicationEntry {
   url: string;
   title: string;
   publishedOn: string | null;
-  /** Compatibility transport for day-only source dates; UTC noon is not an exact upstream time. */
+  /** Day-only values use compatibility UTC noon; exact native social times remain exact. */
   publishedAt?: string;
   updatedAt: string;
   contentStatus: SourceEntryQueryResult["contentStatus"];
@@ -72,6 +120,7 @@ export interface SyndicationEntry {
   revisionNumber?: number;
   contentSha256: string;
   fetchedAt: string;
+  social?: SocialEntryMetadata;
 }
 
 export interface SyndicationFeed {
@@ -97,19 +146,31 @@ export function dayPrecisionTimestamp(publishedOn: string): string {
   return timestamp;
 }
 
-/** Project persisted source observations once, preserving database order and day precision. */
+/** Project persisted source observations once, preserving database order and native precision. */
 export function syndicationFeed(source: PersistedSourceSummary, sourceEntries: SourceEntryQueryResult[], generatedAt?: string): SyndicationFeed {
   const entries = sourceEntries.map((sourceEntry): SyndicationEntry => {
     const linkOnly = sourceEntry.contentStatus === "link-only";
+    const social = sourceEntry.social;
+    const publishedOn = social ? social.publicationTime.publishedOn : sourceEntry.publishedOn;
+    const publishedAt = social && social.publicationTime.precision !== "day"
+      ? social.publicationTime.normalizedAt ?? undefined
+      : publishedOn === null ? undefined : dayPrecisionTimestamp(publishedOn);
+    const socialContentText = social ? [
+      "Only link metadata is published; open the original item.",
+      ...(social.role === "relay" || social.attribution.relationship === "relay"
+        ? ["Relayed publication; original authorship is not implied."] : []),
+      ...(social.attribution.relationship === "unknown"
+        ? ["Original authorship is unknown."]
+        : social.attribution.verification !== "verified"
+          ? ["Original authorship is not verified."] : []),
+    ].join(" ") : linkOnlyContentText;
     return {
       id: `${encodeURIComponent(sourceEntry.sourceId)}:${encodeURIComponent(sourceEntry.sourceItemId)}`,
       url: sourceEntry.url,
       title: sourceEntry.title,
-      publishedOn: sourceEntry.publishedOn,
-      ...(sourceEntry.publishedOn === null ? {} : {
-        publishedAt: dayPrecisionTimestamp(sourceEntry.publishedOn),
-      }),
-      updatedAt: rfc3339(sourceEntry.provenance.fetchedAt),
+      publishedOn,
+      ...(publishedAt === undefined ? {} : { publishedAt }),
+      updatedAt: rfc3339(sourceEntry.modifiedAt ?? sourceEntry.provenance.fetchedAt),
       fetchedAt: sourceEntry.provenance.fetchedAt,
       contentStatus: sourceEntry.contentStatus,
       ...(sourceEntry.acquisitionKind === null ? {} : { acquisitionKind: sourceEntry.acquisitionKind }),
@@ -120,7 +181,7 @@ export function syndicationFeed(source: PersistedSourceSummary, sourceEntries: S
         revisionNumber: sourceEntry.noticeRevisionNumber,
       } : {}),
       bodyHtml: linkOnly ? "" : sourceEntry.bodyHtml,
-      bodyText: linkOnly ? linkOnlyContentText : sourceEntry.bodyText,
+      bodyText: linkOnly ? socialContentText : sourceEntry.bodyText,
       attachments: linkOnly ? [] : sourceEntry.attachments.map((attachment) => ({
         url: attachment.url,
         title: attachment.title,
@@ -130,9 +191,11 @@ export function syndicationFeed(source: PersistedSourceSummary, sourceEntries: S
       sourceName: sourceEntry.sourceName,
       organization: sourceEntry.organization,
       contentSha256: sourceEntry.provenance.contentSha256,
+      ...(social ? { social } : {}),
     };
   });
-  const updatedAt = entries.reduce((latest, entry) => entry.updatedAt > latest ? entry.updatedAt : latest, "");
+  const changedAt = source.socialPublication ? rfc3339(source.socialPublication.changedAt) : "";
+  const updatedAt = entries.reduce((latest, entry) => entry.updatedAt > latest ? entry.updatedAt : latest, changedAt);
   return { source, title: feedTitle(source), entries, updatedAt: updatedAt || rfc3339(generatedAt || new Date().toISOString()) };
 }
 

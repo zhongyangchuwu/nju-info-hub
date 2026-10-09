@@ -8,8 +8,14 @@ import type {
   ParsedNotice,
   RawDocument,
   SourceConfig,
+  SocialEntryMetadata,
+  SocialEnvelopePayload,
+  SocialImportInput,
+  SocialImportResult,
+  SocialPublicationState,
 } from "@nju-info/core";
 import { DATABASE_SCHEMA_VERSION, migrateDatabase } from "./schema.js";
+import { applySocialImport } from "./social-import.js";
 
 export interface PersistedRawDocument {
   id: number;
@@ -53,6 +59,7 @@ export interface PersistedSourceSummary {
   name: string;
   organization: PersistedOrganizationSummary;
   url: string;
+  socialPublication?: SocialPublicationState;
 }
 
 export interface RecentNoticeOptions {
@@ -95,6 +102,9 @@ export interface SourceEntryQueryResult {
   bodyHtml: string;
   attachments: Attachment[];
   provenance: { fetchedAt: string; contentSha256: string };
+  social?: SocialEntryMetadata;
+  /** Last accepted social authorization/correction/restore, distinct from acquisition freshness. */
+  modifiedAt?: string;
 }
 
 interface SourceSummaryRow {
@@ -103,6 +113,8 @@ interface SourceSummaryRow {
   organization_id: string;
   organization_name: string;
   homepage_url: string;
+  social_status: SocialPublicationState["status"] | null;
+  social_changed_at: string | null;
 }
 
 interface NoticeQueryRow {
@@ -158,6 +170,9 @@ interface SourceEntryQueryRow {
   body_html: string | null;
   fetched_at: string;
   raw_sha256: string;
+  social_payload_json: string | null;
+  social_revision_number: number | null;
+  modified_at: string | null;
 }
 
 function numberField(
@@ -221,7 +236,11 @@ export class InfoHubDatabase implements Disposable {
   }
 
   upsertSource(source: SourceConfig): void {
-    this.#writeSource(source);
+    this.#transaction(() => this.#writeSource(source));
+  }
+
+  applySocialImport(input: SocialImportInput, now: Date = new Date()): SocialImportResult {
+    return applySocialImport(this.#database, input, now);
   }
 
   persistRawDocument(
@@ -525,6 +544,11 @@ export class InfoHubDatabase implements Disposable {
   }
 
   #writeSource(source: SourceConfig): void {
+    const existing = this.#database.prepare("SELECT adapter_type FROM sources WHERE id = ?")
+      .get(source.id);
+    if (existing?.adapter_type === "social-acquisition") {
+      throw new Error("website source ID collides with a social source");
+    }
     const now = new Date().toISOString();
     const configJson = JSON.stringify(source);
     this.#database
@@ -713,16 +737,28 @@ class DatabaseQueries {
   listSources(): PersistedSourceSummary[] {
     const rows = this.#database
       .prepare(
-        `SELECT id, name, organization_id, organization_name, homepage_url
-           FROM sources
-          ORDER BY id`,
+        `SELECT s.id, s.name, s.organization_id, s.organization_name, s.homepage_url,
+                CASE WHEN state.source_id IS NULL THEN NULL
+                     WHEN state.revoked = 1 THEN 'revoked'
+                     WHEN julianday(state.expires_at) <= julianday(?) THEN 'expired'
+                     ELSE 'active' END AS social_status,
+                state.changed_at AS social_changed_at
+           FROM sources s
+           LEFT JOIN social_source_state state ON state.source_id = s.id
+          ORDER BY s.id`,
       )
-      .all() as unknown as SourceSummaryRow[];
+      .all(new Date().toISOString()) as unknown as SourceSummaryRow[];
     return rows.map((row) => ({
       id: row.id,
       name: row.name,
       organization: { id: row.organization_id, name: row.organization_name },
       url: row.homepage_url,
+      ...(row.social_status === null ? {} : {
+        socialPublication: {
+          status: row.social_status,
+          changedAt: row.social_changed_at!,
+        },
+      }),
     }));
   }
 
@@ -833,13 +869,14 @@ class DatabaseQueries {
     const filters: string[] = [];
     const parameters: string[] = [];
     if (options.sourceId !== undefined) {
-      filters.push("s.id = ?");
+      filters.push("source_id = ?");
       parameters.push(options.sourceId);
     }
     if (options.organizationId !== undefined) {
-      filters.push("s.organization_id = ?");
+      filters.push("organization_id = ?");
       parameters.push(options.organizationId);
     }
+    const now = new Date().toISOString();
     const rows = this.#database
       .prepare(
         `WITH latest_observations AS (
@@ -864,7 +901,7 @@ class DatabaseQueries {
                WHERE newer.source_item_row_id = r.source_item_row_id
                  AND newer.revision_number > r.revision_number
             )
-         )
+         ), current_entries AS (
          SELECT n.id AS revision_id, s.id AS source_id,
                 si.source_item_id, s.name AS source_name,
                 s.organization_id, s.organization_name, si.url,
@@ -878,19 +915,48 @@ class DatabaseQueries {
                 n.revision_number AS notice_revision_number,
                 n.body_text, n.body_html,
                 CASE WHEN n.id IS NOT NULL THEN n.fetched_at ELSE o.fetched_at END AS fetched_at,
-                CASE WHEN n.id IS NOT NULL THEN n.raw_sha256 ELSE o.raw_sha256 END AS raw_sha256
+                CASE WHEN n.id IS NOT NULL THEN n.raw_sha256 ELSE o.raw_sha256 END AS raw_sha256,
+                NULL AS social_payload_json, NULL AS social_revision_number, NULL AS modified_at
            FROM source_items si
            JOIN sources s ON s.id = si.source_id
            LEFT JOIN latest_observations o ON o.source_item_row_id = si.id
            LEFT JOIN latest_notices n ON n.source_item_row_id = si.id
           WHERE (o.id IS NOT NULL OR n.id IS NOT NULL)
-            ${filters.length ? `AND ${filters.join(" AND ")}` : ""}
-          ORDER BY CASE WHEN n.id IS NOT NULL THEN n.published_on ELSE o.published_on END IS NULL,
-                   CASE WHEN n.id IS NOT NULL THEN n.published_on ELSE o.published_on END DESC,
-                   s.id, si.source_item_id
+            AND s.adapter_type <> 'social-acquisition'
+         UNION ALL
+         SELECT NULL AS revision_id, s.id AS source_id, si.source_item_id,
+                s.name AS source_name, s.organization_id, s.organization_name,
+                json_extract(r.payload_json, '$.item.canonicalUrl') AS url,
+                json_extract(r.payload_json, '$.content.title') AS title,
+                json_extract(r.payload_json, '$.publicationTime.original.value') AS published_at_raw,
+                json_extract(r.payload_json, '$.publicationTime.publishedOn') AS published_on,
+                CASE WHEN json_extract(r.payload_json, '$.source.platform') = 'wechat'
+                     THEN 'public-wechat' ELSE 'external-public' END AS acquisition_kind,
+                NULL AS observation_revision_number, NULL AS notice_revision_number,
+                NULL AS body_text, NULL AS body_html, p.acquired_at AS fetched_at,
+                r.raw_sha256, r.payload_json AS social_payload_json,
+                r.revision_number AS social_revision_number, p.applied_at AS modified_at
+           FROM social_item_publications p
+           JOIN social_item_revisions r ON r.id = p.revision_id
+           JOIN source_items si ON si.id = p.source_item_row_id
+           JOIN sources s ON s.id = si.source_id
+           JOIN social_source_state state ON state.source_id = s.id
+          WHERE state.revoked = 0
+            AND p.policy_sha256 = state.policy_sha256
+            AND julianday(state.expires_at) > julianday(?)
+            AND julianday(p.expires_at) > julianday(?)
+            AND NOT EXISTS (
+              SELECT 1 FROM social_item_suppressions suppression
+               WHERE suppression.source_id = s.id
+                 AND suppression.source_item_id = si.source_item_id
+            )
+         )
+         SELECT * FROM current_entries
+          ${filters.length ? `WHERE ${filters.join(" AND ")}` : ""}
+          ORDER BY published_on IS NULL, published_on DESC, source_id, source_item_id
           ${limit === undefined ? "" : "LIMIT ?"}`,
       )
-      .all(...parameters, ...(limit === undefined ? [] : [limit])) as unknown as SourceEntryQueryRow[];
+      .all(now, now, ...parameters, ...(limit === undefined ? [] : [limit])) as unknown as SourceEntryQueryRow[];
     if (rows.length === 0) return [];
 
     const noticeRevisionIds = rows.flatMap((row) =>
@@ -939,6 +1005,10 @@ class DatabaseQueries {
         fetchedAt: row.fetched_at,
         contentSha256: row.raw_sha256,
       },
+      ...(row.social_payload_json === null ? {} : {
+        social: socialEntryMetadata(row.social_payload_json, row.social_revision_number!),
+        modifiedAt: row.modified_at!,
+      }),
     }));
   }
 
@@ -958,4 +1028,18 @@ class DatabaseQueries {
       attachments: count("attachments"),
     };
   }
+}
+
+function socialEntryMetadata(payloadJson: string, revisionNumber: number): SocialEntryMetadata {
+  const payload = JSON.parse(payloadJson) as SocialEnvelopePayload;
+  return {
+    platform: payload.source.platform,
+    publisherIdentity: payload.source.publisherIdentity,
+    role: payload.source.role,
+    nativeIdentity: payload.item.nativeIdentity,
+    publicationTime: payload.publicationTime,
+    attribution: payload.attribution,
+    policyVersion: payload.source.policyVersion,
+    revisionNumber,
+  };
 }

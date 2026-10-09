@@ -11,6 +11,7 @@ export function jsonFeedItem(entry: SyndicationEntry) {
     url: entry.url,
     title: entry.title,
     ...(entry.publishedAt ? { date_published: entry.publishedAt } : {}),
+    ...(entry.social ? { date_modified: entry.updatedAt } : {}),
     ...(entry.bodyHtml ? { content_html: entry.bodyHtml } : {}),
     content_text: entry.bodyText,
     ...(entry.attachments.length ? {
@@ -26,7 +27,7 @@ export function jsonFeedItem(entry: SyndicationEntry) {
       organization: entry.organization,
       ...(entry.publishedOn === null ? {} : {
         published_on: entry.publishedOn,
-        date_precision: "day",
+        date_precision: entry.social?.publicationTime.precision ?? "day",
       }),
       content_status: entry.contentStatus,
       ...(entry.acquisitionKind == null ? {} : { acquisition_kind: entry.acquisitionKind }),
@@ -36,6 +37,20 @@ export function jsonFeedItem(entry: SyndicationEntry) {
       ...(entry.revisionNumber === undefined ? {} : { revision_number: entry.revisionNumber }),
       fetched_at: entry.fetchedAt,
       content_sha256: entry.contentSha256,
+      ...(entry.social ? { social: {
+        platform: entry.social.platform,
+        publisher_identity: entry.social.publisherIdentity,
+        role: entry.social.role,
+        native_identity: entry.social.nativeIdentity,
+        publication_time: entry.social.publicationTime,
+        attribution: {
+          relationship: entry.social.attribution.relationship,
+          verification: entry.social.attribution.verification,
+          origin: entry.social.attribution.origin,
+        },
+        policy_version: entry.social.policyVersion,
+        revision_number: entry.social.revisionNumber,
+      } } : {}),
     },
   };
 }
@@ -44,6 +59,15 @@ export function atomEntryLines(
   entry: SyndicationEntry,
   source?: EntrySourceAttribution,
 ): string[] {
+  let author = entry.organization.name;
+  if (entry.social) {
+    const attribution = entry.social.attribution;
+    author = "Original author unknown";
+    if (attribution.verification === "verified") {
+      if (attribution.relationship === "original" && entry.social.role !== "relay") author = entry.sourceName;
+      else if (attribution.relationship === "relay" && attribution.origin) author = attribution.origin.publisherName;
+    }
+  }
   return [
     "  <entry>",
     `    <id>${xmlEscape(entry.id)}</id>`,
@@ -52,7 +76,7 @@ export function atomEntryLines(
     `    <updated>${xmlEscape(entry.updatedAt)}</updated>`,
     ...(entry.publishedAt ? [`    <published>${xmlEscape(entry.publishedAt)}</published>`] : []),
     "    <author>",
-    `      <name>${xmlEscape(entry.organization.name)}</name>`,
+    `      <name>${xmlEscape(author)}</name>`,
     "    </author>",
     ...(entry.bodyHtml
       ? [`    <content type="html">${xmlEscape(entry.bodyHtml)}</content>`]

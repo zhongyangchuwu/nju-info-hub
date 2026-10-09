@@ -55,6 +55,10 @@ export function buildSourceCatalog(sources: readonly PersistedSourceSummary[], b
       name: source.name,
       organization: source.organization,
       home_page_url: source.url,
+      ...(source.socialPublication ? { social_publication: {
+        status: source.socialPublication.status,
+        changed_at: source.socialPublication.changedAt,
+      } } : {}),
       feeds: {
         json: feedSelfUrl(base, source.id, "json"),
         atom: feedSelfUrl(base, source.id, "atom"),

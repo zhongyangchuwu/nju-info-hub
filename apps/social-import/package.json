@@ -1,14 +1,14 @@
 {
-  "name": "@nju-info/feed",
+  "name": "@nju-info/social-import",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": {
-    ".": "./src/index.ts"
-  },
   "scripts": {
     "check": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run src"
+    "test": "vitest run src",
+    "import": "tsx src/cli.ts import",
+    "producer-sign": "tsx src/cli.ts producer-sign",
+    "authorize": "tsx src/cli.ts authorize"
   },
   "dependencies": {
     "@nju-info/core": "workspace:*",

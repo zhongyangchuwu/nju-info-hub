@@ -1,6 +1,6 @@
 import type { PersistedSourceSummary, SourceEntryQueryResult } from "@nju-info/db";
 import { atomEntryLines, rssItemLines } from "./entry-renderers.js";
-import { feedMetadataNamespace, syndicationFeed, xmlEscape, type SyndicationContext } from "./syndication.js";
+import { feedMetadataNamespace, sourceXmlMetadata, syndicationFeed, xmlEscape, type SyndicationContext } from "./syndication.js";
 
 const xmlDeclaration = '<?xml version="1.0" encoding="UTF-8"?>';
 
@@ -15,6 +15,7 @@ export function buildAtomFeed(source: PersistedSourceSummary, sourceEntries: Sou
     `  <link rel="alternate" href="${xmlEscape(source.url)}"/>`,
     ...(context.selfUrl ? [`  <link rel="self" type="application/atom+xml" href="${xmlEscape(context.selfUrl)}"/>`] : []),
     `  <updated>${xmlEscape(feed.updatedAt)}</updated>`,
+    ...sourceXmlMetadata(source, "  "),
     ...feed.entries.flatMap((entry) => atomEntryLines(entry)),
     '</feed>',
   ];
@@ -35,6 +36,7 @@ export function buildRssFeed(source: PersistedSourceSummary, sourceEntries: Sour
       `    <atom:link href="${xmlEscape(context.selfUrl)}" rel="self" type="application/rss+xml"/>`,
     ] : []),
     `    <lastBuildDate>${new Date(feed.updatedAt).toUTCString()}</lastBuildDate>`,
+    ...sourceXmlMetadata(source, "    "),
     ...feed.entries.flatMap((entry) => rssItemLines(entry)),
     '  </channel>',
     '</rss>',

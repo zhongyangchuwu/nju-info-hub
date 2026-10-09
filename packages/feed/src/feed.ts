@@ -10,7 +10,14 @@ export function buildJsonFeed(source: PersistedSourceSummary, sourceEntries: Sou
     title: feed.title,
     home_page_url: source.url,
     ...(context.selfUrl ? { feed_url: context.selfUrl } : {}),
-    _nju: { source_id: source.id, organization: source.organization },
+    _nju: {
+      source_id: source.id,
+      organization: source.organization,
+      ...(source.socialPublication ? { social_publication: {
+        status: source.socialPublication.status,
+        changed_at: source.socialPublication.changedAt,
+      } } : {}),
+    },
     items: feed.entries.map(jsonFeedItem),
   };
 }
