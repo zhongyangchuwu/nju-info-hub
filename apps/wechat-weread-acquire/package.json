@@ -6,7 +6,8 @@
   "scripts": {
     "check": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run src",
-    "acquire": "tsx src/cli.ts"
+    "acquire": "tsx src/cli.ts",
+    "observe": "tsx src/observe-cli.ts"
   },
   "dependencies": {
     "@nju-info/core": "workspace:*",

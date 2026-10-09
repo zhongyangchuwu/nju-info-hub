@@ -60,9 +60,16 @@ mise exec -- pnpm --filter @nju-info/qzone-acquire run audit -- "$MANUAL_AUDIT_J
 
 Use explicit `run audit`: bare `pnpm audit` is the package manager's dependency-audit command, not this script. Audited post-capture ratios are scoped operator declarations, not campus/event/public-feed recall or image usability. All outputs retain publicationEligible=false, bundleEligible=false and benchmarkStarted=false; empty provider discovery never proves an empty publisher timeline.
 
-### WeRead latest qualification/shadow
+### WeRead latest qualification, shadow and observations
 
 The separate operator-only [WeRead latest qualification/shadow app](docs/adr-credentialed-public-acquisition.md#weread-latest-qualification-boundary) validates complete native identity and can explicitly derive a link-only `SocialAcquisitionBundle v1` using a separately reviewed official `review-only` policy. Its decision remains `review-required`, never publication approval. It has no importer/public-feed integration and does not start the thirty-day benchmark.
+
+The offline `observe` command compares supplied completed qualification runs and operator-declared blocked/error/empty attempts. It deduplicates canonical `__biz + mid + idx`, not provider review IDs, and records scoped sightings, content-hash variants and new-native-item clocks. Stale export reprocessing does not imply fresh upstream success; failures and empty results never advance progress. Publication conflicts suppress the newest-known-publication pointer. `cursor` and `coveredThrough` remain null: latest-only observations cannot establish a lossless historical checkpoint or benchmark recall.
+
+```bash
+# Only WECHAT_WEREAD_PROTECTED_ROOT is required; declarations and outputs stay private.
+mise exec -- pnpm --filter @nju-info/wechat-weread-acquire run observe -- "$WEREAD_OBSERVATIONS_JSON" "$WEREAD_OBSERVATION_OUTPUT_ROOT"
+```
 
 The [2026-10-08 social acquisition Agent handoff](docs/social-acquisition-handoff-2026-10-08.md) records merged PRs, open Issues, verified paths, admission blockers, and next-Agent verification steps. The machine-specific operator snapshot is stored outside Git and should never be committed.
 
@@ -109,7 +116,7 @@ apps/
   qzone-acquire/ restricted acquisition, offline shadow/item-review and manual audit ledger
   qzone-gateway/ private Node-only read-only capability gateway
   api/           optional read-only HTTP adapter
-  wechat-weread-acquire/  offline operator-only qualification and review-required shadow export
+  wechat-weread-acquire/  offline qualification, review-required shadow and scoped observation ledger
 packages/
   core/          shared schemas and canonical types
   collector/     source registry loader and source adapters
