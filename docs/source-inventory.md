@@ -121,3 +121,106 @@ M2N live admission started from the accepted 25-source snapshot (720 observation
 | --- | --- | --- | --- | --- | --- |
 | Employment recruiting events | https://job.nju.edu.cn/career/specifics | 南京大学学生就业指导中心 | Students and graduates attending recruiting events | Public JSON APIs; audited, not registered | `/api/career/job/fair/specifics` and `/api/career/job/fair/mutual-selections` are anonymously readable and expose stable IDs plus structured start/end times. Public detail routes are `/career/specifics/<id>` and `/career/mutual-selections/<id>`. These are event entities rather than publication notices, so they should wait for an explicit event canonical model instead of treating event time as publication time. |
 | Electronic Science and Engineering announcements | https://ese.nju.edu.cn/22538/list.htm | 电子科学与工程学院 | Electronic-science students and faculty | Public-network restricted; not registered | The official “通知与公告” route redirects public-network requests to a prompt stating that the current IP is not a campus address and the content is campus-only. The public core does not bypass that restriction. |
+
+## Campus-operations event corpus (2026-10-09)
+
+This event-level corpus supports [#86](https://github.com/zhongyangchuwu/nju-info-hub/issues/86); it does not replace the historical source-admission evidence above. Public primary bodies and, where necessary, public attachments were read. Only short factual extracts are retained here: no full article/image copies, credentials, private messages, or staff contact details. Publication days and event windows are separate. Times below retain the notice's local notation; the notices do not supply UTC offsets or exact publication instants. Calendar-day advance publication is not measured Hub delivery latency.
+
+The unchanged baseline is commit `59cea8598308a45b54d06a8e2928039730aa9891`, with 30 official selected sources and 31 registry entries. `instances/official.json` SHA-256 is `02fa06283d089e9f62ecd7e978b001f230aa942d2fab7c099f7eab29e10b9ffe`. No source YAML, admission, production database, scheduler, or publication policy changed for this corpus.
+
+### Network / information systems
+
+All three notices are public first-party ITSC publications, not authenticated service content. The service-hall and network-login endpoints themselves were not queried.
+
+| Event / primary evidence | Publication day; event window | Student impact and issuer | Frozen Hub evidence / timeliness limit |
+| --- | --- | --- | --- |
+| N1 — [关于9月24日凌晨0点至5点鼓楼校区部分区域校园无线网络维护升级的通知](https://oi.nju.edu.cn/e3/e1/c21415a844769/page.htm) | 2026-09-23; 09-24 00:00–05:00 | 鼓楼安中楼等十三处区域; wireless briefly interrupted, wired network unaffected. 信息化建设管理服务中心. | `nju-itsc-notices`: configured adapter replay matched the list's [mobile detail URL](https://oi.nju.edu.cn/e3/e1/c21415a844769/pagem.htm), ID `2f8837f8c0bb00a71eda8f5b`, day `2026-09-23`. Live CLI transport failed; no live collection/delivery proof. Advance notice on the preceding calendar day. |
+| N2 — [关于南京大学网上办事服务大厅系统升级的通知](https://oi.nju.edu.cn/e3/f9/c21415a844793/pagem.htm) | 2026-09-23; same day 22:00–24:00 | University online service hall temporarily unavailable: “网上办事服务大厅将暂不可用”. 信息化建设管理服务中心. | `nju-itsc-notices`: replay matched ID `5d7b1ce769aeec560b492730`, day `2026-09-23`. Live transport failed. Same-day advance notice; exact lead time and delivery latency unknown. |
+| N3 — [关于3月14日凌晨0:00-1:00上网认证计费系统维护升级的通知](https://oi.nju.edu.cn/90/2e/c21415a823342/pagem.htm) | 2026-03-12; 03-14 00:00–01:00 | 仙林、鼓楼、浦口、苏州 network login and online fee top-up may be unavailable. 信息化建设管理服务中心. | Primary body verified; older than the replayed first-page window. Historical discovery by `nju-itsc-notices` is unverified, not a demonstrated miss. Advance publication two calendar days before the event. |
+
+### Traffic / campus access
+
+These public first-party 保卫处 notices are historical controls. The operative text is in public PDFs, not inferred from the page titles or map images; no map-image OCR was performed.
+
+| Event / primary evidence | Publication day; event window | Student impact and issuer | Frozen Hub evidence / timeliness limit |
+| --- | --- | --- | --- |
+| T1 — [关于“挑战杯”竞赛期间仙林校区交通管制的通知](https://bwc.nju.edu.cn/98/4d/c64533a825421/page.htm), [PDF: 交通安排](https://bwc.nju.edu.cn/_upload/article/files/f1/32/1bb8bfde4547bea4cdc313ce5695/2e05ca09-7a47-4264-945b-84049e3013fb.pdf) | 2025-10-27; 10-31–11-03 daily 07:00–18:00, closing ceremony 11-03 15:00–22:00 | 仙林体育馆/邵逸夫楼周边 access/parking restrictions; public campus-visit booking suspended; closing-ceremony area admits only permitted vehicles. 保卫处. | `nju-security-office-general-notices`: replay matched ID `c734efc546c29559fad9d646`, day `2025-10-27`. Live CLI transport failed. Four-calendar-day advance publication; no current delivery proof. |
+| T2 — [关于6月15日仙林校区交通管制的通知](https://bwc.nju.edu.cn/98/3b/c64533a825403/page.htm), [PDF](https://bwc.nju.edu.cn/_upload/article/files/05/d5/d1ac4ee64e84ac82d8b01eba0005/a761b80f-0123-4f67-a3e9-2a451d821a36.pdf) | 2025-06-13; 06-15 07:30–16:00 | Exam-day south-gate vehicle lanes used by walking candidates; vehicles use east/west gates; 金大路/国际学院/教学楼周边 roads closed. 保卫处. | `nju-security-office-general-notices`: replay matched ID `a602eb34465d9d93569bac0d`, day `2025-06-13`. Live transport failed. Two-calendar-day advance publication; historical event, not evidence of 2026 incident recall. |
+
+### Teaching-space / facility access
+
+The public Undergraduate School site is an official proxy here, not automatically the original operational issuer. A forwarding label does not establish the first-publication URL or repost latency.
+
+| Event / primary evidence | Publication day; event window | Student impact and issuer | Frozen Hub evidence / timeliness limit |
+| --- | --- | --- | --- |
+| S1 — [【转发】国庆期间鼓楼、仙林、苏州各校区公共教室开放公告](https://jw.nju.edu.cn/e5/af/c26263a845231/page.htm) | 2026-09-30; 10-01–10-07; 苏州 study rooms 07:00–23:00 | Only specified classrooms open; 鼓楼费彝民楼 closed, 仙林 floors 4–5 closed. Body signed 后勤服务集团 on 09-30; published by 本科生院教学运行服务中心. | Actual unchanged `nju-undergraduate-notices` CLI discovered this exact URL/day in two pages, ID `050de9f8dfe14d7866f24252`. Public proxy-forwarded positive discovery, not ingestion/feed/reader proof. Preceding-calendar-day publication; original publication instant/repost delay unknown. |
+| S2 — [【转发】关于暑假期间公共教室开放情况的通知](https://jw.nju.edu.cn/ca/e3/c26263a838371/page.htm) | Page 2026-07-03, body signed 07-02; 07-06–08-23, 仙林邵逸夫楼 closure 07-17–07-22 | 指定鼓楼、仙林、苏州 classrooms only; competition-period closure changes self-study access. 本科生院教学运行服务中心 forwards; the body signature does not name an issuing unit. | Outside the executed two-page current window; historical discovery unverified. Do not infer the issuer from S1 or convert the signed-day/page-day difference into measured repost latency. |
+
+### Electricity / load shedding
+
+| Event / primary evidence | Publication day; event window | Student impact and issuer | Frozen Hub evidence / timeliness limit |
+| --- | --- | --- | --- |
+| P0 — 关于仙林校区临时限负荷供电的通知; [previously qualified motivating sample](https://github.com/zhongyangchuwu/nju-info-hub/issues/86#issuecomment-6043978493) | 2026-09-29; restriction from 10:00; historical relay timestamp 10:56:27 +08:00 | 仙林 temporary load-limited supply; notice signed 后勤服务集团水电中心. Previously qualified NJU助手 QZone post is a **credentialed-public secondary relay**, not the author or canonical first-party channel. | **Explicit unresolved-origin regression**: exact first-publication channel/URL/instant remains `origin-unresolved`. Historical relay evidence was not fetched again. No current public-core discovery or delivery proof; neither retrospective P1 nor search absence resolves this notice's origin. |
+| P1 — [暴雨中的电力守护 ——水电中心快速应对“9·29”外网故障停电纪实](https://hqjt.nju.edu.cn/e6/2a/c40086a845354/page.htm) | 2026-09-30 retrospective; 09-29 outages at 06:40 and 08:02, reported restoration before 10:00 | Two broad 仙林 outages due to an external-line fault; 水电中心 reports 47 substations restored and six critical backup-generation locations. Full building denominator absent. | First-party event/response-unit corroboration, **not a load-shedding advance notice**. This URL was absent from the actual `nju-logistics-notices` two-page/28-item window; it is a department-news article, not proof the selected `/1214/` notice stream discovers it. “通过多种渠道” does not name those channels. Next-day retrospective cannot prove emergency-alert timeliness. |
+
+### Water outage
+
+| Event / primary evidence | Publication day; event window | Student impact and issuer | Frozen Hub evidence / timeliness limit |
+| --- | --- | --- | --- |
+| W1 — [水电管理中心“安全管理提升”工作系列报道之五——水电管理中心快速修复仙林校区爆裂水管](https://hqjt.nju.edu.cn/dlzx/58/32/c1396a481330/page.htm) | 2020-06-10 retrospective; 06-09 report at 23:30; valve closure printed as `24:10`; next-morning repair at 07:00 | 仙林25栋西侧 burst pipe affected 天文台、大气楼及25幢宿舍附近 supply; 水电管理中心 closed the main valves. Exact restoration time/duration absent; `24:10` retained, not normalized into a fabricated timestamp. | **Historical first-party interruption control, current coverage gap**. No selected dedicated Water-Electricity source or demonstrated alert discovery. This 2020 article is outside the executed Logistics window; historical discovery is unverified. It proves an interruption, not a current advance-alert channel. |
+
+The checked [Water-Electricity work archive](https://hqjt.nju.edu.cn/dlzx/1396/list.htm) has a latest visible first-page item dated 2020-10-30; the [notice archive](https://hqjt.nju.edu.cn/dlzx/1400/list.htm) has a latest visible notice dated 2018-10-15. Neither establishes a current outage-alert timeline. The [2019 Archives burst-pipe repair report](https://hqjt.nju.edu.cn/dlzx/8f/11/c1396a429841/page.htm) does not explicitly establish a user-visible interruption or incident date, so it is not counted as another outage sample. Bounded public searches supplied no additional qualifying recent utilities notice; this is not evidence of nonpublication elsewhere.
+
+### Housing / dorm operations
+
+| Event / primary evidence | Publication day; event window | Student impact and issuer | Frozen Hub evidence / timeliness limit |
+| --- | --- | --- | --- |
+| H1 — [后勤服务集团2026年寒假窗口服务表](https://hqjt.nju.edu.cn/53/76/c1214a807798/page.htm), [public PDF, p. 1](https://hqjt.nju.edu.cn/_upload/article/files/c4/b9/7483a935449e8a2ba21e9d21ea28/94e40e7d-6cf0-403f-abbb-8781e0996c48.pdf) | 2026-01-22; winter break, no exact dorm-room start/end dates | Public apartment study areas: 仙林02/05/06/16–24栋 first floor, 04栋 light dining/study room, 08栋 light dining room, 26/27栋 first/second floors; 鼓楼11 common study rooms “正常开放”. 后勤服务集团 issued the schedule; building-level operator not named. | Actual `nju-logistics-notices` discovery matched URL/day, ID `f6a99ca6fa062606ba1c5cbe`. Planned public opening schedule, **not an interruption** or proof of uninterrupted operation. Campus/building alignment was checked visually in the PDF; exact dates and delivery latency remain unknown. |
+| H2 — [使命在肩，鼓楼学生公寓接管南园四舍](https://hqjt.nju.edu.cn/ldwygl/b0/70/c2272a700528/page.htm) | 2024-07-02 retrospective; acceptance 06-25, first occupancy 07-01 | 鼓楼南园4舍 refurbishment handover; first occupants were 65 military instructors, not a declared general-student reopening. Signed 物业管理中心/鼓楼学生公寓; 基建处 organized acceptance. | Historical dorm-operations control on an unselected Property Center substream; no current discovery proof. Renovation start and general student occupancy dates absent. Not a dorm interruption alert. |
+
+**Dorm interruption remains an explicit evidence gap.** H1/H2 establish service access/handover, not a recent dated dorm outage/closure. W1 includes the 25幢 dorm area but is a 2020 water control, not contemporary dorm coverage. The [2026 freshman accommodation report](https://hqjt.nju.edu.cn/ldwygl/db/a1/c2273a842657/page.htm) describes August 22–23 move-in support and individual repairs, not a defined interruption, so it is not promoted as another alert sample. Bounded research supplied no qualifying recent building/time-window interruption notice; that does not prove none was published.
+
+### Dining hours / closures
+
+These are public first-party Logistics Group schedules. The 2025/2026 PDF rows were checked in locally rendered pages because flattened text scrambled the campus/outlet/cutoff/restart columns. The PDF does not separately name each restaurant's frontline operator. Meal cutoffs/restarts below are not fabricated exact clock times or claims about today's hours.
+
+| Event / primary evidence | Publication day; event window | Student impact and issuer | Frozen Hub evidence / timeliness limit |
+| --- | --- | --- | --- |
+| D1 — [2026 winter schedule](https://hqjt.nju.edu.cn/53/76/c1214a807798/page.htm), [PDF p. 1](https://hqjt.nju.edu.cn/_upload/article/files/c4/b9/7483a935449e8a2ba21e9d21ea28/94e40e7d-6cf0-403f-abbb-8781e0996c48.pdf) | 2026-01-22; 鼓楼二食堂 last service 01-23 dinner, restart 02-26 breakfast | Holiday student meal-supply change at a specifically campus-labeled restaurant. 后勤服务集团. This is a different service event from H1 in the same publication. | Actual `nju-logistics-notices` list matched the same canonical publication ID `f6a99ca6fa062606ba1c5cbe`; no detail ingestion/feed proof. Preceding-calendar-day advance notice for this cutoff. Other outlets with earlier cutoffs must not inherit that advance classification. |
+| D2 — [后勤服务集团2025暑期窗口服务表](https://hqjt.nju.edu.cn/b8/aa/c1214a768170/page.htm), [PDF p. 1](https://hqjt.nju.edu.cn/_upload/article/files/d0/2f/1a94a89b4c638bb6c6fb5ed92d1d/97369300-1a69-4d40-994e-bb77e3e89df4.pdf) | 2025-07-01; 苏州十七食堂（A、B） last service 07-04 dinner, restart 08-21 breakfast | Campus-specific summer student meal-service change. 后勤服务集团. Visual table alignment resolves the outlet/date pairing that flattened extraction could not. | Actual `nju-logistics-notices` list matched URL/day, ID `31f852c9b00dee2f7cc6b49e`. Three-calendar-day advance publication for this row; historical schedule, not current service status or delivery proof. |
+| D3 — [后勤服务集团国庆（10.1-10.7）服务安排](https://hqjt.nju.edu.cn/f3/10/c1214a717584/page.htm) and its public PDF | 2024-09-30; 鼓楼教工餐厅 last service 09-30 dinner, restart 10-08 lunch | Staff-cafeteria holiday control, **not a student-default meal denominator**. 后勤服务集团 issued the schedule. | Actual `nju-logistics-notices` list matched URL/day, ID `84c3911871cf91177ffabbcc`. Same-day cutoff/preceding-day holiday publication; no exact lead time or historical ingestion proof. |
+
+Do not admit the old Dining Center sublist merely because it exists: its useful [2020 summer-hours page](https://hqjt.nju.edu.cn/sszx/9f/8a/c1389a499594/page.htm) is printed `2020-12-22`, after that summer; the [2019 wiring-closure page](https://hqjt.nju.edu.cn/sszx/4a/8d/c1389a346765/page.htm) is printed `2019-07-08` for a July 1–6 closure. They are historical controls against confusing page day with advance publication, not evidence of a current alert timeline. D1/D2 resolve a public operational-schedule channel; they do not establish reliable emergency dining alerts or complete holiday-event coverage.
+
+### Shuttle / transport changes
+
+| Event / primary evidence | Publication day; event window | Student impact and issuer | Frozen Hub evidence / timeliness limit |
+| --- | --- | --- | --- |
+| B1 — [关于学校班车的通知](https://hqjt.nju.edu.cn/yszx/4a/34/c1419a281140/page.htm), embedded public notice image | 2018-08-20; “即日起”, no end/restart date | “取消鼓楼和仙林校区之间的交通班车，浦口校区班车保留”. Image signed 后勤服务集团运输中心 and dated 08-20. | Public first-party immediate-effect historical change. Transport sublist is not a selected source; no discovery/delivery proof. It does not establish whether the route later resumed. |
+| B2 — [仙林校区教职工工作日交通班车时刻表(2017年8月31日起)](https://hqjt.nju.edu.cn/yszx/48/9f/c1419a215199/page.htm) | 2017-09-13; effective 08-31 on workdays, no end date | Staff commuter timetable through 仙林/新庄/大钟亭/鼓楼; “法定节假日班车停开”. 后勤服务集团运输中心. | Public first-party historical timetable posted after its effective day; staff-oriented, not current student transport coverage. No selected Transport source or observed discovery; current route status unknown. |
+
+Only historical 2017–2018 transport changes were independently verified in this bounded study. No qualifying 2024–2026 route/hours/stoppage change was established. Do not count stale timetables as current transport coverage or search absence as proof no current channel exists.
+
+### Actual Hub checks and interpretation
+
+On 2026-10-09, Node 26 ran the existing command `mise exec -- pnpm nju-info -- source discover-pages <source-id> 2` without modifying source configuration. Discovery enumerates metadata; it does not fetch every detail, persist notices, publish feeds, or prove reader delivery.
+
+| Source | Actual live CLI outcome | Separate configured-adapter replay |
+| --- | --- | --- |
+| `nju-itsc-notices` | Failed: `GET https://oi.nju.edu.cn/tzgg/listm.htm failed after retries: fetch failed`; no list was obtained. | Complete public HTML snapshot yielded 18 candidates, including N1/N2. This count includes non-event service/footer links, not 18 operational events. |
+| `nju-security-office-general-notices` | Failed: `GET https://bwc.nju.edu.cn/64533/list.htm failed after retries: fetch failed`; no list was obtained. | Complete public HTML snapshot yielded 14 candidates, including T1/T2. |
+| `nju-logistics-notices` | Passed: two pages, 28 distinct candidates; newest listed item was the 2026-07-21 duty roster. | Not replayed; the observed live list is the bounded comparison window, not an exhaustive historical archive. |
+| `nju-undergraduate-notices` | Passed: two pages, 28 distinct candidates, including exact S1 URL/publication day. | Not replayed. |
+
+The existing fetcher's internal retries occurred in the failed commands; those commands were not rerun to manufacture success. Transport root cause is unresolved. Independent public-page readability is not proof the Node collector is healthy; a failed run is not an empty successful run.
+
+The offline smoke imported the real `loadSourceDirectory` and `discoverSourcePage`, loaded the unchanged YAML, supplied complete tool-decoded public-list HTML through the `RawDocument` interface, and asserted each matched URL/day/acquisition kind plus the unchanged official-instance hash. It passed with no network requests. Snapshot UTF-8 text SHA-256 values were ITSC `99e5a8bd20c27037297bb1061db89f32a71d46138ed485c9d8df8bd424deef8b` and Security Office `1ed3dd69ff286212386a506f506edfb6b623c8c5c2373ea2e1916e4a5051eba6`; these identify decoded fixture text, **not upstream response-byte hashes**. Replay clocks are synthetic input timestamps, not acquisition freshness. Temporary fixtures/scripts are not permanent tests or a transport remediation.
+
+The official policy's `17 */2 * * *` UTC schedule is configuration, not an observed latency guarantee. No publication-to-collection/feed/reader interval was measured. Same-day short-window N2 and emergency P0 expose a timeliness requirement that cannot be declared satisfied by source membership, a two-hour configured cadence, successful list parsing, or next-day incident reporting. These samples are not an independent campus-wide event denominator and support no recall/precision percentage.
+
+### Corpus-supported next acquisition decision
+
+Prioritize the **already-selected Logistics public schedule/attachment path**, not another ordinary college feed or automatic admission of stale utility/dining/transport sublists. H1/D1/D2 show that useful current-period operational facts can sit in public PDF tables behind metadata-only HTML pages, and that text flattening can misassign dates to outlets. A concrete next acquisition increment is a generic public-attachment evidence boundary retaining canonical page/document provenance, distinct publication/event dates, and explicit layout/extraction confidence. First qualify existing detail ingestion and reader access for these exact PDFs; do not assume the existing attachment locator is missing or silently replace an uncertain table with guessed text. This is a justified candidate, not a source/config/code change made by this study.
+
+Retain P0 as `origin-unresolved`; no retry of its historical WeChat/EHall/QZone checks or activation of a credentialed relay was part of this work. Separately restore and qualify live ITSC/Security collection before claiming those positive controls are operationally healthy. Current utilities alerts, dated dorm interruptions, recent shuttle changes, exact first-publication routes/repost delays, end-to-end delivery, and an independent event denominator remain unresolved. The eight domains now have explicit records/limits, but **#86 must remain open**; an opening schedule, retrospective, stale timetable, or parser replay does not satisfy an interruption/timeliness gate.
+
