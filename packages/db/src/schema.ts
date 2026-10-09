@@ -1,7 +1,7 @@
 import { normalizePublicationDate } from "@nju-info/core";
 import type { DatabaseSync } from "node:sqlite";
 
-export const DATABASE_SCHEMA_VERSION = 6;
+export const DATABASE_SCHEMA_VERSION = 7;
 
 const INITIAL_SCHEMA = `
 CREATE TABLE sources (
@@ -162,12 +162,46 @@ CREATE TABLE social_item_suppressions (
 ) STRICT;
 `;
 
+const COLLECTION_SCHEMA = `
+CREATE TABLE collection_runs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  trigger TEXT NOT NULL CHECK (trigger IN ('manual', 'startup', 'scheduled')),
+  started_at TEXT NOT NULL,
+  finished_at TEXT,
+  outcome TEXT NOT NULL DEFAULT 'unfinished'
+    CHECK (outcome IN ('unfinished', 'success', 'partial-failure', 'failure')),
+  succeeded_sources INTEGER NOT NULL DEFAULT 0 CHECK (succeeded_sources >= 0),
+  failed_sources INTEGER NOT NULL DEFAULT 0 CHECK (failed_sources >= 0),
+  CHECK ((outcome = 'unfinished' AND finished_at IS NULL)
+      OR (outcome <> 'unfinished' AND finished_at IS NOT NULL))
+) STRICT;
+
+CREATE TABLE collection_source_attempts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_id INTEGER NOT NULL REFERENCES collection_runs(id),
+  source_id TEXT NOT NULL,
+  started_at TEXT NOT NULL,
+  finished_at TEXT,
+  outcome TEXT NOT NULL DEFAULT 'unfinished'
+    CHECK (outcome IN ('unfinished', 'success', 'failure')),
+  counts_json TEXT,
+  error_json TEXT,
+  UNIQUE (run_id, source_id),
+  CHECK ((outcome = 'unfinished' AND finished_at IS NULL AND counts_json IS NULL AND error_json IS NULL)
+      OR (outcome = 'success' AND finished_at IS NOT NULL AND counts_json IS NOT NULL AND error_json IS NULL)
+      OR (outcome = 'failure' AND finished_at IS NOT NULL AND counts_json IS NULL AND error_json IS NOT NULL))
+) STRICT;
+
+CREATE INDEX collection_source_attempts_run_idx ON collection_source_attempts (run_id, id);
+CREATE INDEX collection_source_attempts_source_idx ON collection_source_attempts (source_id, id DESC);
+`;
+
 export function migrateDatabase(database: DatabaseSync): void {
   const row = database.prepare("PRAGMA user_version").get();
   const currentVersion = Number(row?.user_version ?? 0);
 
   if (currentVersion === DATABASE_SCHEMA_VERSION) return;
-  if (![0, 1, 2, 3, 4, 5].includes(currentVersion)) {
+  if (![0, 1, 2, 3, 4, 5, 6].includes(currentVersion)) {
     throw new Error(
       `unsupported database schema version ${currentVersion}; expected ${DATABASE_SCHEMA_VERSION}`,
     );
@@ -216,7 +250,8 @@ export function migrateDatabase(database: DatabaseSync): void {
         database.exec("DROP TABLE source_item_observations_legacy");
       }
     }
-    database.exec(SOCIAL_IMPORT_SCHEMA);
+    if (currentVersion < 6) database.exec(SOCIAL_IMPORT_SCHEMA);
+    database.exec(COLLECTION_SCHEMA);
     database.exec(`PRAGMA user_version = ${DATABASE_SCHEMA_VERSION}`);
     database.exec("COMMIT");
   } catch (error) {

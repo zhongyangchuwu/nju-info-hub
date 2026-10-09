@@ -9,25 +9,79 @@ import {
   parseSourceNotice,
 } from "@nju-info/collector";
 import type {
+  CollectionPhase,
+  CollectionSourceCounts,
+  DiscoveryPage,
   DiscoveredItem,
   ParsedNotice,
   RawDocument,
   SourceConfig,
 } from "@nju-info/core";
+import { CollectionStageError } from "./diagnostics.js";
 import {
   UnsupportedDetailAcquisitionError,
   fetchSourceDetail,
 } from "./detail-acquisition.js";
 
-export interface IngestSummary {
+export interface IngestSummary extends CollectionSourceCounts {
   sourceId: string;
   databasePath: string;
-  pagesVisited: number;
-  itemsObserved: number;
-  noticesIngested: number;
-  insertedRevisions: number;
-  unchangedRevisions: number;
   stats: DatabaseStats;
+}
+
+type SkippedDetailKind = "restricted" | "unsupported";
+
+function stageFailure(phase: CollectionPhase, cause: unknown): CollectionStageError {
+  try {
+    if (cause instanceof CollectionStageError) return cause;
+  } catch {
+    // A hostile proxy is preserved as the original cause below.
+  }
+  return new CollectionStageError(phase, cause);
+}
+
+
+function warnSkippedDetail(
+  error: unknown,
+  sourceId: string,
+): SkippedDetailKind | undefined {
+  let restrictionClass: RestrictedDetailError["restrictionClass"] | undefined;
+  let acquisitionKind:
+    | UnsupportedDetailAcquisitionError["acquisitionKind"]
+    | undefined;
+  try {
+    if (error instanceof RestrictedDetailError) {
+      const candidate = error.restrictionClass;
+      if (candidate === "campus-network" || candidate === "authentication") {
+        restrictionClass = candidate;
+      }
+    } else if (error instanceof UnsupportedDetailAcquisitionError) {
+      const candidate = error.acquisitionKind;
+      if (candidate === "public-wechat" || candidate === "external-public") {
+        acquisitionKind = candidate;
+      }
+    }
+  } catch {
+    return undefined;
+  }
+
+  if (restrictionClass) {
+    console.warn(JSON.stringify({
+      event: "restricted_detail_skipped",
+      sourceId,
+      restrictionClass,
+    }));
+    return "restricted";
+  }
+  if (acquisitionKind) {
+    console.warn(JSON.stringify({
+      event: "unsupported_detail_skipped",
+      sourceId,
+      acquisitionKind,
+    }));
+    return "unsupported";
+  }
+  return undefined;
 }
 
 export interface DiscoverPagesOptions {
@@ -51,7 +105,7 @@ export interface DiscoverPagesOptions {
  * `recentLimit` also refreshes that many of the newest known items so edits can
  * still create new revisions.
  */
-export async function discoverPages(
+async function discoverPagesUnchecked(
   source: SourceConfig,
   options: DiscoverPagesOptions,
 ): Promise<{
@@ -70,10 +124,27 @@ export async function discoverPages(
   let reachedBootstrapLimit = false;
   let foundOverlap = false;
   while (pageUrl && pagesVisited < options.maxPages && !seenPages.has(pageUrl)) {
-    seenPages.add(pageUrl);
-    const raw = await fetchRawDocument(source.id, pageUrl);
-    options.onPage?.(raw);
-    const page = discoverSourcePage(raw, source);
+    const currentPageUrl = pageUrl;
+    seenPages.add(currentPageUrl);
+    let raw: RawDocument;
+    try {
+      raw = await fetchRawDocument(source.id, currentPageUrl);
+    } catch (error) {
+      throw stageFailure("list-fetch", error);
+    }
+    if (options.onPage) {
+      try {
+        options.onPage(raw);
+      } catch (error) {
+        throw stageFailure("persistence", error);
+      }
+    }
+    let page: DiscoveryPage;
+    try {
+      page = discoverSourcePage(raw, source);
+    } catch (error) {
+      throw stageFailure("list-parse", error);
+    }
     let pageHasKnownItem = false;
     const isIncrementalLookahead = incremental && foundOverlap;
     for (const item of page.items) {
@@ -112,7 +183,11 @@ export async function discoverPages(
     for (const item of sourceOrderedItems) {
       const listRaw = firstListRawByUrl.get(item.url);
       if (!listRaw) throw new Error(`missing list-page provenance for ${item.url}`);
-      options.onItem(item, listRaw);
+      try {
+        options.onItem(item, listRaw);
+      } catch (error) {
+        throw stageFailure("persistence", error);
+      }
     }
   }
 
@@ -148,6 +223,17 @@ export async function discoverPages(
   return { pagesVisited, items: selectedItems };
 }
 
+export async function discoverPages(
+  source: SourceConfig,
+  options: DiscoverPagesOptions,
+): Promise<{ pagesVisited: number; items: DiscoveredItem[] }> {
+  try {
+    return await discoverPagesUnchecked(source, options);
+  } catch (error) {
+    throw stageFailure("discovery", error);
+  }
+}
+
 export async function collectNotices(
   source: SourceConfig,
   limit: number,
@@ -158,10 +244,16 @@ export async function collectNotices(
 ): Promise<{
   pagesVisited: number;
   itemsObserved: number;
+  newItemsObserved: number;
+  skippedRestricted: number;
+  skippedUnsupported: number;
   notices: ParsedNotice[];
 }> {
   const notices: ParsedNotice[] = [];
+  const newSourceItemIds = new Set<string>();
   let itemsObserved = 0;
+  let skippedRestricted = 0;
+  let skippedUnsupported = 0;
   const { pagesVisited } = await discoverPages(source, {
     maxPages: 100,
     recentLimit: limit,
@@ -169,32 +261,64 @@ export async function collectNotices(
     ...(onPage ? { onPage } : {}),
     onItem: (item, listRaw) => {
       itemsObserved += 1;
-      onObservedItem?.(item, listRaw);
-    },
-    onCandidate: async (item) => {
+      if (!knownSourceItemIds?.has(item.sourceItemId)) {
+        newSourceItemIds.add(item.sourceItemId);
+      }
       try {
-        const detailRaw = await fetchSourceDetail(source, item);
-        const notice = parseSourceNotice(detailRaw, source, item);
-        onNotice?.(detailRaw, notice);
-        notices.push(notice);
+        onObservedItem?.(item, listRaw);
       } catch (error) {
-        if (error instanceof RestrictedDetailError) {
-          console.error(
-            `skipping restricted detail ${source.id} ${item.url}: ${error.restrictionClass}`,
-          );
-          return;
-        }
-        if (error instanceof UnsupportedDetailAcquisitionError) {
-          console.error(
-            `skipping unsupported detail ${error.sourceId} ${error.url}: ${error.acquisitionKind}`,
-          );
-          return;
-        }
-        throw error;
+        throw stageFailure("persistence", error);
       }
     },
+    onCandidate: async (item) => {
+      let detailRaw: RawDocument;
+      try {
+        detailRaw = await fetchSourceDetail(source, item);
+      } catch (error) {
+        const skipped = warnSkippedDetail(error, source.id);
+        if (skipped === "restricted") {
+          skippedRestricted += 1;
+          return;
+        }
+        if (skipped === "unsupported") {
+          skippedUnsupported += 1;
+          return;
+        }
+        throw stageFailure("detail-fetch", error);
+      }
+
+      let notice: ParsedNotice;
+      try {
+        notice = parseSourceNotice(detailRaw, source, item);
+      } catch (error) {
+        const skipped = warnSkippedDetail(error, source.id);
+        if (skipped === "restricted") {
+          skippedRestricted += 1;
+          return;
+        }
+        if (skipped === "unsupported") {
+          skippedUnsupported += 1;
+          return;
+        }
+        throw stageFailure("detail-parse", error);
+      }
+
+      try {
+        onNotice?.(detailRaw, notice);
+      } catch (error) {
+        throw stageFailure("persistence", error);
+      }
+      notices.push(notice);
+    },
   });
-  return { pagesVisited, itemsObserved, notices };
+  return {
+    pagesVisited,
+    itemsObserved,
+    newItemsObserved: newSourceItemIds.size,
+    skippedRestricted,
+    skippedUnsupported,
+    notices,
+  };
 }
 
 export async function ingestSource(
@@ -203,22 +327,30 @@ export async function ingestSource(
   recentItemLimit: number,
 ): Promise<IngestSummary> {
   const resolvedDatabasePath = resolve(databasePath);
-  const database = new InfoHubDatabase(resolvedDatabasePath);
+  let database: InfoHubDatabase | undefined;
 
   try {
+    database = new InfoHubDatabase(resolvedDatabasePath);
     let insertedRevisions = 0;
     let unchangedRevisions = 0;
     const knownSourceItemIds = new Set(database.listKnownSourceItemIds(source.id));
-    const { pagesVisited, itemsObserved, notices } = await collectNotices(
+    const {
+      pagesVisited,
+      itemsObserved,
+      newItemsObserved,
+      skippedRestricted,
+      skippedUnsupported,
+      notices,
+    } = await collectNotices(
       source,
       recentItemLimit,
-      (rawDocument) => database.persistRawDocument(source, rawDocument),
+      (rawDocument) => database!.persistRawDocument(source, rawDocument),
       (detailRaw, notice) => {
-        const result = database.ingestNotice(source, detailRaw, notice);
+        const result = database!.ingestNotice(source, detailRaw, notice);
         if (result.insertedRevision) insertedRevisions += 1;
         else unchangedRevisions += 1;
       },
-      (item, listRaw) => database.observeSourceItem(source, listRaw, item),
+      (item, listRaw) => database!.observeSourceItem(source, listRaw, item),
       knownSourceItemIds,
     );
 
@@ -227,12 +359,21 @@ export async function ingestSource(
       databasePath: resolvedDatabasePath,
       pagesVisited,
       itemsObserved,
+      newItemsObserved,
       noticesIngested: notices.length,
       insertedRevisions,
       unchangedRevisions,
+      skippedRestricted,
+      skippedUnsupported,
       stats: database.stats(),
     };
+  } catch (error) {
+    throw stageFailure("persistence", error);
   } finally {
-    database.close();
+    try {
+      database?.close();
+    } catch (error) {
+      throw stageFailure("persistence", error);
+    }
   }
 }

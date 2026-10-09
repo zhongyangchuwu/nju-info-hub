@@ -7,4 +7,5 @@ export * from './social-acquisition.js';
 export * from './social-import-types.js';
 export * from './social-import.js';
 export * from './social-import-json.js';
+export * from './collection-operations.js';
 

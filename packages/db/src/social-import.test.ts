@@ -200,6 +200,8 @@ describe("authenticated social imports", () => {
         DROP TABLE social_raw_blobs;
         DROP TABLE social_import_operations;
         DROP TABLE social_source_state;
+        DROP TABLE collection_source_attempts;
+        DROP TABLE collection_runs;
         PRAGMA user_version = 5;
       `);
       database = new InfoHubDatabase(path);
@@ -227,6 +229,64 @@ describe("authenticated social imports", () => {
       using reader = new InfoHubDatabaseReader(path);
       expect(reader.listRecentSourceEntries()).toEqual(database.listRecentSourceEntries());
       expect(reader.listSources()).toEqual(database.listSources());
+    } finally {
+      database.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("migrates v6 without recreating social tables or altering website and social records", () => {
+    const directory = mkdtempSync(join(tmpdir(), "nju-social-v6-"));
+    const path = join(directory, "test.sqlite");
+    let database = new InfoHubDatabase(path);
+    try {
+      ingestWebsite(database);
+      const value = fixture();
+      const packet = input(value, 1, [{ tid: "one", title: "Retained social entry" },
+        { tid: "two", title: "Withdrawn social entry" }]);
+      database.applySocialImport(packet, NOW);
+      database.applySocialImport(input(value, 2, [], {
+        action: "suppress", sourceItemIds: [itemId(value, "two")],
+      }), NOW);
+      const website = database.listRecentNotices();
+      const entries = database.listRecentSourceEntries();
+      const sources = database.listSources();
+      const stats = database.stats();
+      database.close();
+      const tables = ["sources", "raw_documents", "source_items", "notice_revisions", "attachments",
+        "source_item_observations", "social_source_state", "social_import_operations", "social_raw_blobs",
+        "social_operation_blobs", "social_item_revisions", "social_item_publications", "social_item_suppressions"];
+      const before = new Map<string, unknown[]>();
+      const schemas = new Map<string, unknown>();
+      {
+        using legacy = new DatabaseSync(path);
+        legacy.exec(`DROP TABLE collection_source_attempts; DROP TABLE collection_runs; PRAGMA user_version = 6;`);
+        for (const table of tables) {
+          before.set(table, legacy.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all());
+          schemas.set(table, legacy.prepare("SELECT sql FROM sqlite_schema WHERE name = ?").get(table));
+        }
+      }
+      expect(() => new InfoHubDatabaseReader(path)).toThrow(/schema version 6/);
+      database = new InfoHubDatabase(path);
+      expect(database.listRecentNotices()).toEqual(website);
+      expect(database.listRecentSourceEntries()).toEqual(entries);
+      expect(database.listSources()).toEqual(sources);
+      expect(database.stats()).toEqual(stats);
+      expect(database.listCollectionRuns()).toEqual([]);
+      expect(database.listCollectionSourceStatuses()).toEqual([]);
+      using inspection = new DatabaseSync(path, { readOnly: true });
+      expect(inspection.prepare("PRAGMA user_version").get()).toEqual({ user_version: 7 });
+      for (const table of tables) {
+        expect(inspection.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all()).toEqual(before.get(table));
+        expect(inspection.prepare("SELECT sql FROM sqlite_schema WHERE name = ?").get(table)).toEqual(schemas.get(table));
+      }
+      expect(inspection.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+      const runId = database.beginCollectionRun("manual", NOW.toISOString());
+      const attemptId = database.beginCollectionSourceAttempt(runId, SOURCE.id, NOW.toISOString());
+      database.finishCollectionSourceAttempt(attemptId, NOW.toISOString(), {
+        outcome: "failure", error: { phase: "list-fetch", causes: [{ name: "TypeError" }] },
+      });
+      expect(database.finishCollectionRun(runId, NOW.toISOString()).outcome).toBe("failure");
     } finally {
       database.close();
       rmSync(directory, { recursive: true, force: true });

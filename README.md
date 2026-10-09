@@ -183,6 +183,9 @@ pnpm nju-info -- source ingest nju-cs-graduate /tmp/nju-info.sqlite 10
 
 # serve an existing current-schema database
 pnpm nju-info -- serve /tmp/nju-info.sqlite --host 127.0.0.1 --port 3001
+
+# inspect persisted instance collection runs and per-source status without writing
+pnpm nju-info -- status /tmp/nju-info.sqlite
 ```
 
 Source-level fetch and ingest commands access public NJU websites. Unit tests use local fixtures instead.
@@ -200,12 +203,18 @@ curl http://127.0.0.1:3000/v1/health
 curl http://127.0.0.1:3000/v1/sources
 curl http://127.0.0.1:3000/v1/organizations
 curl 'http://127.0.0.1:3000/v1/notices/recent?sourceId=nju-cs-graduate&limit=10'
+curl http://127.0.0.1:3000/v1/collection/status
+curl 'http://127.0.0.1:3000/v1/collection/runs?limit=20'
 curl http://127.0.0.1:3000/feeds/nju-cs-graduate.json
 curl http://127.0.0.1:3000/feeds/nju-cs-graduate.atom
 curl http://127.0.0.1:3000/feeds/nju-cs-graduate.rss
 ```
 
-Only the recent-notices route accepts `sourceId`, `organizationId`, and `limit`; filters combine, and the default limit is 50 (maximum 100). Unknown IDs return an empty `data` array. Invalid queries return `400`, unknown paths `404`, non-GET methods on known paths `405` (`Allow: GET`), and internal failures `500`, each as `{"error":{"code":"…","message":"…"}}`. Dates and provenance follow the persisted query contract; health is liveness only.
+The recent-notices route accepts `sourceId`, `organizationId`, and `limit`; filters combine, and the default limit is 50 (maximum 100). Unknown IDs return an empty `data` array. Invalid queries return `400`, unknown paths `404`, non-GET methods on known paths `405` (`Allow: GET`), and internal failures `500`, each as `{"error":{"code":"…","message":"…"}}`. Dates and provenance follow the persisted query contract; health is liveness only.
+
+`GET /v1/collection/status` rejects query parameters and returns `{data: {latestRun, sources}}`; before an instance collection run, `latestRun` is null and `sources` is empty. `GET /v1/collection/runs` accepts only a unique integer `limit` from 1 to 100 (default 20), newest run first. These operator views report completed success, partial failure, failure, or an unfinished attempt, not upstream publication freshness. A successful poll with zero new items/revisions is not a fault; a healthy API does not prove every source is collecting. See [operating diagnostics](docs/docker.md#collection-logs-and-status) and [ledger semantics](docs/database.md#collection-operation-tables). Instance `collect`/`schedule` record this history; source-level debugging commands do not.
+
+Runtime failures are structured JSON with bounded stage/cause diagnostics rather than raw exception messages or response bodies. Trusted CLI input errors additionally expose a finite `input.code` and static `input.hint`; argument values and image-reference text are not echoed. Original source data remains in the normal canonical/provenance path, not operational logs.
 
 `GET /feeds/{sourceId}.{json,atom,rss}` publishes the shared producer recent window (currently up to 100 current source entries) per persisted source in database recency order: a known full notice, or an observed official-list link with no acquired full text. JSON is JSON Feed 1.1 (`application/feed+json`), Atom is Atom 1.0 (`application/atom+xml`), and RSS is RSS 2.0 (`application/rss+xml`); all responses are UTF-8. HTTP Feed responses include a content-derived `ETag`, observation-derived `Last-Modified`, and `Cache-Control: public, max-age=0, must-revalidate`; `If-None-Match` and `If-Modified-Since` are honored with `304`. Unknown sources return a JSON `404`; feed query parameters are rejected with `400`, and non-GET methods return `405`. All formats use the organization — source title, link to the original source list/home page, original item links, and stable IDs formed from percent-encoded source ID and source item ID separated by a colon. A later full acquisition upgrades the **same** feed ID. Local HTTP feeds omit self URLs because a reliable public origin is unknown. `/v1/notices/recent` remains full-notice-only.
 

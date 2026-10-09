@@ -34,6 +34,13 @@ function decodeHtml(bytes: Uint8Array, contentType: string | null): string {
   }
 }
 
+export class HttpStatusError extends Error {
+  constructor(readonly status: number) {
+    super("HTTP request failed");
+    this.name = "HttpStatusError";
+  }
+}
+
 function retryableStatus(status: number): boolean {
   return status === 429 || status >= 500;
 }
@@ -96,9 +103,7 @@ export async function fetchRawDocument(
   if (response.status === 304) return null;
 
   if (!response.ok) {
-    throw new Error(
-      `GET ${url} failed: ${response.status} ${response.statusText}`,
-    );
+    throw new HttpStatusError(response.status);
   }
 
   const contentType = response.headers.get("content-type");

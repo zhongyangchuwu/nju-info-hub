@@ -2,6 +2,11 @@ name: ${NJU_INFO_PROJECT_NAME:-nju-info-hub}
 
 x-image: &image
   image: ${NJU_INFO_IMAGE:?Set NJU_INFO_IMAGE to an immutable GHCR tag or local development image}
+  logging:
+    driver: local
+    options:
+      max-size: "10m"
+      max-file: "3"
 
 x-image-environment: &image-environment
   NJU_INFO_IMAGE_REF: ${NJU_INFO_IMAGE}

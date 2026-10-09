@@ -14,10 +14,13 @@ const paths: Record<string, true> = {
   "/v1/sources": true,
   "/v1/organizations": true,
   "/v1/notices/recent": true,
+  "/v1/collection/status": true,
+  "/v1/collection/runs": true,
 };
 
 type Reader = Pick<InfoHubDatabaseReader,
-  "listSources" | "listOrganizations" | "listRecentNotices" | "listRecentSourceEntries">;
+  "listSources" | "listOrganizations" | "listRecentNotices" | "listRecentSourceEntries"
+  | "listCollectionRuns" | "listCollectionSourceStatuses">;
 
 function json(response: ServerResponse, status: number, body: unknown, allow?: string,
   contentType = "application/json; charset=utf-8"): void {
@@ -141,9 +144,13 @@ export function createApiServer(reader: Reader): Server {
       error(response, 405, "method_not_allowed", "Method not allowed", "GET");
       return;
     }
-    const options = path === "/v1/notices/recent"
+    const options = path === "/v1/notices/recent" || path === "/v1/collection/runs"
       ? recentOptions(url.searchParams)
       : url.searchParams.size === 0 ? {} : undefined;
+    if (path === "/v1/collection/runs" && [...url.searchParams.keys()].some((key) => key !== "limit")) {
+      error(response, 400, "invalid_query", "Invalid query parameters");
+      return;
+    }
     if (options === undefined) {
       error(response, 400, "invalid_query", "Invalid query parameters");
       return;
@@ -191,6 +198,15 @@ export function createApiServer(reader: Reader): Server {
           break;
         case "/v1/organizations":
           json(response, 200, { data: reader.listOrganizations() });
+          break;
+        case "/v1/collection/status":
+          json(response, 200, { data: {
+            latestRun: reader.listCollectionRuns(1)[0] ?? null,
+            sources: reader.listCollectionSourceStatuses(),
+          } });
+          break;
+        case "/v1/collection/runs":
+          json(response, 200, { data: reader.listCollectionRuns(options.limit) });
           break;
         case "/v1/notices/recent":
           json(response, 200, { data: reader.listRecentNotices(options) });
