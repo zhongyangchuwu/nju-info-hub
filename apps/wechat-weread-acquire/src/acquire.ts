@@ -1,74 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { lstat, mkdir, mkdtemp, readFile, realpath, rename, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { assertAbsoluteRuntime, type WereadAcquireRuntime } from './config.js';
 import { normalizeWereadLatest } from './normalize.js';
 import { parseWechatSourcePolicy } from './policy.js';
 import { buildWereadShadowBundle } from './shadow.js';
-
-const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-
-function contains(parent: string, child: string): boolean {
-  const relative = path.relative(parent, child);
-  return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
-}
-
-async function rejectSymlinkPath(target: string): Promise<void> {
-  let current = path.parse(target).root;
-  for (const component of path.relative(current, target).split(path.sep).filter(Boolean)) {
-    current = path.join(current, component);
-    try {
-      if ((await lstat(current)).isSymbolicLink()) throw new Error('Restricted path must not contain symlinks');
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    }
-  }
-}
-
-async function restrictedOutputRoot(outputRoot: string, protectedRoot: string): Promise<string> {
-  const resolved = path.resolve(outputRoot);
-  const protectedResolved = path.resolve(protectedRoot);
-  if (contains(repositoryRoot, resolved) || contains(protectedResolved, resolved) ||
-      contains(resolved, repositoryRoot) || contains(resolved, protectedResolved)) {
-    throw new Error('Restricted output must be separate from repository and provider state');
-  }
-  await rejectSymlinkPath(resolved);
-  await mkdir(resolved, { recursive: true, mode: 0o700 });
-  const canonical = await realpath(resolved);
-  if (contains(repositoryRoot, canonical) || contains(protectedResolved, canonical) ||
-      contains(canonical, repositoryRoot) || contains(canonical, protectedResolved)) {
-    throw new Error('Restricted output resolves into repository or provider state');
-  }
-  const info = await stat(canonical);
-  if (!info.isDirectory() || (info.mode & 0o077) !== 0 || info.uid !== process.getuid?.()) {
-    throw new Error('Restricted output root must be operator-owned and mode 0700');
-  }
-  return canonical;
-}
-
-async function readIsolatedJson(inputPath: string, protectedRoot: string): Promise<{ bytes: Buffer; value: unknown }> {
-  const resolved = path.resolve(inputPath);
-  const protectedResolved = path.resolve(protectedRoot);
-  if (contains(protectedResolved, resolved) || contains(repositoryRoot, resolved)) {
-    throw new Error('Input JSON must not be read from provider state or repository');
-  }
-  await rejectSymlinkPath(resolved);
-  const info = await lstat(resolved);
-  if (!info.isFile()) throw new Error('Input JSON must be a regular file');
-  const canonical = await realpath(resolved);
-  if (contains(protectedResolved, canonical) || contains(repositoryRoot, canonical)) {
-    throw new Error('Input JSON resolves into provider state or repository');
-  }
-  const bytes = await readFile(canonical);
-  let value: unknown;
-  try {
-    value = JSON.parse(bytes.toString('utf8'));
-  } catch {
-    throw new Error('Input must be valid JSON');
-  }
-  return { bytes, value };
-}
+import { readIsolatedJson, restrictedRoot } from './storage.js';
 
 function sha256(bytes: Buffer): string {
   return createHash('sha256').update(bytes).digest('hex');
@@ -83,7 +20,7 @@ export async function acquireWereadLatest(runtimeInput: WereadAcquireRuntime): P
   shadowBundleCreated: boolean;
 }> {
   const runtime = assertAbsoluteRuntime(runtimeInput);
-  const root = await restrictedOutputRoot(runtime.outputRoot, runtime.protectedRoot);
+  const root = await restrictedRoot(runtime.outputRoot, runtime.protectedRoot);
   const providerExport = await readIsolatedJson(runtime.inputPath, runtime.protectedRoot);
   const candidate = normalizeWereadLatest(providerExport.value);
 

@@ -20,6 +20,8 @@ An additional offline manual-audit command compares independent operator public-
 
 `apps/wechat-weread-acquire` is an operator-only offline WeRead latest qualification/shadow app, also defined by the credentialed-public acquisition ADR. The explicit shadow path emits only reviewed-policy-gated link metadata with a `review-required` decision. It adds no provider runtime, network collection, importer, scheduler, or public-feed integration; shadow generation does not start the prospective benchmark.
 
+Its separate offline `observe` flow verifies only restricted qualification evidence from supplied completed runs and combines compact native identity/time/hash summaries with declared blocked/error/empty attempts. Provider aliases never reset deduplication; upstream export observation clocks, not later processing clocks, determine freshness. Failures cannot advance progress; conflicts suppress publication progress. Immutable private ledgers keep an explicit supplied-run scope and null cursor/covered-through fields, not a historical completeness claim. They neither verify optional public-safe shadow artifacts nor authorize publication or source admission.
+
 ## Data flow
 
 ```text
