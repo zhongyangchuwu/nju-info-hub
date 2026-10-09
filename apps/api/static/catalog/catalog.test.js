@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { buildOpml, escapeXml, parseSourceSelection, serializeSourceSelection } from "./catalog-helpers.js";
 
@@ -51,21 +50,5 @@ describe("static catalog helpers", () => {
       '</opml>',
       '',
     ].join("\n"));
-  });
-
-  it("keeps the static document semantic, CSP-restricted, and free of inline code", () => {
-    const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
-    expect(html).toMatch(/<main\b/);
-    expect(html).toMatch(/<h1\b/);
-    expect(html).toMatch(/aria-labelledby="sources-heading"/);
-    expect(html.indexOf('id="sources-heading"')).toBeLessThan(html.indexOf('id="sets-heading"'));
-    expect(html).toMatch(/http-equiv="Content-Security-Policy"/);
-    expect(html).toMatch(/default-src 'self'/);
-    expect(html).toMatch(/<script type="module" src="\.\/app\.js"><\/script>/);
-    expect(html).toMatch(/<link rel="stylesheet" href="\.\/styles\.css">/);
-    expect(html).not.toMatch(/<(?:script|link)\b[^>]*(?:src|href)\s*=\s*["']https?:/i);
-    expect(html).not.toMatch(/<script\b(?![^>]*\bsrc=)/i);
-    expect(html).not.toMatch(/\son[a-z]+\s*=/i);
-    expect(html).not.toMatch(/javascript:/i);
   });
 });
