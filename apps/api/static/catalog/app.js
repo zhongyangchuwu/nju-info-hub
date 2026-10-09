@@ -179,8 +179,13 @@ async function loadCatalog() {
       fetch("./sources.json"),
       fetch("./sets.json"),
     ]);
-    if (!sourceResponse.ok || !setsResponse.ok) throw new Error("Catalog request failed");
-    const [sourceCatalog, setCatalog] = await Promise.all([sourceResponse.json(), setsResponse.json()]);
+    if (!sourceResponse.ok || (!setsResponse.ok && setsResponse.status !== 404)) {
+      throw new Error("Catalog request failed");
+    }
+    const [sourceCatalog, setCatalog] = await Promise.all([
+      sourceResponse.json(),
+      setsResponse.status === 404 ? { sets: [] } : setsResponse.json(),
+    ]);
     if (!Array.isArray(sourceCatalog.sources) || !Array.isArray(setCatalog.sets)) {
       throw new Error("Catalog data is invalid");
     }

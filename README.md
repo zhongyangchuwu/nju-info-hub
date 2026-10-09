@@ -243,6 +243,8 @@ When generated, the source catalog lists only the sources selected by the active
 
 Static publication is driven by the reviewed instance configuration rather than a second set of export CLI flags. The instance selects the published source allow-list, optional curated set, OPML path under `subscriptions/`, and public base URL; the exporter consumes that contract directly. SQLite retains the complete persisted history, while each RSS/Atom/JSON Feed exposes the producer recent window (currently the latest 100 entries per source) for efficient polling by readers. Each export renders a complete next generation before replacing the publication-owned `feeds/`, `catalog/`, `bundles/`, and `subscriptions/` directories, so a render failure leaves the previous generation intact while unrelated files at the output root are preserved.
 
+A source-only publication may omit `catalog/sets.json`. The selector treats that file's HTTP 404 as no curated sets while retaining source selection and subscription links. Source-catalog failures, other set-catalog HTTP failures, and malformed available catalog data remain errors; missing optional sets must not hide a failed source publication.
+
 To collect and export the same feeds locally, run from the repository root (package scripts use their own working directories):
 
 ```bash
