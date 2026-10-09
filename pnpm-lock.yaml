@@ -245,6 +245,15 @@ importers:
 
   apps/qzone-gateway: {}
 
+  apps/social-import:
+    dependencies:
+      '@nju-info/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@nju-info/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+
   apps/wechat-weread-acquire:
     dependencies:
       '@nju-info/core':
@@ -295,6 +304,9 @@ importers:
 
   packages/feed:
     dependencies:
+      '@nju-info/core':
+        specifier: workspace:*
+        version: link:../core
       '@nju-info/db':
         specifier: workspace:*
         version: link:../db

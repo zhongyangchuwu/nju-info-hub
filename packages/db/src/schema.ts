@@ -1,7 +1,7 @@
 import { normalizePublicationDate } from "@nju-info/core";
 import type { DatabaseSync } from "node:sqlite";
 
-export const DATABASE_SCHEMA_VERSION = 5;
+export const DATABASE_SCHEMA_VERSION = 6;
 
 const INITIAL_SCHEMA = `
 CREATE TABLE sources (
@@ -91,12 +91,83 @@ CREATE INDEX source_item_observations_item_idx
   ON source_item_observations (source_item_row_id, revision_number DESC);
 `;
 
+const SOCIAL_IMPORT_SCHEMA = `
+CREATE TABLE social_source_state (
+  source_id TEXT PRIMARY KEY REFERENCES sources(id),
+  publisher_key TEXT NOT NULL UNIQUE,
+  policy_sha256 TEXT NOT NULL CHECK (length(policy_sha256) = 64),
+  registration_json TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  revoked INTEGER NOT NULL CHECK (revoked IN (0, 1)),
+  changed_at TEXT NOT NULL,
+  latest_sequence INTEGER NOT NULL CHECK (latest_sequence > 0)
+) STRICT;
+
+CREATE TABLE social_import_operations (
+  operation_id TEXT PRIMARY KEY,
+  source_id TEXT NOT NULL REFERENCES social_source_state(source_id),
+  sequence INTEGER NOT NULL CHECK (sequence > 0),
+  operation_sha256 TEXT NOT NULL CHECK (length(operation_sha256) = 64),
+  authorization_bytes BLOB NOT NULL,
+  bundle_bytes BLOB,
+  action TEXT NOT NULL CHECK (action IN ('publish', 'restore', 'suppress', 'revoke-source')),
+  issued_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  policy_sha256 TEXT NOT NULL,
+  applied_at TEXT NOT NULL,
+  imported_items INTEGER NOT NULL,
+  suppressed_items INTEGER NOT NULL,
+  UNIQUE (source_id, sequence)
+) STRICT;
+
+CREATE TABLE social_raw_blobs (
+  sha256 TEXT PRIMARY KEY CHECK (length(sha256) = 64),
+  body BLOB NOT NULL
+) STRICT;
+
+CREATE TABLE social_operation_blobs (
+  operation_id TEXT NOT NULL REFERENCES social_import_operations(operation_id),
+  sha256 TEXT NOT NULL REFERENCES social_raw_blobs(sha256),
+  PRIMARY KEY (operation_id, sha256)
+) STRICT;
+
+CREATE TABLE social_item_revisions (
+  id INTEGER PRIMARY KEY,
+  source_item_row_id INTEGER NOT NULL REFERENCES source_items(id),
+  revision_number INTEGER NOT NULL CHECK (revision_number > 0),
+  material_sha256 TEXT NOT NULL CHECK (length(material_sha256) = 64),
+  payload_json TEXT NOT NULL,
+  raw_sha256 TEXT NOT NULL REFERENCES social_raw_blobs(sha256),
+  operation_id TEXT NOT NULL REFERENCES social_import_operations(operation_id),
+  created_at TEXT NOT NULL,
+  UNIQUE (source_item_row_id, revision_number)
+) STRICT;
+
+CREATE TABLE social_item_publications (
+  source_item_row_id INTEGER PRIMARY KEY REFERENCES source_items(id),
+  revision_id INTEGER NOT NULL REFERENCES social_item_revisions(id),
+  operation_id TEXT NOT NULL REFERENCES social_import_operations(operation_id),
+  policy_sha256 TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  acquired_at TEXT NOT NULL,
+  applied_at TEXT NOT NULL
+) STRICT;
+
+CREATE TABLE social_item_suppressions (
+  source_id TEXT NOT NULL REFERENCES social_source_state(source_id),
+  source_item_id TEXT NOT NULL,
+  operation_id TEXT NOT NULL REFERENCES social_import_operations(operation_id),
+  changed_at TEXT NOT NULL,
+  PRIMARY KEY (source_id, source_item_id)
+) STRICT;
+`;
+
 export function migrateDatabase(database: DatabaseSync): void {
   const row = database.prepare("PRAGMA user_version").get();
   const currentVersion = Number(row?.user_version ?? 0);
 
   if (currentVersion === DATABASE_SCHEMA_VERSION) return;
-  if (![0, 1, 2, 3, 4].includes(currentVersion)) {
+  if (![0, 1, 2, 3, 4, 5].includes(currentVersion)) {
     throw new Error(
       `unsupported database schema version ${currentVersion}; expected ${DATABASE_SCHEMA_VERSION}`,
     );
@@ -107,7 +178,7 @@ export function migrateDatabase(database: DatabaseSync): void {
     if (currentVersion === 0) {
       database.exec(INITIAL_SCHEMA);
       database.exec(SOURCE_ITEM_OBSERVATIONS_SCHEMA);
-    } else {
+    } else if (currentVersion < 5) {
       if (currentVersion === 1) {
         database.exec("ALTER TABLE notice_revisions ADD COLUMN published_on TEXT");
         const rows = database
@@ -145,6 +216,7 @@ export function migrateDatabase(database: DatabaseSync): void {
         database.exec("DROP TABLE source_item_observations_legacy");
       }
     }
+    database.exec(SOCIAL_IMPORT_SCHEMA);
     database.exec(`PRAGMA user_version = ${DATABASE_SCHEMA_VERSION}`);
     database.exec("COMMIT");
   } catch (error) {

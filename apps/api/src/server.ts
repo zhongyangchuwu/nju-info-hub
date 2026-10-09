@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { InfoHubDatabaseReader, type RecentNoticeOptions } from "@nju-info/db";
+import { InfoHubDatabaseReader, type PersistedSourceSummary, type RecentNoticeOptions, type SourceEntryQueryResult } from "@nju-info/db";
 import type { ApiConfig } from "./config.js";
 import {
   buildAtomFeed,
@@ -38,10 +38,11 @@ function feedEtag(body: string): string {
   return `"sha256-${digest}"`;
 }
 
-function feedLastModified(entries: ReturnType<Reader["listRecentSourceEntries"]>): string | undefined {
-  let latest = 0;
+function feedLastModified(entries: SourceEntryQueryResult[], source: PersistedSourceSummary): string | undefined {
+  const changedAt = source.socialPublication ? Date.parse(source.socialPublication.changedAt) : 0;
+  let latest = Number.isFinite(changedAt) ? changedAt : 0;
   for (const entry of entries) {
-    const time = Date.parse(entry.provenance.fetchedAt);
+    const time = Date.parse(entry.modifiedAt ?? entry.provenance.fetchedAt);
     if (Number.isFinite(time) && time > latest) latest = time;
   }
   if (latest === 0) return undefined;
@@ -66,14 +67,16 @@ function conditionalFeed(
   response: ServerResponse,
   body: string,
   contentType: string,
-  entries: ReturnType<Reader["listRecentSourceEntries"]>,
+  entries: SourceEntryQueryResult[],
+  source: PersistedSourceSummary,
 ): void {
   const etag = feedEtag(body);
-  const lastModified = feedLastModified(entries);
+  const lastModified = feedLastModified(entries, source);
   const ifNoneMatch = request.headers["if-none-match"];
   let notModified = ifNoneMatchMatches(ifNoneMatch, etag);
 
-  if (ifNoneMatch === undefined && lastModified !== undefined) {
+  // Lifecycle changes can share an HTTP-date second; only the current representation's ETag is authoritative.
+  if (source.socialPublication === undefined && ifNoneMatch === undefined && lastModified !== undefined) {
     const value = request.headers["if-modified-since"];
     const header = Array.isArray(value) ? value[0] : value;
     if (header !== undefined) {
@@ -164,6 +167,7 @@ export function createApiServer(reader: Reader): Server {
             JSON.stringify(buildJsonFeed(source, sourceEntries)),
             "application/feed+json; charset=utf-8",
             sourceEntries,
+            source,
           );
         } else {
           const atom = feedMatch?.[2] === "atom";
@@ -173,6 +177,7 @@ export function createApiServer(reader: Reader): Server {
             atom ? buildAtomFeed(source, sourceEntries) : buildRssFeed(source, sourceEntries),
             atom ? "application/atom+xml; charset=utf-8" : "application/rss+xml; charset=utf-8",
             sourceEntries,
+            source,
           );
         }
         return;

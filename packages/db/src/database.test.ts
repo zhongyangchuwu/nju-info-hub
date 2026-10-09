@@ -1380,6 +1380,13 @@ describe("InfoHubDatabase", () => {
           INSERT INTO source_item_observations
           SELECT * FROM source_item_observations_v5;
           DROP TABLE source_item_observations_v5;
+          DROP TABLE social_item_suppressions;
+          DROP TABLE social_item_publications;
+          DROP TABLE social_item_revisions;
+          DROP TABLE social_operation_blobs;
+          DROP TABLE social_raw_blobs;
+          DROP TABLE social_import_operations;
+          DROP TABLE social_source_state;
           PRAGMA user_version = 4;
         `);
         before = legacy

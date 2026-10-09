@@ -42,8 +42,17 @@ function bundleEntries(parts: readonly BundlePart[]): BundleEntry[] {
   return orderEntries(entries).slice(0, feedRecentItemLimit);
 }
 
-function bundleUpdatedAt(entries: readonly BundleEntry[], generatedAt?: string): string {
-  const latest = entries.reduce((value, entry) => entry.updatedAt > value ? entry.updatedAt : value, "");
+function bundleUpdatedAt(entries: readonly BundleEntry[], parts: readonly BundlePart[], generatedAt?: string): string {
+  let latest = "";
+  for (const { source } of parts) {
+    if (source.socialPublication) {
+      const time = new Date(source.socialPublication.changedAt);
+      if (!Number.isFinite(time.getTime())) throw new Error("invalid social lifecycle timestamp");
+      const changedAt = time.toISOString();
+      if (changedAt > latest) latest = changedAt;
+    }
+  }
+  latest = entries.reduce((value, entry) => entry.updatedAt > value ? entry.updatedAt : value, latest);
   if (latest) return latest;
   const time = new Date(generatedAt ?? new Date().toISOString());
   if (!Number.isFinite(time.getTime())) throw new Error("invalid feed timestamp: " + generatedAt);
@@ -77,7 +86,7 @@ export function buildAtomBundle(
   context: SyndicationContext = {},
 ): string {
   const entries = bundleEntries(parts);
-  const updatedAt = bundleUpdatedAt(entries, context.generatedAt);
+  const updatedAt = bundleUpdatedAt(entries, parts, context.generatedAt);
   const feedId = context.selfUrl ?? "urn:nju-info-hub:bundle:" + set.id;
   const lines = [
     xmlDeclaration,
@@ -101,7 +110,7 @@ export function buildRssBundle(
   context: SyndicationContext = {},
 ): string {
   const entries = bundleEntries(parts);
-  const updatedAt = bundleUpdatedAt(entries, context.generatedAt);
+  const updatedAt = bundleUpdatedAt(entries, parts, context.generatedAt);
   const channelLink = context.selfUrl ?? "urn:nju-info-hub:bundle:" + set.id;
   const lines = [
     xmlDeclaration,

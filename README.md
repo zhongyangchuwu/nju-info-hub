@@ -50,7 +50,7 @@ mise exec -- pnpm --filter @nju-info/qzone-acquire shadow -- "$ACQUISITION_RUN" 
 mise exec -- pnpm --filter @nju-info/qzone-acquire review -- "$SHADOW_RUN" "$DECISIONS_JSON" "$POLICY_JSON" "$REVIEW_OUTPUT_ROOT"
 ```
 
-Shadow decisions start `review-required`; an explicit review can record `approved / link-only`, `rejected / none`, or `review-required / none`. Reviewer/private reasons remain restricted. Even approved declarations retain **`publicationEligible=false`, `bundleEligible=false`**: no trusted importer, real public publication, source admission, or benchmark is implied. Title/link privacy and rights remain human responsibilities.
+Shadow decisions start `review-required`; an explicit review can record `approved / link-only`, `rejected / none`, or `review-required / none`. Reviewer/private reasons remain restricted. Even approved declarations retain **`publicationEligible=false`, `bundleEligible=false`**: these flags confer no importer authorization, real source admission or benchmark eligibility. Publication requires the separate independent signed operation below; title/link privacy and rights remain human responsibilities.
 
 The [manual source-observation audit](docs/adr-credentialed-public-acquisition.md#qzone-manual-source-observation-audit) uses a separately prepared public-profile post list, capture cutoff, verified successful run directories and explicitly declared failed attempts. It deduplicates native identities, distinguishes missing/partial/unknown/conflicting observations, and returns N/A rates when the manual denominator is incomplete or inconsistent. It requires only `QZONE_PROTECTED_ROOT` and writes private immutable ledgers:
 
@@ -62,7 +62,7 @@ Use explicit `run audit`: bare `pnpm audit` is the package manager's dependency-
 
 ### WeRead latest qualification, shadow and observations
 
-The separate operator-only [WeRead latest qualification/shadow app](docs/adr-credentialed-public-acquisition.md#weread-latest-qualification-boundary) validates complete native identity and can explicitly derive a link-only `SocialAcquisitionBundle v1` using a separately reviewed official `review-only` policy. Its decision remains `review-required`, never publication approval. It has no importer/public-feed integration and does not start the thirty-day benchmark.
+The separate operator-only [WeRead latest qualification/shadow app](docs/adr-credentialed-public-acquisition.md#weread-latest-qualification-boundary) validates complete native identity and can explicitly derive a link-only `SocialAcquisitionBundle v1` using a separately reviewed official `review-only` policy. Its decision remains `review-required`, never publication approval. The acquisition app itself neither imports nor publishes; the independent authenticated metadata boundary below does not start the thirty-day benchmark.
 
 The offline `observe` command compares supplied completed qualification runs and operator-declared blocked/error/empty attempts. It deduplicates canonical `__biz + mid + idx`, not provider review IDs, and records scoped sightings, content-hash variants and new-native-item clocks. Stale export reprocessing does not imply fresh upstream success; failures and empty results never advance progress. Publication conflicts suppress the newest-known-publication pointer. `cursor` and `coveredThrough` remain null: latest-only observations cannot establish a lossless historical checkpoint or benchmark recall.
 
@@ -70,6 +70,23 @@ The offline `observe` command compares supplied completed qualification runs and
 # Only WECHAT_WEREAD_PROTECTED_ROOT is required; declarations and outputs stay private.
 mise exec -- pnpm --filter @nju-info/wechat-weread-acquire run observe -- "$WEREAD_OBSERVATIONS_JSON" "$WEREAD_OBSERVATION_OUTPUT_ROOT"
 ```
+
+### Authenticated metadata import, correction and withdrawal
+
+`apps/social-import` is a separate private offline operator tool, excluded from normal releases. It authenticates distinct Ed25519 producer receipts and operator authorization against explicit external trust, checks the complete current source registration and exact supported metadata bytes, then commits immutable evidence and native-item revisions atomically. Empty trust denies all; full/media packets are rejected, never clipped. No real source or official-instance selection is changed.
+
+Set canonical `SOCIAL_IMPORT_PROTECTED_ROOT`; use absolute owner-private paths outside repository/provider storage and a separately selected private database parent. After independent audience/privacy/redistribution/item review:
+
+```bash
+mise exec -- pnpm --filter @nju-info/social-import run producer-sign -- "$PUBLIC_SAFE_DIR" "$PRODUCER_ID" "$PRODUCER_PRIVATE_KEY" "$RECEIPT_JSON"
+mise exec -- pnpm --filter @nju-info/social-import run authorize -- "$TRUST_JSON" "$OPERATION_DRAFT_JSON" "$APPROVER_PRIVATE_KEY" "$SIGNED_OPERATION_JSON"
+mise exec -- pnpm --filter @nju-info/social-import run import -- "$TRUST_JSON" "$SIGNED_OPERATION_JSON" "$PUBLIC_SAFE_DIR" "$DATABASE"
+# Signed suppress/revoke-source operations use no producer bundle:
+mise exec -- pnpm --filter @nju-info/social-import run import -- "$TRUST_JSON" "$SIGNED_CONTROL_JSON" - "$DATABASE"
+```
+
+Use a completed producer run's `public-safe` subtree, never its restricted run root. [The ADR](docs/adr-credentialed-public-acquisition.md#authenticated-metadata-import-and-lifecycle) owns strict trust/draft schemas, signing preimages, storage/byte limits and lifecycle rules. Signed corrections keep native feed IDs stable; exact replay cannot undo newer state; publish cannot clear suppression, explicit restore can, and source revocation is terminal. Public queries/JSON/Atom/RSS preserve native precision and unknown-origin/relay status without exposing operator audit data. Social HTTP feeds use ETags rather than IMS-only caching; static withdrawals require re-export. Keep DB/sidecars/backups/signing records private. Synthetic local CLI/HTTP/static verification is not real source admission, public deployment, third-party reader acceptance or benchmark Day 1.
+
 
 The [2026-10-08 social acquisition Agent handoff](docs/social-acquisition-handoff-2026-10-08.md) records merged PRs, open Issues, verified paths, admission blockers, and next-Agent verification steps. The machine-specific operator snapshot is stored outside Git and should never be committed.
 
@@ -106,7 +123,7 @@ public detail raw + provenance (when available)
 parsed full notice revision --> full feed entry / optional REST notices
 ```
 
-The QZone/AstrBot acquisition and offline item-review paths remain outside Hub core/runtime and the public release. `apps/qzone-gateway` is a separate local read-only capability gateway, not a public adapter or publication integration. Future social publication needs trusted producer/import/approval verification and publication/correction/reader support; private/local sidecars remain separate.
+The QZone/AstrBot acquisition and offline review paths remain outside Hub core/runtime and the public release. `apps/qzone-gateway` remains a separate private read capability. The independent operator-only `apps/social-import` connects authenticated public-safe link metadata to common DB/feed/API output and signed correction/withdrawal state; it does not activate real collectors, live sources, publication deployment or automatic scheduling. Private/local sidecars remain separate.
 
 ## Repository layout
 
@@ -117,6 +134,7 @@ apps/
   qzone-gateway/ private Node-only read-only capability gateway
   api/           optional read-only HTTP adapter
   wechat-weread-acquire/  offline qualification, review-required shadow and scoped observation ledger
+  social-import/ private offline producer/operator signing and authenticated metadata lifecycle
 packages/
   core/          shared schemas and canonical types
   collector/     source registry loader and source adapters
