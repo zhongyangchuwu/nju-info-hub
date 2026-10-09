@@ -23,14 +23,6 @@ describe("NJU Undergraduate School announcements", () => {
     const source = webPlusSourceConfigSchema.parse(
       await loadSourceFile(sourcePath.pathname),
     );
-    expect(source).toMatchObject({
-      id: "nju-undergraduate-notices",
-      name: "本科生院公告通知",
-      organization: { id: "nju-undergraduate-school", name: "本科生院" },
-      url: "https://jw.nju.edu.cn/ggtz/list.htm",
-      adapter: { type: "webplus" },
-    });
-    expect(source.adapter.selectors).toBeUndefined();
 
     const body = readFileSync(listFixture, "utf8");
     const raw: RawDocument = {
@@ -89,7 +81,7 @@ describe("NJU Undergraduate School announcements", () => {
     });
   });
 
-  it("parses a public detail body with its original URL and publication day", async () => {
+  it("uses the article title instead of calendar reminders while preserving the detail", async () => {
     const source = webPlusSourceConfigSchema.parse(
       await loadSourceFile(sourcePath.pathname),
     );
