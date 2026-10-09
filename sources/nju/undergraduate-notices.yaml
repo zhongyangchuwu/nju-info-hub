@@ -7,3 +7,5 @@ organization:
 url: https://jw.nju.edu.cn/ggtz/list.htm
 adapter:
   type: webplus
+  selectors:
+    title: h1.arti_title

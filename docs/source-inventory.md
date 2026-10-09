@@ -9,7 +9,7 @@ This inventory records source-level coverage, adapter fit, and official instance
 | Source | URL | Organization | Audience relevance | Adapter/status | Notes |
 | --- | --- | --- | --- | --- | --- |
 | Undergraduate School academic calendar | https://jw.nju.edu.cn/24809/list.htm | 本科生院 | Undergraduate students and teaching staff | WebPlus; official instance (`recentLimit=1`) | Calendar/resource stream rather than a general notice stream. |
-| Undergraduate School notices | https://jw.nju.edu.cn/ggtz/list.htm | 本科生院 | Undergraduate students and teaching staff | WebPlus; registered | Public list may include restricted details; current collector preserves those as link-only observations. |
+| Undergraduate School notices | https://jw.nju.edu.cn/ggtz/list.htm | 本科生院 | Undergraduate students and teaching staff | WebPlus with explicit article-title selector; registered | Detail titles use `h1.arti_title`, not the calendar navigation's earlier “事项提醒” heading. Public list may include restricted details; current collector preserves those as link-only observations. |
 | Graduate School notices | https://grawww.nju.edu.cn/905/list.htm | 研究生院 | Graduate students, supervisors, and graduate administrators | WebPlus; registered | General graduate education notices. |
 | Student Affairs notices | https://xgb.nju.edu.cn/gsgg/list.htm | 党委学生工作部 | Students | WebPlus; registered | Mixed first-party, public-WeChat, and other public links are retained from the official list. |
 | Youth League announcements | https://tuanwei.nju.edu.cn/ggtz/list.htm | 共青团南京大学委员会 | Students and student organizations | WebPlus; registered | Some first-party details can be campus-network restricted. |
