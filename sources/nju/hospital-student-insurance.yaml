@@ -1,0 +1,14 @@
+schemaVersion: 1
+id: nju-hospital-student-insurance
+name: 南京大学医院大学生医保
+organization:
+  id: nju-hospital
+  name: 南京大学医院
+  kind: service-unit
+url: https://hospital.nju.edu.cn/gfyyb/dxsyb/index.html
+adapter:
+  type: boshan
+  channelId: 18102
+  pageSize: 15
+  selectors:
+    content: '#zoom'

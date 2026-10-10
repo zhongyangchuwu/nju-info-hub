@@ -39,18 +39,18 @@ function publishedDateNearAnchor(
   $: cheerio.CheerioAPI,
   element: AnyNode,
   listItemSelector?: string,
+  publishedAtSelector?: string,
 ): string | undefined {
   const container = $(element).closest(
     listItemSelector ?? "li, tr, .news, .list_item, .list-item, .item",
   );
   const scope = container.length ? container : $(element).parent();
   const publishedText = normalizeText(
-    scope.find(DEFAULT_PUBLISHED_AT_SELECTOR).first().text(),
+    scope.find(publishedAtSelector ?? DEFAULT_PUBLISHED_AT_SELECTOR).first().text(),
   );
-  return (
-    publishedText.match(DATE_RE)?.[0] ??
-    textWithElementBoundaries($, scope).match(DATE_RE)?.[0]
-  );
+  const publishedDate = publishedText.match(DATE_RE)?.[0];
+  if (publishedAtSelector !== undefined) return publishedDate;
+  return publishedDate ?? textWithElementBoundaries($, scope).match(DATE_RE)?.[0];
 }
 
 function acquisitionKind(
@@ -80,6 +80,7 @@ export function discoverWebPlusPage(
   const $ = cheerio.load(raw.body);
   const listItemSelector = source.adapter.selectors?.listItem;
   const explicitListLink = source.adapter.selectors?.listLink;
+  const listPublishedAtSelector = source.adapter.selectors?.listPublishedAt;
   const items = new Map<string, DiscoveredItem>();
 
   const scanLinks = (selector: string): void => {
@@ -108,6 +109,7 @@ export function discoverWebPlusPage(
         $,
         element,
         listItemSelector,
+        listPublishedAtSelector,
       );
       items.set(url, {
         sourceId: source.id,
