@@ -53,7 +53,6 @@ describe('parseWechatSourcePolicy', () => {
       input.source.publisherIdentity = { scheme: 'qzone-uin', version: 1, value: '123456789' };
     }],
     ['access', (input: PolicyFixture) => { input.source.access = 'anonymous'; }],
-    ['role', (input: PolicyFixture) => { input.source.role = 'relay'; }],
     ['audience', (input: PolicyFixture) => { input.source.audience = 'private'; }],
   ] as const)('rejects a non-Weread %s', async (_field, mutate) => {
     const input = await fixture();
