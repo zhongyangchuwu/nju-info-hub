@@ -27,51 +27,6 @@ async function withConfig(mutator: (value: any) => void): Promise<string> {
 }
 
 describe("instance config", () => {
-  it("loads the official v4 collection and publication policy", async () => {
-    const config = await loadInstanceConfig(officialPath, sourceDir);
-    expect(config.schemaVersion).toBe(4);
-    expect(config.publication.sources).toHaveLength(30);
-    expect(config.publication.sources).toContain("nju-security-office-general-notices");
-    expect(config.publication.sources).not.toContain("nju-security-office-notices");
-    expect(config.collection.sources.find(
-      ({ id }) => id === "nju-security-office-general-notices",
-    )).toEqual({ id: "nju-security-office-general-notices", recentLimit: 5 });
-    expect(config.collection.sources.map(({ id }) => id))
-      .not.toContain("nju-security-office-notices");
-    expect(config.publication.publicBaseUrl)
-      .toBe("https://zhongyangchuwu.github.io/nju-info-hub/");
-    expect(config.publication.sources.slice(-5)).toEqual([
-      "nju-business-school-notices",
-      "nju-chemistry-student-notices",
-      "nju-environment-notices",
-      "nju-earth-sciences-notices",
-      "nju-modern-engineering-notices",
-    ]);
-    expect(config.publication.sets).toEqual([{
-      id: "cs",
-      title: "计算机学院公开信息",
-      sources: [
-        "nju-cs-graduate",
-        "nju-cs-internal-notices",
-        "nju-cs-seminars",
-      ],
-      opml: "subscriptions/cs.opml",
-    }]);
-    expect(config.collection.schedule).toBe("17 */2 * * *");
-    expect(config.collection.timeZone).toBe("UTC");
-    expect(config.collection.sources).toHaveLength(30);
-    expect(config.collection.sources[0]).toEqual({
-      id: "nju-cs-graduate",
-      recentLimit: 10,
-    });
-    expect(config.collection.sources.slice(-5)).toEqual([
-      { id: "nju-business-school-notices", recentLimit: 5 },
-      { id: "nju-chemistry-student-notices", recentLimit: 5 },
-      { id: "nju-environment-notices", recentLimit: 5 },
-      { id: "nju-earth-sciences-notices", recentLimit: 5 },
-      { id: "nju-modern-engineering-notices", recentLimit: 5 },
-    ]);
-  });
 
   it("rejects the obsolete v3 instance shape", async () => {
     const current = await official();

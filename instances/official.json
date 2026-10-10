@@ -20,6 +20,7 @@
       "nju-psychology-center-bulletin",
       "nju-logistics-notices",
       "nju-hospital-announcements",
+      "nju-hospital-student-insurance",
       "nju-asset-management-notices",
       "nju-employment-news",
       "nju-employment-college",
@@ -36,7 +37,9 @@
       "nju-chemistry-student-notices",
       "nju-environment-notices",
       "nju-earth-sciences-notices",
-      "nju-modern-engineering-notices"
+      "nju-modern-engineering-notices",
+      "nju-ias-lectures",
+      "nju-ias-activities"
     ],
     "sets": [
       {
@@ -108,6 +111,10 @@
         "recentLimit": 5
       },
       {
+        "id": "nju-hospital-student-insurance",
+        "recentLimit": 5
+      },
+      {
         "id": "nju-asset-management-notices",
         "recentLimit": 5
       },
@@ -173,6 +180,14 @@
       },
       {
         "id": "nju-modern-engineering-notices",
+        "recentLimit": 5
+      },
+      {
+        "id": "nju-ias-lectures",
+        "recentLimit": 5
+      },
+      {
+        "id": "nju-ias-activities",
         "recentLimit": 5
       }
     ]

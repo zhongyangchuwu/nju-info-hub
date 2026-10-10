@@ -17,7 +17,7 @@ The public ingestion foundation and two read-only delivery adapters are in place
 - static publication can expose a machine-readable published-source catalog plus reusable source sets as OPML or combined JSON/Atom/RSS timelines;
 - Node.js 26 is the default repository runtime and Node.js 24 remains the compatibility floor.
 
-The official instance policy selects thirty sources for collection and independent per-source publication. Unsupported public-WeChat and external-public details require no direct article request and remain `link-only`; recognized campus-network and authentication restrictions also remain visible through their official-list observations. Full supported public WebPlus, Boshan, and employment-portal details attach as notice revisions, and `fetch` writes no database state.
+The official instance policy selects thirty-three sources for collection and independent per-source publication. Unsupported public-WeChat and external-public details require no direct article request and remain `link-only`; recognized campus-network and authentication restrictions also remain visible through their official-list observations. Full supported public WebPlus, Boshan, and employment-portal details attach as notice revisions, and `fetch` writes no database state.
 
 Public-reader acceptance remains a post-deployment check. Local JSON/XML parsing and packaged CLI smoke establish format and artifact correctness but cannot establish third-party reader admission.
 
@@ -270,7 +270,7 @@ On an empty database, `ingest` bootstraps only the configured recent window plus
 
 ## Initial sources
 
-The public-source registry and fixtures cover NJU WebPlus/Sudy, Boshan/NJDX, and public employment information/recruitment streams. The official instance now contains thirty sources, including the employment streams, Student Exchange, Science and Technology Office notices, the low-frequency Academic Calendar feed, and nine representative college feeds spanning AI, Software, Mathematics, Physics, Business, Chemistry/Chemical Engineering, Environment, Earth Sciences/Engineering, and Modern Engineering/Applied Sciences. The localhost Docker/Compose instance remains the current test publisher, while public deployment acceptance is still pending.
+The public-source registry and fixtures cover NJU WebPlus/Sudy, Boshan/NJDX, and public employment information/recruitment streams. The official instance contains thirty-three sources, including the employment streams, Student Exchange, Science and Technology Office notices, the low-frequency Academic Calendar feed, nine representative college feeds, the Hospital student-insurance category, and separate IAS lecture/activity categories. The insurance category adds public guidance beyond the sampled Hospital announcement stream but also repeats some notices; IAS activities include scholar recruitment and are not uniformly student-open. These categories use bounded `recentLimit: 5` collection without changing cadence or the curated CS set. See [`docs/source-inventory.md`](docs/source-inventory.md) for evidence and limits. Docker/Compose is the supported local runtime; policy admission is not public deployment acceptance.
 
 More sources should preferably be added by contributing YAML under `sources/nju/` rather than adding a new crawler.
 

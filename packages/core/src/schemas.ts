@@ -58,6 +58,7 @@ const sourceBaseSchema = z.object({
 const webPlusSelectorsSchema = z.object({
   listItem: z.string().min(1).optional(),
   listLink: z.string().min(1).optional(),
+  listPublishedAt: z.string().min(1).optional(),
   title: z.string().min(1).optional(),
   publishedAt: z.string().min(1).optional(),
   content: z.string().min(1).optional(),

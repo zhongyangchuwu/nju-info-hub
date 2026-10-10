@@ -1,0 +1,16 @@
+schemaVersion: 1
+id: nju-ias-lectures
+name: 人文社会科学高级研究院最新讲座
+organization:
+  id: nju-ias
+  name: 南京大学人文社会科学高级研究院
+  kind: academic-unit
+url: https://ias.nju.edu.cn/13159/list.htm
+adapter:
+  type: webplus
+  selectors:
+    listItem: '#wp_news_w6 table[width="98%"]'
+    listPublishedAt: .time.hhh
+    title: 'div[frag="窗口9"] h3'
+    publishedAt: 'div[frag="窗口9"] > table tr:nth-child(2) > td'
+    content: .wp_articlecontent

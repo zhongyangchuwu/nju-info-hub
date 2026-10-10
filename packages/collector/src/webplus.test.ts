@@ -512,4 +512,24 @@ describe("WebPlus adapter", () => {
       }),
     ]);
   });
+
+  it("does not turn event dates into publication dates when configured list dates are missing", () => {
+    const config: WebPlusSourceConfig = {
+      ...source("events", "Events", "https://events.nju.edu.cn/list.htm"),
+      adapter: {
+        type: "webplus",
+        selectors: { listItem: ".notice", listPublishedAt: ".publication" },
+      },
+    };
+    const page = discoverWebPlusPage(
+      raw(config.id, config.url,
+        '<div class="notice"><a href="/c1a1/page.htm">Lecture on 2026-06-22</a></div>'),
+      config,
+    );
+    expect(page.items[0]).toMatchObject({
+      title: "Lecture on 2026-06-22",
+      url: "https://events.nju.edu.cn/c1a1/page.htm",
+    });
+    expect(page.items[0]).not.toHaveProperty("publishedAtRaw");
+  });
 });
