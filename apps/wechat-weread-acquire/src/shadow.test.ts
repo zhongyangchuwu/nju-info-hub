@@ -104,6 +104,21 @@ describe('buildWereadShadowBundle', () => {
     expect(envelope.decision.binding.mediaSha256s).toEqual([]);
   });
 
+  it.each(['relay', 'sentinel'] as const)('keeps %s publishers behind item review', async (role) => {
+    const policy = await sourcePolicy();
+    policy.source.role = role;
+    const { bundle } = buildWereadShadowBundle(await candidate(), policy, 'synthetic-community-run', now);
+    const envelope = parseSocialAcquisitionBundle(bundle).envelopes[0]!;
+    expect(envelope.decision).toMatchObject({
+      status: 'review-required', mode: 'none', method: 'item-review',
+    });
+
+    envelope.decision.status = 'approved';
+    envelope.decision.mode = 'link-only';
+    envelope.decision.method = 'source-policy';
+    expect(() => parseSocialAcquisitionBundle({ ...bundle, envelopes: [envelope] })).toThrow();
+  });
+
   it.each(['originalUrl', 'canonicalUrl'] as const)('rejects unsafe %s', async (field) => {
     const input = await candidate();
     const policy = await sourcePolicy();

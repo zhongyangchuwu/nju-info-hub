@@ -50,9 +50,6 @@ const sourcePolicySchema = z.object({
   if (source.audience !== 'public') {
     context.addIssue({ code: 'custom', path: ['source', 'audience'], message: 'Weread policies require a public audience' });
   }
-  if (source.role !== 'official') {
-    context.addIssue({ code: 'custom', path: ['source', 'role'], message: 'Weread policies require the official role' });
-  }
   if (source.redistributionMode !== 'review-only') {
     context.addIssue({ code: 'custom', path: ['source', 'redistributionMode'], message: 'Weread policies require review-only redistribution' });
   }
